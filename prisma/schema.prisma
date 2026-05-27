@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("manager") // "owner" or "manager"
+  phone     String?
+  photo     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+  payments  Payment[]
+}
+
+model Member {
+  id               String    @id @default(cuid())
+  firstName        String
+  lastName         String
+  phone            String?
+  email            String?
+  photo            String?
+  emergencyContact String?
+  notes            String?
+  isDeleted        Boolean   @default(false)
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  payments      Payment[]
+
+  @@index([phone])
+  @@index([isDeleted])
+}
+
+model Service {
+  id            String   @id @default(cuid())
+  name          String
+  nameAm        String?  // Amharic name
+  description   String?
+  descriptionAm String?
+  price         Float
+  duration      Int      // duration in days
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  memberId      String
+  serviceId     String
+  startDate     DateTime
+  endDate       DateTime
+  status        String   @default("active") // "active", "expired", "cancelled"
+  priceSnapshot Float    // price at time of creation
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  member    Member    @relation(fields: [memberId], references: [id])
+  service   Service   @relation(fields: [serviceId], references: [id])
+  invoices  Invoice[]
+
+  @@index([memberId, endDate])
+  @@index([status])
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  memberId       String
+  subscriptionId String
+  amount         Float
+  status         String   @default("pending") // "pending", "paid", "overdue", "cancelled"
+  dueDate        DateTime
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  member       Member      @relation(fields: [memberId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  payments     Payment[]
+
+  @@index([status])
+}
+
+model Payment {
+  id            String    @id @default(cuid())
+  invoiceId     String
+  memberId      String
+  amount        Float
+  paymentDate   DateTime
+  method        String    @default("cash") // "cash", "bank_transfer", "mobile_money"
+  receiptNumber String    @unique
+  isVoided      Boolean   @default(false)
+  voidedAt      DateTime?
+  voidedBy      String?
+  notes         String?
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  member  Member  @relation(fields: [memberId], references: [id])
+  user    User    @relation(fields: [createdBy], references: [id])
+
+  @@index([paymentDate])
+  @@index([memberId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String   // e.g., "member.create", "payment.void", "service.update"
+  details   String?  // JSON string with details
+  entity    String?  // entity type: "member", "service", "payment", etc.
+  entityId  String?  // ID of affected entity
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+}
