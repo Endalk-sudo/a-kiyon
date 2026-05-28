@@ -63,19 +63,6 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Auth
-export const authApi = {
-  login: (email: string, password: string) =>
-    apiFetch('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }),
-  logout: () =>
-    apiFetch('/auth/logout', { method: 'POST' }),
-  getSession: () =>
-    apiFetch('/auth/session'),
-};
-
 // Members
 export const membersApi = {
   list: (params?: Record<string, unknown>) =>

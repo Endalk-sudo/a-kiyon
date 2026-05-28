@@ -15,7 +15,7 @@ interface Session {
   userId: string;
   email: string;
   name: string;
-  role: 'owner' | 'manager';
+  role: string;
 }
 
 interface AppState {

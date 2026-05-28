@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authApi } from '@/lib/api-client';
+import { authClient } from '@/lib/auth-client';
 import { useAppStore } from '@/lib/store';
 import { Dumbbell, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,16 +21,25 @@ export function LoginForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      const result = await authApi.login(email, password);
-      const session = result as unknown as {
-        userId: string;
-        email: string;
-        name: string;
-        role: 'owner' | 'manager';
-      };
-      setSession(session);
-      toast.success('Welcome back!');
-    } catch (err) {
+      const { data, error } = await authClient.signIn.email({
+        email,
+        password,
+      });
+      if (error) {
+        toast.error(error.message || 'Invalid email or password');
+        return;
+      }
+      if (data?.user) {
+        const u = data.user as { id: string; email: string; name: string | null; role?: string };
+        setSession({
+          userId: u.id,
+          email: u.email,
+          name: u.name || '',
+          role: u.role || 'manager',
+        });
+        toast.success('Welcome back!');
+      }
+    } catch {
       toast.error('Invalid email or password');
     } finally {
       setLoading(false);

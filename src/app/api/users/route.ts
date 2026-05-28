@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getSessionOrThrow, hashPassword } from '@/lib/auth';
+import { getSessionOrThrow } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
+import bcrypt from 'bcryptjs';
 
 export async function GET() {
   try {
@@ -63,13 +64,12 @@ export async function POST(request: NextRequest) {
       return apiError('A user with this email already exists', 409);
     }
 
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await db.user.create({
       data: {
         email,
         name,
-        password: hashedPassword,
         role,
         phone: phone || null,
       },
@@ -81,6 +81,15 @@ export async function POST(request: NextRequest) {
         phone: true,
         isActive: true,
         createdAt: true,
+      },
+    });
+
+    await db.account.create({
+      data: {
+        userId: user.id,
+        accountId: user.id,
+        providerId: 'credential',
+        password: hashedPassword,
       },
     });
 

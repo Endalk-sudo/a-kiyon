@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
-import { authApi } from '@/lib/api-client';
+import { authClient } from '@/lib/auth-client';
 import { LoginForm } from '@/components/login-form';
 import { AppLayout } from '@/components/app-layout';
 import { DashboardPage } from '@/components/pages/dashboard';
@@ -35,14 +35,18 @@ export default function Home() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const result = await authApi.getSession();
-        const sessionData = result as unknown as {
-          userId: string;
-          email: string;
-          name: string;
-          role: 'owner' | 'manager';
-        };
-        setSession(sessionData);
+        const { data } = await authClient.getSession();
+        if (data?.user) {
+          const u = data.user as { id: string; email: string; name: string | null; role?: string };
+          setSession({
+            userId: u.id,
+            email: u.email,
+            name: u.name || '',
+            role: u.role || 'manager',
+          });
+        } else {
+          setSession(null);
+        }
       } catch {
         setSession(null);
       } finally {

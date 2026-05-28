@@ -1,7 +1,7 @@
 'use client';
 
 import { useAppStore, type PageId } from '@/lib/store';
-import { authApi } from '@/lib/api-client';
+import { authClient } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -69,7 +69,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleLogout = useCallback(async () => {
     try {
-      await authApi.logout();
+      await authClient.signOut();
     } catch {
       // ignore
     }

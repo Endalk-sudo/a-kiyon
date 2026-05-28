@@ -23,10 +23,18 @@ async function main() {
     data: {
       email: 'owner@fcms.com',
       name: 'Owner',
-      password: ownerPassword,
       role: 'owner',
       phone: '+251911000000',
       isActive: true,
+    },
+  });
+
+  await prisma.account.create({
+    data: {
+      userId: owner.id,
+      accountId: owner.id,
+      providerId: 'credential',
+      password: ownerPassword,
     },
   });
 
@@ -34,10 +42,18 @@ async function main() {
     data: {
       email: 'manager@fcms.com',
       name: 'Manager',
-      password: managerPassword,
       role: 'manager',
       phone: '+251922000000',
       isActive: true,
+    },
+  });
+
+  await prisma.account.create({
+    data: {
+      userId: manager.id,
+      accountId: manager.id,
+      providerId: 'credential',
+      password: managerPassword,
     },
   });
 
