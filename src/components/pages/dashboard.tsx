@@ -295,7 +295,7 @@ export function DashboardPage() {
                 </div>
                 <CardTitle className="text-base">Expiring Soon</CardTitle>
               </div>
-              {data && data.expiringSoonMembers.length > 0 && (
+              {data?.expiringSoonMembers && data.expiringSoonMembers.length > 0 && (
                 <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-xs">
                   {data.expiringSoonMembers.length} member{data.expiringSoonMembers.length !== 1 ? 's' : ''}
                 </Badge>
@@ -308,7 +308,7 @@ export function DashboardPage() {
           <CardContent>
             {loading ? (
               <AlertListSkeleton />
-            ) : !data?.expiringSoonMembers.length ? (
+            ) : !data?.expiringSoonMembers?.length ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Calendar className="h-8 w-8 text-muted-foreground/40 mb-2" />
                 <p className="text-sm text-muted-foreground">
@@ -317,7 +317,7 @@ export function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto custom-scrollbar">
-                {data.expiringSoonMembers.map((member) => (
+                {data?.expiringSoonMembers?.map((member) => (
                   <div
                     key={member.subscriptionId}
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-amber-100/50 transition-colors"
@@ -365,7 +365,7 @@ export function DashboardPage() {
                 </div>
                 <CardTitle className="text-base">Recently Expired</CardTitle>
               </div>
-              {data && data.recentlyExpiredMembers.length > 0 && (
+              {data?.recentlyExpiredMembers && data.recentlyExpiredMembers.length > 0 && (
                 <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 text-xs">
                   {data.recentlyExpiredMembers.length} member{data.recentlyExpiredMembers.length !== 1 ? 's' : ''}
                 </Badge>
@@ -378,7 +378,7 @@ export function DashboardPage() {
           <CardContent>
             {loading ? (
               <AlertListSkeleton />
-            ) : !data?.recentlyExpiredMembers.length ? (
+            ) : !data?.recentlyExpiredMembers?.length ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Calendar className="h-8 w-8 text-muted-foreground/40 mb-2" />
                 <p className="text-sm text-muted-foreground">
@@ -387,7 +387,7 @@ export function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto custom-scrollbar">
-                {data.recentlyExpiredMembers.map((member) => (
+                {data?.recentlyExpiredMembers?.map((member) => (
                   <div
                     key={member.subscriptionId}
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-red-100/50 transition-colors"
@@ -446,7 +446,7 @@ export function DashboardPage() {
           <CardContent>
             {loading ? (
               <PaymentsTableSkeleton />
-            ) : !data?.recentPayments.length ? (
+            ) : !data?.recentPayments?.length ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <CreditCard className="h-8 w-8 text-muted-foreground/40 mb-2" />
                 <p className="text-sm text-muted-foreground">
@@ -465,7 +465,7 @@ export function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.recentPayments.map((payment) => (
+                    {data?.recentPayments?.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell className="text-sm font-medium py-2">
                           {payment.memberName}
@@ -520,7 +520,7 @@ export function DashboardPage() {
               <div className="h-64 flex items-center justify-center">
                 <Skeleton className="h-full w-full" />
               </div>
-            ) : !data?.monthlyRevenue.length ? (
+            ) : !data?.monthlyRevenue?.length ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <TrendingUp className="h-8 w-8 text-muted-foreground/40 mb-2" />
                 <p className="text-sm text-muted-foreground">
@@ -531,7 +531,7 @@ export function DashboardPage() {
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={data.monthlyRevenue}
+                    data={data?.monthlyRevenue || []}
                     margin={{ top: 5, right: 5, left: -15, bottom: 5 }}
                   >
                     <CartesianGrid
