@@ -22,7 +22,7 @@ export function LoginForm() {
     setLoading(true);
     try {
       const result = await authApi.login(email, password);
-      const session = (result as { session: unknown }).session as {
+      const session = result as unknown as {
         userId: string;
         email: string;
         name: string;

@@ -36,7 +36,7 @@ export default function Home() {
     const checkSession = async () => {
       try {
         const result = await authApi.getSession();
-        const sessionData = (result as { session: unknown }).session as {
+        const sessionData = result as unknown as {
           userId: string;
           email: string;
           name: string;
