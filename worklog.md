@@ -24,3 +24,25 @@ Stage Summary:
 - Subscription renewal API and UI fully implemented
 - Renew creates new subscription + pending invoice, old subscription marked expired
 - All pages updated to reflect manual payment process
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix "sandbox is inactive" error and verify FCMS application
+
+Work Log:
+- Diagnosed the "sandbox is inactive" error was caused by the Next.js dev server not running
+- Started the dev server on port 3000
+- Identified that the Next.js Turbopack dev server uses ~1.2GB memory and crashes in this sandbox environment
+- Disabled Prisma query logging to reduce memory usage
+- Updated package.json dev script from `bun` to `node` for better stability
+- Re-seeded the database with 3 services (Gym: 1500 ETB, Karate: 2000 ETB, Aerobics: 1200 ETB)
+- Verified all API endpoints work correctly (login, services, dashboard, members, subscriptions, payments)
+- Confirmed manual payment workflow is properly implemented across all pages
+- Ran lint check - no errors
+
+Stage Summary:
+- Dev server is functional but has memory constraints in sandbox environment
+- All 3 services are seeded with different pricing
+- Manual payment flow is working: member pays cash → manager creates subscription → pending invoice generated → manager records payment
+- Member CRUD with photo capture, weight, height, blood type fields is complete
+- Application has 11 members, 11 subscriptions, 8 payments, 11 invoices in seed data
