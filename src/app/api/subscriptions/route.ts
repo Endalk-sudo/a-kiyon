@@ -65,11 +65,12 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getSessionOrThrow(['owner', 'manager']);
     const body = await request.json();
-    const { memberId, serviceId, startDate, notes } = body;
+    const { memberId, serviceId, startDate: rawStartDate, notes } = body;
+    const startDate = rawStartDate || new Date().toISOString();
 
     // Validate required fields
-    if (!memberId || !serviceId || !startDate) {
-      return apiError('memberId, serviceId, and startDate are required');
+    if (!memberId || !serviceId) {
+      return apiError('memberId and serviceId are required');
     }
 
     // Verify member exists and is not deleted

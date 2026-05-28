@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { subscriptionsApi, membersApi, servicesApi } from '@/lib/api-client';
-import { EthiopianDateInput } from '@/components/ethiopian-date-input';
+
 import { MemberAvatar } from '@/components/member-avatar';
 import { StatusBadge } from '@/components/status-badge';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
@@ -163,8 +163,7 @@ export function SubscriptionsPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [startDateValue, setStartDateValue] = useState('');
-  const [startDateIso, setStartDateIso] = useState<string | null>(null);
+
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -224,8 +223,7 @@ export function SubscriptionsPage() {
       // Reset form
       setSelectedMemberId('');
       setSelectedServiceId('');
-      setStartDateValue('');
-      setStartDateIso(null);
+
       setNotes('');
       setFormError(null);
     }
@@ -241,10 +239,6 @@ export function SubscriptionsPage() {
       setFormError('Please select a service.');
       return;
     }
-    if (!startDateIso) {
-      setFormError('Please enter a valid start date.');
-      return;
-    }
 
     setSubmitting(true);
     setFormError(null);
@@ -253,7 +247,6 @@ export function SubscriptionsPage() {
       await subscriptionsApi.create({
         memberId: selectedMemberId,
         serviceId: selectedServiceId,
-        startDate: startDateIso,
         notes: notes || undefined,
       });
       toast.success('Subscription created. A pending invoice has been generated — record the payment when the member pays.');
@@ -397,18 +390,6 @@ export function SubscriptionsPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Start Date */}
-                <EthiopianDateInput
-                  value={startDateValue}
-                  onChange={(value, iso) => {
-                    setStartDateValue(value);
-                    setStartDateIso(iso);
-                  }}
-                  label="Start Date (EC)"
-                  placeholder="dd/mm/yyyy"
-                  required
-                />
 
                 {/* Notes */}
                 <div className="space-y-2">

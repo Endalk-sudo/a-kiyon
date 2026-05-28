@@ -30,7 +30,17 @@ export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get('fcms_session')?.value;
   if (!token) return null;
-  return decodeSession(token);
+
+  const session = decodeSession(token);
+  if (!session) return null;
+
+  const user = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, isActive: true },
+  });
+  if (!user || !user.isActive) return null;
+
+  return session;
 }
 
 export async function getSessionOrThrow(allowedRoles?: string[]): Promise<Session> {
