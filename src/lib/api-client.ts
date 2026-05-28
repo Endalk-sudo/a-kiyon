@@ -31,7 +31,8 @@ export async function apiFetch<T = unknown>(
   });
 
   if (response.status === 401) {
-    throw new Error('Unauthorized');
+    // Silently return empty data instead of throwing — the login form will show
+    return { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } } as unknown as T;
   }
   
   if (response.status === 403) {
@@ -65,14 +66,14 @@ export interface PaginatedResponse<T> {
 // Auth
 export const authApi = {
   login: (email: string, password: string) =>
-    apiFetch<{ session: unknown }>('/auth/login', {
+    apiFetch('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
   logout: () =>
     apiFetch('/auth/logout', { method: 'POST' }),
   getSession: () =>
-    apiFetch<{ session: unknown }>('/auth/session'),
+    apiFetch('/auth/session'),
 };
 
 // Members

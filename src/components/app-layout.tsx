@@ -5,7 +5,7 @@ import { authApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   LayoutDashboard,
   Users,
@@ -149,6 +149,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Mobile Sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 p-0">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation Menu</SheetTitle>
+          </SheetHeader>
           <div className="flex flex-col h-full">
             <div className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center">

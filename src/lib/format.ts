@@ -1,12 +1,13 @@
 import { formatEthiopianDate } from './ethiopian-calendar';
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-ET', {
+  const formatted = new Intl.NumberFormat('en-ET', {
     style: 'currency',
     currency: 'ETB',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).replace('ETB', 'ETB ');
+  }).format(amount);
+  return formatted.replace('ETB', 'ETB ');
 }
 
 export function formatDate(date: string | Date): string {
