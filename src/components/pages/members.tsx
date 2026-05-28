@@ -474,7 +474,7 @@ export function MembersPage() {
             Members
           </h2>
           <p className="text-sm text-muted-foreground">
-            Manage your fitness center members
+            Manage your members
           </p>
         </div>
         {isManagerOrAbove && (

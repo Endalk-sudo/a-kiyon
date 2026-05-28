@@ -411,8 +411,8 @@ export function PaymentsPage() {
         </head>
         <body>
           <div class="header">
-            <h1>FCMS</h1>
-            <p>Fitness Center Management System</p>
+            <h1>A-kiyon</h1>
+            <p>Fitness Center</p>
           </div>
           <div class="row">
             <span class="label">Receipt #</span>

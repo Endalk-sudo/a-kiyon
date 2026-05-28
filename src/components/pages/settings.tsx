@@ -406,7 +406,7 @@ export function SettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">System</p>
-              <p className="text-sm font-medium">FCMS - Fitness Center Management System</p>
+              <p className="text-sm font-medium">A-kiyon - Fitness Center</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Version</p>

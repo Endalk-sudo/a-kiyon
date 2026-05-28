@@ -220,7 +220,7 @@ export function DashboardPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your fitness center</p>
+          <p className="text-muted-foreground">Overview of your business</p>
         </div>
         <Card className="border-destructive/50">
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -242,7 +242,7 @@ export function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your fitness center</p>
+          <p className="text-muted-foreground">Overview of your business</p>
         </div>
         {data && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

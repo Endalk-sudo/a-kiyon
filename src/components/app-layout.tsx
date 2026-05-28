@@ -91,9 +91,9 @@ export function AppLayout({ children }: AppLayoutProps) {
               <Dumbbell className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-lg leading-none">FCMS</h2>
+              <h2 className="font-bold text-lg leading-none">A-kiyon</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {locale === 'en' ? 'Fitness Center Mgmt' : 'የአካል ብቃት ማዕከል'}
+                {locale === 'en' ? 'Fitness Center' : 'የአካል ብቃት ማዕከል'}
               </p>
             </div>
           </div>
@@ -158,9 +158,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Dumbbell className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="font-bold text-lg leading-none">FCMS</h2>
+                <h2 className="font-bold text-lg leading-none">A-kiyon</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {locale === 'en' ? 'Fitness Center Mgmt' : 'የአካል ብቃት ማዕከል'}
+                  {locale === 'en' ? 'Fitness Center' : 'የአካል ብቃት ማዕከል'}
                 </p>
               </div>
             </div>

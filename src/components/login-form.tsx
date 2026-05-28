@@ -44,8 +44,8 @@ export function LoginForm() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground mb-4">
             <Dumbbell className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold">FCMS</h1>
-          <p className="text-muted-foreground mt-1">Fitness Center Subscription Management</p>
+          <h1 className="text-3xl font-bold">A-kiyon</h1>
+          <p className="text-muted-foreground mt-1">Fitness Center</p>
         </div>
 
         <Card>

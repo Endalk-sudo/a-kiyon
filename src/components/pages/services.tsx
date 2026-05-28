@@ -380,7 +380,7 @@ export function ServicesPage() {
           </h2>
           <p className="text-muted-foreground">
             {locale === 'en'
-              ? 'Manage fitness center services and pricing'
+              ? 'Manage services and pricing'
               : 'የአካል ብቃት ማዕከል አገልግሎቶች እና ዋጋ አስተዳድር'}
           </p>
         </div>
@@ -549,7 +549,7 @@ export function ServicesPage() {
             </DialogTitle>
             <DialogDescription>
               {locale === 'en'
-                ? 'Create a new fitness center service with pricing and duration.'
+                ? 'Create a new service with pricing and duration.'
                 : 'አዲስ የአካል ብቃት ማዕከል አገልግሎት በዋጋ እና ርዝመት ይፍጠሩ።'}
             </DialogDescription>
           </DialogHeader>

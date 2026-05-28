@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FCMS - Fitness Center Subscription Management",
-  description: "Fitness Center Subscription Management System with Ethiopian Calendar Support",
+  title: "A-kiyon - Fitness Center",
+  description: "Fitness Center Management System",
 };
 
 export default function RootLayout({
