@@ -105,7 +105,11 @@ export async function PUT(
       return apiError('Cannot update a deleted member');
     }
 
-    const { firstName, lastName, phone, email, photo, emergencyContact, notes } = body;
+    const {
+      firstName, lastName, phone, email, photo,
+      address, weight, height, bloodType,
+      emergencyContact, notes,
+    } = body;
 
     const member = await db.member.update({
       where: { id },
@@ -115,6 +119,10 @@ export async function PUT(
         ...(phone !== undefined && { phone }),
         ...(email !== undefined && { email }),
         ...(photo !== undefined && { photo }),
+        ...(address !== undefined && { address }),
+        ...(weight !== undefined && { weight: weight ? parseFloat(String(weight)) : null }),
+        ...(height !== undefined && { height: height ? parseFloat(String(height)) : null }),
+        ...(bloodType !== undefined && { bloodType }),
         ...(emergencyContact !== undefined && { emergencyContact }),
         ...(notes !== undefined && { notes }),
       },

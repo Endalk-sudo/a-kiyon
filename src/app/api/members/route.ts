@@ -6,33 +6,6 @@ import { NextRequest } from 'next/server';
 
 type MemberStatus = 'active' | 'expiring_soon' | 'expired' | 'no_subscription';
 
-async function computeMemberStatus(memberId: string): Promise<MemberStatus> {
-  const subscriptions = await db.subscription.findMany({
-    where: { memberId },
-    select: { endDate: true, status: true },
-  });
-
-  if (subscriptions.length === 0) return 'no_subscription';
-
-  const now = new Date();
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  const hasActive = subscriptions.some(
-    (s) => s.endDate >= now && s.status !== 'cancelled'
-  );
-  const hasExpiringSoon = subscriptions.some(
-    (s) => s.endDate >= now && s.endDate <= sevenDaysFromNow && s.status !== 'cancelled'
-  );
-  const allExpired = subscriptions.every(
-    (s) => s.endDate < now || s.status === 'cancelled'
-  );
-
-  if (hasExpiringSoon) return 'expiring_soon';
-  if (hasActive) return 'active';
-  if (allExpired) return 'expired';
-  return 'expired';
-}
-
 export async function GET(request: NextRequest) {
   try {
     const session = await getSessionOrThrow();
@@ -103,7 +76,6 @@ export async function GET(request: NextRequest) {
         else status = 'expired';
       }
 
-      // Remove subscriptions array from the response, only keep status
       const { subscriptions: _subscriptions, ...memberData } = member;
       return { ...memberData, status };
     });
@@ -130,7 +102,11 @@ export async function POST(request: NextRequest) {
     const session = await getSessionOrThrow(['owner', 'manager']);
 
     const body = await request.json();
-    const { firstName, lastName, phone, email, photo, emergencyContact, notes } = body;
+    const {
+      firstName, lastName, phone, email, photo,
+      address, weight, height, bloodType,
+      emergencyContact, notes,
+    } = body;
 
     if (!firstName || !lastName) {
       return apiError('First name and last name are required');
@@ -143,6 +119,10 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         email: email || null,
         photo: photo || null,
+        address: address || null,
+        weight: weight ? parseFloat(String(weight)) : null,
+        height: height ? parseFloat(String(height)) : null,
+        bloodType: bloodType || null,
         emergencyContact: emergencyContact || null,
         notes: notes || null,
       },

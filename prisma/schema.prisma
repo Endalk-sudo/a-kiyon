@@ -30,6 +30,10 @@ model Member {
   phone            String?
   email            String?
   photo            String?
+  address          String?
+  weight           Float?    // weight in kg
+  height           Float?    // height in cm
+  bloodType        String?   // e.g. A+, B-, O+, AB+
   emergencyContact String?
   notes            String?
   isDeleted        Boolean   @default(false)

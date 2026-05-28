@@ -1,6 +1,5 @@
 import { db } from '@/lib/db';
 import { cookies } from 'next/headers';
-import bcrypt from 'bcryptjs';
 
 export interface Session {
   userId: string;
@@ -46,6 +45,9 @@ export async function getSessionOrThrow(allowedRoles?: string[]): Promise<Sessio
 }
 
 export async function login(email: string, password: string): Promise<Session | null> {
+  // Lazy import bcryptjs to avoid native addon issues with Turbopack
+  const bcrypt = await import('bcryptjs');
+  
   const user = await db.user.findUnique({ where: { email } });
   if (!user || !user.isActive) return null;
 
@@ -65,5 +67,7 @@ export async function login(email: string, password: string): Promise<Session | 
 }
 
 export async function hashPassword(password: string): Promise<string> {
+  // Lazy import bcryptjs
+  const bcrypt = await import('bcryptjs');
   return bcrypt.hash(password, 10);
 }

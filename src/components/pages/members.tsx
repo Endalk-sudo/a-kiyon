@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { membersApi } from '@/lib/api-client';
 import { StatusBadge, type StatusType } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
+import { PhotoCapture } from '@/components/photo-capture';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -35,6 +36,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -65,6 +67,11 @@ import {
   AlertTriangle,
   Users,
   UserPlus,
+  MapPin,
+  Scale,
+  Ruler,
+  Droplets,
+  Heart,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -76,6 +83,10 @@ interface Member {
   phone: string | null;
   email: string | null;
   photo: string | null;
+  address: string | null;
+  weight: number | null;
+  height: number | null;
+  bloodType: string | null;
   emergencyContact: string | null;
   notes: string | null;
   isDeleted: boolean;
@@ -151,8 +162,13 @@ interface MemberFormData {
   lastName: string;
   phone: string;
   email: string;
+  address: string;
+  weight: string;
+  height: string;
+  bloodType: string;
   emergencyContact: string;
   notes: string;
+  photo: string | null;
 }
 
 const emptyFormData: MemberFormData = {
@@ -160,9 +176,16 @@ const emptyFormData: MemberFormData = {
   lastName: '',
   phone: '',
   email: '',
+  address: '',
+  weight: '',
+  height: '',
+  bloodType: '',
   emergencyContact: '',
   notes: '',
+  photo: null,
 };
+
+const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 const statusFilters: { value: StatusType | 'all'; label: string; color: string }[] = [
   { value: 'all', label: 'All', color: '' },
@@ -179,7 +202,6 @@ const PAGE_LIMIT = 20;
 export function MembersPage() {
   const { session } = useAppStore();
   const isMobile = useIsMobile();
-  const { toast } = useToast();
 
   const isOwner = session?.role === 'owner';
   const isManagerOrAbove = session?.role === 'owner' || session?.role === 'manager';
@@ -232,21 +254,17 @@ export function MembersPage() {
       if (showDeleted) params.showDeleted = true;
 
       const result = await membersApi.list(params) as { data: Member[]; pagination: PaginationInfo };
-      setMembers(result.data);
+      setMembers(result.data || []);
       setPagination((prev) => ({
         ...result.pagination,
-        page: prev.page, // keep the requested page
+        page: prev.page,
       }));
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: 'Failed to load members',
-        variant: 'destructive',
-      });
+      toast.error('Failed to load members');
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, searchDebounced, statusFilter, showDeleted, toast]);
+  }, [pagination.page, searchDebounced, statusFilter, showDeleted]);
 
   useEffect(() => {
     fetchMembers();
@@ -274,11 +292,7 @@ export function MembersPage() {
       const detail = await membersApi.get(id) as MemberDetail;
       setMemberDetail(detail);
     } catch {
-      toast({
-        title: 'Error',
-        description: 'Failed to load member details',
-        variant: 'destructive',
-      });
+      toast.error('Failed to load member details');
     } finally {
       setDetailLoading(false);
     }
@@ -299,8 +313,13 @@ export function MembersPage() {
       lastName: member.lastName,
       phone: member.phone || '',
       email: member.email || '',
+      address: member.address || '',
+      weight: member.weight?.toString() || '',
+      height: member.height?.toString() || '',
+      bloodType: member.bloodType || '',
       emergencyContact: member.emergencyContact || '',
       notes: member.notes || '',
+      photo: member.photo || null,
     });
     setFormErrors({});
     setEditDialogOpen(true);
@@ -331,6 +350,12 @@ export function MembersPage() {
     if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
       errors.email = 'Invalid email format';
     }
+    if (data.weight && (isNaN(Number(data.weight)) || Number(data.weight) <= 0)) {
+      errors.weight = 'Weight must be a positive number';
+    }
+    if (data.height && (isNaN(Number(data.height)) || Number(data.height) <= 0)) {
+      errors.height = 'Height must be a positive number';
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -346,19 +371,20 @@ export function MembersPage() {
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim() || null,
         email: formData.email.trim() || null,
+        photo: formData.photo,
+        address: formData.address.trim() || null,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
+        height: formData.height ? parseFloat(formData.height) : null,
+        bloodType: formData.bloodType || null,
         emergencyContact: formData.emergencyContact.trim() || null,
         notes: formData.notes.trim() || null,
       });
-      toast({ title: 'Success', description: 'Member created successfully' });
+      toast.success('Member created successfully');
       setAddDialogOpen(false);
       setFormData(emptyFormData);
       fetchMembers();
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to create member',
-        variant: 'destructive',
-      });
+      toast.error(err instanceof Error ? err.message : 'Failed to create member');
     } finally {
       setSubmitting(false);
     }
@@ -373,18 +399,19 @@ export function MembersPage() {
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim() || null,
         email: formData.email.trim() || null,
+        photo: formData.photo,
+        address: formData.address.trim() || null,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
+        height: formData.height ? parseFloat(formData.height) : null,
+        bloodType: formData.bloodType || null,
         emergencyContact: formData.emergencyContact.trim() || null,
         notes: formData.notes.trim() || null,
       });
-      toast({ title: 'Success', description: 'Member updated successfully' });
+      toast.success('Member updated successfully');
       setEditDialogOpen(false);
       fetchMembers();
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to update member',
-        variant: 'destructive',
-      });
+      toast.error(err instanceof Error ? err.message : 'Failed to update member');
     } finally {
       setSubmitting(false);
     }
@@ -394,15 +421,11 @@ export function MembersPage() {
     if (!selectedMember) return;
     try {
       await membersApi.delete(selectedMember.id);
-      toast({ title: 'Success', description: 'Member deleted successfully' });
+      toast.success('Member deleted successfully');
       setDeleteDialogOpen(false);
       fetchMembers();
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to delete member',
-        variant: 'destructive',
-      });
+      toast.error(err instanceof Error ? err.message : 'Failed to delete member');
     }
   };
 
@@ -410,15 +433,11 @@ export function MembersPage() {
     if (!selectedMember) return;
     try {
       await membersApi.restore(selectedMember.id);
-      toast({ title: 'Success', description: 'Member restored successfully' });
+      toast.success('Member restored successfully');
       setRestoreDialogOpen(false);
       fetchMembers();
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to restore member',
-        variant: 'destructive',
-      });
+      toast.error(err instanceof Error ? err.message : 'Failed to restore member');
     }
   };
 
@@ -468,7 +487,6 @@ export function MembersPage() {
       {/* Search & Filters */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          {/* Search Bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -478,10 +496,7 @@ export function MembersPage() {
               className="pl-9"
             />
           </div>
-
-          {/* Filter Row */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Status Filter Buttons */}
             {statusFilters.map((filter) => (
               <Button
                 key={filter.value}
@@ -497,20 +512,12 @@ export function MembersPage() {
                 {filter.label}
               </Button>
             ))}
-
-            {/* Show Deleted Toggle (owner only) */}
             {isOwner && (
               <>
                 <Separator orientation="vertical" className="h-6 mx-1 hidden sm:block" />
                 <div className="flex items-center gap-2">
-                  <Switch
-                    id="show-deleted"
-                    checked={showDeleted}
-                    onCheckedChange={setShowDeleted}
-                  />
-                  <Label htmlFor="show-deleted" className="text-sm cursor-pointer">
-                    Show Deleted
-                  </Label>
+                  <Switch id="show-deleted" checked={showDeleted} onCheckedChange={setShowDeleted} />
+                  <Label htmlFor="show-deleted" className="text-sm cursor-pointer">Show Deleted</Label>
                 </div>
               </>
             )}
@@ -520,52 +527,39 @@ export function MembersPage() {
 
       {/* Members Count */}
       <div className="text-sm text-muted-foreground">
-        {loading ? (
-          <Skeleton className="h-4 w-32" />
-        ) : (
-          `${pagination.total} member${pagination.total !== 1 ? 's' : ''} found`
-        )}
+        {loading ? <Skeleton className="h-4 w-32" /> : `${pagination.total} member${pagination.total !== 1 ? 's' : ''} found`}
       </div>
 
       {/* Members List */}
       {loading ? (
-        <MembersListSkeleton isMobile={isMobile} />
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+          ))}
+        </div>
       ) : members.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center">
             <Users className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
             <h3 className="font-semibold text-lg">No members found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || statusFilter !== 'all'
-                ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first member'}
+              {search || statusFilter !== 'all' ? 'Try adjusting your search or filters' : 'Get started by adding your first member'}
             </p>
             {isManagerOrAbove && !search && statusFilter === 'all' && (
               <Button onClick={handleAddMember} className="mt-4">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add Member
+                <UserPlus className="h-4 w-4 mr-2" /> Add Member
               </Button>
             )}
           </CardContent>
         </Card>
       ) : isMobile ? (
-        /* Mobile Card Layout */
         <div className="space-y-3">
           {members.map((member) => (
-            <MemberCard
-              key={member.id}
-              member={member}
-              isOwner={isOwner}
-              isManagerOrAbove={isManagerOrAbove}
-              onView={handleViewMember}
-              onEdit={handleEditMember}
-              onDelete={handleDeleteMember}
-              onRestore={handleRestoreMember}
-            />
+            <MemberCard key={member.id} member={member} isOwner={isOwner} isManagerOrAbove={isManagerOrAbove}
+              onView={handleViewMember} onEdit={handleEditMember} onDelete={handleDeleteMember} onRestore={handleRestoreMember} />
           ))}
         </div>
       ) : (
-        /* Desktop Table Layout */
         <Card>
           <CardContent className="p-0">
             <Table>
@@ -573,7 +567,7 @@ export function MembersPage() {
                 <TableRow>
                   <TableHead className="w-[280px]">Member</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Blood</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -581,52 +575,34 @@ export function MembersPage() {
               </TableHeader>
               <TableBody>
                 {members.map((member) => (
-                  <TableRow
-                    key={member.id}
-                    className={member.isDeleted ? 'opacity-60' : ''}
-                  >
+                  <TableRow key={member.id} className={member.isDeleted ? 'opacity-60' : ''}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <MemberAvatar
-                          photo={member.photo}
-                          firstName={member.firstName}
-                          lastName={member.lastName}
-                          size="sm"
-                        />
+                        <MemberAvatar photo={member.photo} firstName={member.firstName} lastName={member.lastName} size="sm" />
                         <div className="min-w-0">
                           <div className="font-medium truncate">
                             {formatMemberName(member)}
                             {member.isDeleted && (
-                              <Badge variant="outline" className="ml-2 text-xs text-destructive border-destructive">
-                                Deleted
-                              </Badge>
+                              <Badge variant="outline" className="ml-2 text-xs text-destructive border-destructive">Deleted</Badge>
                             )}
                           </div>
+                          {member.email && <div className="text-xs text-muted-foreground truncate">{member.email}</div>}
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">
-                      {member.phone || '—'}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {member.email || '—'}
-                    </TableCell>
+                    <TableCell className="text-sm">{member.phone || '—'}</TableCell>
                     <TableCell>
-                      <StatusBadge status={member.status} size="sm" />
+                      {member.bloodType ? (
+                        <Badge variant="outline" className="text-xs text-red-600 border-red-200 bg-red-50">
+                          <Droplets className="h-3 w-3 mr-1" />{member.bloodType}
+                        </Badge>
+                      ) : '—'}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(member.createdAt)}
-                    </TableCell>
+                    <TableCell><StatusBadge status={member.status} size="sm" /></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatDate(member.createdAt)}</TableCell>
                     <TableCell className="text-right">
-                      <MemberActions
-                        member={member}
-                        isOwner={isOwner}
-                        isManagerOrAbove={isManagerOrAbove}
-                        onView={handleViewMember}
-                        onEdit={handleEditMember}
-                        onDelete={handleDeleteMember}
-                        onRestore={handleRestoreMember}
-                      />
+                      <MemberActions member={member} isOwner={isOwner} isManagerOrAbove={isManagerOrAbove}
+                        onView={handleViewMember} onEdit={handleEditMember} onDelete={handleDeleteMember} onRestore={handleRestoreMember} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -642,53 +618,21 @@ export function MembersPage() {
           <Pagination>
             <PaginationContent>
               <PaginationItem>
-                <PaginationPrevious
-                  onClick={() =>
-                    setPagination((prev) => ({
-                      ...prev,
-                      page: Math.max(1, prev.page - 1),
-                    }))
-                  }
-                  className={
-                    pagination.page <= 1
-                      ? 'pointer-events-none opacity-50'
-                      : 'cursor-pointer'
-                  }
-                />
+                <PaginationPrevious onClick={() => setPagination((p) => ({ ...p, page: Math.max(1, p.page - 1) }))}
+                  className={pagination.page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />
               </PaginationItem>
               {getPageNumbers().map((page, idx) =>
                 page === 'ellipsis' ? (
-                  <PaginationItem key={`ellipsis-${idx}`}>
-                    <PaginationEllipsis />
-                  </PaginationItem>
+                  <PaginationItem key={`e-${idx}`}><PaginationEllipsis /></PaginationItem>
                 ) : (
                   <PaginationItem key={page}>
-                    <PaginationLink
-                      isActive={pagination.page === page}
-                      onClick={() =>
-                        setPagination((prev) => ({ ...prev, page }))
-                      }
-                      className="cursor-pointer"
-                    >
-                      {page}
-                    </PaginationLink>
+                    <PaginationLink isActive={pagination.page === page} onClick={() => setPagination((p) => ({ ...p, page }))} className="cursor-pointer">{page}</PaginationLink>
                   </PaginationItem>
                 )
               )}
               <PaginationItem>
-                <PaginationNext
-                  onClick={() =>
-                    setPagination((prev) => ({
-                      ...prev,
-                      page: Math.min(prev.totalPages, prev.page + 1),
-                    }))
-                  }
-                  className={
-                    pagination.page >= pagination.totalPages
-                      ? 'pointer-events-none opacity-50'
-                      : 'cursor-pointer'
-                  }
-                />
+                <PaginationNext onClick={() => setPagination((p) => ({ ...p, page: Math.min(p.totalPages, p.page + 1) }))}
+                  className={pagination.page >= pagination.totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} />
               </PaginationItem>
             </PaginationContent>
           </Pagination>
@@ -697,58 +641,30 @@ export function MembersPage() {
 
       {/* ─── Add Member Dialog ──────────────────────────────────────────── */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Member</DialogTitle>
-            <DialogDescription>
-              Create a new member account in the system.
-            </DialogDescription>
+            <DialogDescription>Enter member information and photo.</DialogDescription>
           </DialogHeader>
-          <MemberForm
-            formData={formData}
-            setFormData={setFormData}
-            formErrors={formErrors}
-          />
+          <MemberForm formData={formData} setFormData={setFormData} formErrors={formErrors} />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setAddDialogOpen(false)}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleCreateMember} disabled={submitting}>
-              {submitting ? 'Creating...' : 'Create Member'}
-            </Button>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={submitting}>Cancel</Button>
+            <Button onClick={handleCreateMember} disabled={submitting}>{submitting ? 'Creating...' : 'Create Member'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ─── Edit Member Dialog ──────────────────────────────────────────── */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Member</DialogTitle>
-            <DialogDescription>
-              Update member information.
-            </DialogDescription>
+            <DialogDescription>Update member information.</DialogDescription>
           </DialogHeader>
-          <MemberForm
-            formData={formData}
-            setFormData={setFormData}
-            formErrors={formErrors}
-          />
+          <MemberForm formData={formData} setFormData={setFormData} formErrors={formErrors} />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditDialogOpen(false)}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleUpdateMember} disabled={submitting}>
-              {submitting ? 'Saving...' : 'Save Changes'}
-            </Button>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={submitting}>Cancel</Button>
+            <Button onClick={handleUpdateMember} disabled={submitting}>{submitting ? 'Saving...' : 'Save Changes'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -761,114 +677,94 @@ export function MembersPage() {
           </DialogHeader>
           {detailLoading ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-14 w-14 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-40" />
-                  <Skeleton className="h-4 w-24" />
-                </div>
-              </div>
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-32 w-full" />
+              <div className="flex items-center gap-4"><Skeleton className="h-14 w-14 rounded-full" /><div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-4 w-24" /></div></div>
+              <Skeleton className="h-4 w-32" /><Skeleton className="h-32 w-full" />
             </div>
           ) : memberDetail ? (
             <div className="space-y-6">
               {/* Member Header */}
               <div className="flex items-start gap-4">
-                <MemberAvatar
-                  photo={memberDetail.photo}
-                  firstName={memberDetail.firstName}
-                  lastName={memberDetail.lastName}
-                  size="lg"
-                />
+                <MemberAvatar photo={memberDetail.photo} firstName={memberDetail.firstName} lastName={memberDetail.lastName} size="lg" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-lg font-semibold">
-                      {formatMemberName(memberDetail)}
-                    </h3>
+                    <h3 className="text-lg font-semibold">{formatMemberName(memberDetail)}</h3>
                     <StatusBadge status={memberDetail.status} size="sm" />
-                    {memberDetail.isDeleted && (
-                      <Badge variant="outline" className="text-xs text-destructive border-destructive">
-                        Deleted
-                      </Badge>
-                    )}
+                    {memberDetail.isDeleted && <Badge variant="outline" className="text-xs text-destructive border-destructive">Deleted</Badge>}
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1 text-sm text-muted-foreground">
-                    {memberDetail.phone && (
-                      <span className="flex items-center gap-1">
-                        <Phone className="h-3.5 w-3.5" />
-                        {memberDetail.phone}
-                      </span>
-                    )}
-                    {memberDetail.email && (
-                      <span className="flex items-center gap-1">
-                        <Mail className="h-3.5 w-3.5" />
-                        {memberDetail.email}
-                      </span>
-                    )}
+                    {memberDetail.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{memberDetail.phone}</span>}
+                    {memberDetail.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" />{memberDetail.email}</span>}
                   </div>
                 </div>
               </div>
 
-              {/* Contact Info */}
+              {/* Physical Info */}
+              {(memberDetail.address || memberDetail.weight || memberDetail.height || memberDetail.bloodType) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {memberDetail.address && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm">{memberDetail.address}</span>
+                    </div>
+                  )}
+                  {memberDetail.weight && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                      <Scale className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm">{memberDetail.weight} kg</span>
+                    </div>
+                  )}
+                  {memberDetail.height && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                      <Ruler className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm">{memberDetail.height} cm</span>
+                    </div>
+                  )}
+                  {memberDetail.bloodType && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 text-red-700">
+                      <Droplets className="h-4 w-4 shrink-0" />
+                      <span className="text-sm font-medium">{memberDetail.bloodType}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {(memberDetail.emergencyContact || memberDetail.notes) && (
                 <div className="space-y-2">
                   {memberDetail.emergencyContact && (
-                    <div className="text-sm">
-                      <span className="font-medium">Emergency Contact:</span>{' '}
-                      {memberDetail.emergencyContact}
-                    </div>
+                    <div className="text-sm"><span className="font-medium">Emergency Contact:</span> {memberDetail.emergencyContact}</div>
                   )}
                   {memberDetail.notes && (
-                    <div className="text-sm">
-                      <span className="font-medium">Notes:</span>{' '}
-                      {memberDetail.notes}
-                    </div>
+                    <div className="text-sm"><span className="font-medium">Notes:</span> {memberDetail.notes}</div>
                   )}
                 </div>
               )}
 
               <Separator />
 
+              {/* BMI if both weight and height */}
+              {memberDetail.weight && memberDetail.height && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 text-emerald-700">
+                  <Heart className="h-4 w-4" />
+                  <span className="text-sm font-medium">BMI: {(memberDetail.weight / ((memberDetail.height / 100) ** 2)).toFixed(1)}</span>
+                </div>
+              )}
+
               {/* Subscriptions */}
               <div>
-                <h4 className="font-semibold mb-3">
-                  Subscriptions ({memberDetail.subscriptions.length})
-                </h4>
-                {memberDetail.subscriptions.length === 0 ? (
+                <h4 className="font-semibold mb-3">Subscriptions ({memberDetail.subscriptions?.length || 0})</h4>
+                {!memberDetail.subscriptions?.length ? (
                   <p className="text-sm text-muted-foreground">No subscriptions yet</p>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {memberDetail.subscriptions.map((sub) => (
-                      <div
-                        key={sub.id}
-                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                      >
+                      <div key={sub.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                         <div>
-                          <div className="font-medium text-sm">
-                            {sub.service.name}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatDate(sub.startDate)} — {formatDate(sub.endDate)}
-                          </div>
+                          <div className="font-medium text-sm">{sub.service.name}</div>
+                          <div className="text-xs text-muted-foreground">{formatDate(sub.startDate)} — {formatDate(sub.endDate)}</div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {formatCurrency(sub.priceSnapshot)}
-                          </span>
-                          <Badge
-                            variant={
-                              sub.status === 'active'
-                                ? 'default'
-                                : sub.status === 'expired'
-                                ? 'secondary'
-                                : 'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {sub.status}
-                          </Badge>
+                          <span className="text-sm font-medium">{formatCurrency(sub.priceSnapshot)}</span>
+                          <Badge variant={sub.status === 'active' ? 'default' : sub.status === 'expired' ? 'secondary' : 'outline'} className="text-xs">{sub.status}</Badge>
                         </div>
                       </div>
                     ))}
@@ -878,44 +774,20 @@ export function MembersPage() {
 
               {/* Invoices */}
               <div>
-                <h4 className="font-semibold mb-3">
-                  Invoices ({memberDetail.invoices.length})
-                </h4>
-                {memberDetail.invoices.length === 0 ? (
+                <h4 className="font-semibold mb-3">Invoices ({memberDetail.invoices?.length || 0})</h4>
+                {!memberDetail.invoices?.length ? (
                   <p className="text-sm text-muted-foreground">No invoices yet</p>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {memberDetail.invoices.map((inv) => (
-                      <div
-                        key={inv.id}
-                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                      >
+                      <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                         <div>
-                          <div className="font-medium text-sm">
-                            {inv.subscription?.service?.name || 'Service'}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Due: {formatDate(inv.dueDate)}
-                          </div>
+                          <div className="font-medium text-sm">{inv.subscription?.service?.name || 'Service'}</div>
+                          <div className="text-xs text-muted-foreground">Due: {formatDate(inv.dueDate)}</div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {formatCurrency(inv.amount)}
-                          </span>
-                          <Badge
-                            variant={
-                              inv.status === 'paid'
-                                ? 'default'
-                                : inv.status === 'pending'
-                                ? 'secondary'
-                                : inv.status === 'overdue'
-                                ? 'destructive'
-                                : 'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {inv.status}
-                          </Badge>
+                          <span className="text-sm font-medium">{formatCurrency(inv.amount)}</span>
+                          <Badge variant={inv.status === 'paid' ? 'default' : inv.status === 'overdue' ? 'destructive' : 'secondary'} className="text-xs">{inv.status}</Badge>
                         </div>
                       </div>
                     ))}
@@ -925,35 +797,20 @@ export function MembersPage() {
 
               {/* Payments */}
               <div>
-                <h4 className="font-semibold mb-3">
-                  Payments ({memberDetail.payments.length})
-                </h4>
-                {memberDetail.payments.length === 0 ? (
+                <h4 className="font-semibold mb-3">Payments ({memberDetail.payments?.length || 0})</h4>
+                {!memberDetail.payments?.length ? (
                   <p className="text-sm text-muted-foreground">No payments yet</p>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {memberDetail.payments.map((pay) => (
-                      <div
-                        key={pay.id}
-                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                      >
+                      <div key={pay.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                         <div>
-                          <div className="font-medium text-sm">
-                            {pay.receiptNumber}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {pay.invoice?.subscription?.service?.name || 'Service'} — {formatDate(pay.paymentDate)}
-                          </div>
+                          <div className="font-medium text-sm">{pay.receiptNumber}</div>
+                          <div className="text-xs text-muted-foreground">{pay.invoice?.subscription?.service?.name || 'Service'} — {formatDate(pay.paymentDate)}</div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {formatCurrency(pay.amount)}
-                          </span>
-                          {pay.isVoided && (
-                            <Badge variant="destructive" className="text-xs">
-                              Voided
-                            </Badge>
-                          )}
+                          <span className="text-sm font-medium">{formatCurrency(pay.amount)}</span>
+                          {pay.isVoided && <Badge variant="destructive" className="text-xs">Voided</Badge>}
                         </div>
                       </div>
                     ))}
@@ -969,24 +826,14 @@ export function MembersPage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Delete Member
-            </AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Delete Member</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{selectedMember && formatMemberName(selectedMember)}</strong>?
-              This action soft-deletes the member. You can restore them later.
+              Are you sure you want to delete <strong>{selectedMember && formatMemberName(selectedMember)}</strong>? This action soft-deletes the member. You can restore them later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -995,20 +842,14 @@ export function MembersPage() {
       <AlertDialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5" />
-              Restore Member
-            </AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2"><RotateCcw className="h-5 w-5" />Restore Member</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to restore{' '}
-              <strong>{selectedMember && formatMemberName(selectedMember)}</strong>?
+              Are you sure you want to restore <strong>{selectedMember && formatMemberName(selectedMember)}</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmRestore}>
-              Restore
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirmRestore}>Restore</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1019,83 +860,30 @@ export function MembersPage() {
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
 /** Member Card (mobile layout) */
-function MemberCard({
-  member,
-  isOwner,
-  isManagerOrAbove,
-  onView,
-  onEdit,
-  onDelete,
-  onRestore,
-}: {
-  member: Member;
-  isOwner: boolean;
-  isManagerOrAbove: boolean;
-  onView: (m: Member) => void;
-  onEdit: (m: Member) => void;
-  onDelete: (m: Member) => void;
-  onRestore: (m: Member) => void;
+function MemberCard({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelete, onRestore }: {
+  member: Member; isOwner: boolean; isManagerOrAbove: boolean;
+  onView: (m: Member) => void; onEdit: (m: Member) => void; onDelete: (m: Member) => void; onRestore: (m: Member) => void;
 }) {
   return (
     <Card className={member.isDeleted ? 'opacity-60' : ''}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <MemberAvatar
-            photo={member.photo}
-            firstName={member.firstName}
-            lastName={member.lastName}
-            size="md"
-          />
+          <MemberAvatar photo={member.photo} firstName={member.firstName} lastName={member.lastName} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold truncate">
-                {formatMemberName(member)}
-              </span>
+              <span className="font-semibold truncate">{formatMemberName(member)}</span>
               <StatusBadge status={member.status} size="sm" />
             </div>
-            {member.isDeleted && (
-              <Badge variant="outline" className="mt-1 text-xs text-destructive border-destructive">
-                Deleted
-              </Badge>
-            )}
+            {member.isDeleted && <Badge variant="outline" className="mt-1 text-xs text-destructive border-destructive">Deleted</Badge>}
             <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
-              {member.phone && (
-                <div className="flex items-center gap-1.5">
-                  <Phone className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{member.phone}</span>
-                </div>
-              )}
-              {member.email && (
-                <div className="flex items-center gap-1.5">
-                  <Mail className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{member.email}</span>
-                </div>
-              )}
+              {member.phone && <div className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" /><span className="truncate">{member.phone}</span></div>}
+              {member.bloodType && <div className="flex items-center gap-1.5"><Droplets className="h-3 w-3 shrink-0 text-red-500" /><span>{member.bloodType}</span></div>}
             </div>
             <div className="flex items-center gap-1.5 mt-3">
-              <Button variant="outline" size="sm" onClick={() => onView(member)}>
-                <Eye className="h-3.5 w-3.5" />
-              </Button>
-              {isManagerOrAbove && !member.isDeleted && (
-                <Button variant="outline" size="sm" onClick={() => onEdit(member)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {isOwner && member.isDeleted && (
-                <Button variant="outline" size="sm" onClick={() => onRestore(member)}>
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {isOwner && !member.isDeleted && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => onDelete(member)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              <Button variant="outline" size="sm" onClick={() => onView(member)}><Eye className="h-3.5 w-3.5" /></Button>
+              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="sm" onClick={() => onEdit(member)}><Pencil className="h-3.5 w-3.5" /></Button>}
+              {isOwner && member.isDeleted && <Button variant="outline" size="sm" onClick={() => onRestore(member)}><RotateCcw className="h-3.5 w-3.5" /></Button>}
+              {isOwner && !member.isDeleted && <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(member)}><Trash2 className="h-3.5 w-3.5" /></Button>}
             </div>
           </div>
         </div>
@@ -1104,228 +892,126 @@ function MemberCard({
   );
 }
 
-/** Member Action Buttons (desktop table) */
-function MemberActions({
-  member,
-  isOwner,
-  isManagerOrAbove,
-  onView,
-  onEdit,
-  onDelete,
-  onRestore,
-}: {
-  member: Member;
-  isOwner: boolean;
-  isManagerOrAbove: boolean;
-  onView: (m: Member) => void;
-  onEdit: (m: Member) => void;
-  onDelete: (m: Member) => void;
-  onRestore: (m: Member) => void;
+/** Member Actions (desktop table) */
+function MemberActions({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelete, onRestore }: {
+  member: Member; isOwner: boolean; isManagerOrAbove: boolean;
+  onView: (m: Member) => void; onEdit: (m: Member) => void; onDelete: (m: Member) => void; onRestore: (m: Member) => void;
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon" onClick={() => onView(member)} title="View">
-        <Eye className="h-4 w-4" />
-      </Button>
-      {isManagerOrAbove && !member.isDeleted && (
-        <Button variant="ghost" size="icon" onClick={() => onEdit(member)} title="Edit">
-          <Pencil className="h-4 w-4" />
-        </Button>
-      )}
-      {isOwner && member.isDeleted && (
-        <Button variant="ghost" size="icon" onClick={() => onRestore(member)} title="Restore">
-          <RotateCcw className="h-4 w-4" />
-        </Button>
-      )}
-      {isOwner && !member.isDeleted && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-destructive hover:text-destructive"
-          onClick={() => onDelete(member)}
-          title="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      )}
+      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onView(member)}><Eye className="h-4 w-4" /></Button>
+      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(member)}><Pencil className="h-4 w-4" /></Button>}
+      {isOwner && member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onRestore(member)}><RotateCcw className="h-4 w-4" /></Button>}
+      {isOwner && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => onDelete(member)}><Trash2 className="h-4 w-4" /></Button>}
     </div>
   );
 }
 
-/** Member Form (shared between Add & Edit) */
-function MemberForm({
-  formData,
-  setFormData,
-  formErrors,
-}: {
+/** Member Form (shared between Add and Edit dialogs) */
+function MemberForm({ formData, setFormData, formErrors }: {
   formData: MemberFormData;
   setFormData: React.Dispatch<React.SetStateAction<MemberFormData>>;
   formErrors: Partial<Record<keyof MemberFormData, string>>;
 }) {
-  const updateField = (field: keyof MemberFormData, value: string) => {
+  const updateField = (field: keyof MemberFormData, value: string | null) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
-    <div className="space-y-4 py-2">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="firstName">
-            First Name <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="firstName"
-            value={formData.firstName}
-            onChange={(e) => updateField('firstName', e.target.value)}
-            placeholder="Enter first name"
-            className={formErrors.firstName ? 'border-destructive' : ''}
-          />
-          {formErrors.firstName && (
-            <p className="text-xs text-destructive">{formErrors.firstName}</p>
-          )}
+    <div className="space-y-5">
+      {/* Photo Section */}
+      <PhotoCapture
+        value={formData.photo}
+        onChange={(url) => updateField('photo', url)}
+        firstName={formData.firstName}
+        lastName={formData.lastName}
+      />
+
+      <Separator />
+
+      {/* Personal Info */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-muted-foreground">Personal Information</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="firstName">First Name *</Label>
+            <Input id="firstName" value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} placeholder="First name" />
+            {formErrors.firstName && <p className="text-xs text-destructive">{formErrors.firstName}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="lastName">Last Name *</Label>
+            <Input id="lastName" value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} placeholder="Last name" />
+            {formErrors.lastName && <p className="text-xs text-destructive">{formErrors.lastName}</p>}
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="lastName">
-            Last Name <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="lastName"
-            value={formData.lastName}
-            onChange={(e) => updateField('lastName', e.target.value)}
-            placeholder="Enter last name"
-            className={formErrors.lastName ? 'border-destructive' : ''}
-          />
-          {formErrors.lastName && (
-            <p className="text-xs text-destructive">{formErrors.lastName}</p>
-          )}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="phone">Phone</Label>
+            <Input id="phone" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="+251..." />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} placeholder="email@example.com" />
+            {formErrors.email && <p className="text-xs text-destructive">{formErrors.email}</p>}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="address">Address</Label>
+          <Input id="address" value={formData.address} onChange={(e) => updateField('address', e.target.value)} placeholder="Street, City" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone</Label>
-          <Input
-            id="phone"
-            value={formData.phone}
-            onChange={(e) => updateField('phone', e.target.value)}
-            placeholder="Enter phone number"
-          />
+      <Separator />
+
+      {/* Physical Info */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-muted-foreground">Physical Information</h4>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="weight">Weight (kg)</Label>
+            <Input id="weight" type="number" step="0.1" value={formData.weight} onChange={(e) => updateField('weight', e.target.value)} placeholder="70" />
+            {formErrors.weight && <p className="text-xs text-destructive">{formErrors.weight}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="height">Height (cm)</Label>
+            <Input id="height" type="number" step="0.1" value={formData.height} onChange={(e) => updateField('height', e.target.value)} placeholder="175" />
+            {formErrors.height && <p className="text-xs text-destructive">{formErrors.height}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bloodType">Blood Type</Label>
+            <Select value={formData.bloodType} onValueChange={(v) => updateField('bloodType', v)}>
+              <SelectTrigger id="bloodType"><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                {bloodTypes.map((bt) => (
+                  <SelectItem key={bt} value={bt}>{bt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => updateField('email', e.target.value)}
-            placeholder="Enter email address"
-            className={formErrors.email ? 'border-destructive' : ''}
-          />
-          {formErrors.email && (
-            <p className="text-xs text-destructive">{formErrors.email}</p>
-          )}
-        </div>
+        {/* BMI Preview */}
+        {formData.weight && formData.height && Number(formData.height) > 0 && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+            <Heart className="h-4 w-4" />
+            <span>BMI: {(Number(formData.weight) / ((Number(formData.height) / 100) ** 2)).toFixed(1)}</span>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="emergencyContact">Emergency Contact</Label>
-        <Input
-          id="emergencyContact"
-          value={formData.emergencyContact}
-          onChange={(e) => updateField('emergencyContact', e.target.value)}
-          placeholder="Enter emergency contact info"
-        />
-      </div>
+      <Separator />
 
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea
-          id="notes"
-          value={formData.notes}
-          onChange={(e) => updateField('notes', e.target.value)}
-          placeholder="Additional notes about the member"
-          rows={3}
-        />
+      {/* Additional Info */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-muted-foreground">Additional Information</h4>
+        <div className="space-y-1.5">
+          <Label htmlFor="emergencyContact">Emergency Contact</Label>
+          <Input id="emergencyContact" value={formData.emergencyContact} onChange={(e) => updateField('emergencyContact', e.target.value)} placeholder="Name and phone number" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="notes">Notes</Label>
+          <Textarea id="notes" value={formData.notes} onChange={(e) => updateField('notes', e.target.value)} placeholder="Any additional notes..." rows={2} />
+        </div>
       </div>
     </div>
-  );
-}
-
-/** Loading Skeleton for Members List */
-function MembersListSkeleton({ isMobile }: { isMobile: boolean }) {
-  if (isMobile) {
-    return (
-      <div className="space-y-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <Skeleton className="h-10 w-10 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-3 w-36" />
-                  <div className="flex gap-1.5 mt-2">
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Member</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <Skeleton className="h-4 w-28" />
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-24" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-32" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-6 w-20 rounded-full" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-20" />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
   );
 }
