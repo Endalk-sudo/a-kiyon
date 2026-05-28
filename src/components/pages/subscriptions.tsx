@@ -47,6 +47,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
   Pagination,
   PaginationContent,
@@ -57,12 +58,12 @@ import {
 } from '@/components/ui/pagination';
 import {
   Plus,
-  Search,
   Filter,
   Ban,
-  ChevronLeft,
-  ChevronRight,
+  RefreshCw,
+  Info,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Types
 interface Member {
@@ -75,6 +76,7 @@ interface Member {
 interface Service {
   id: string;
   name: string;
+  nameAm: string | null;
   price: number;
   duration: number;
 }
@@ -89,7 +91,7 @@ interface Subscription {
   priceSnapshot: number;
   notes?: string | null;
   member: Member;
-  service: { name: string; price: number; duration: number };
+  service: { id: string; name: string; nameAm: string | null; price: number; duration: number };
 }
 
 interface SubscriptionsResponse {
@@ -154,7 +156,6 @@ export function SubscriptionsPage() {
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatus>('all');
-  const [searchTerm, setSearchTerm] = useState('');
 
   // Add subscription dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -172,6 +173,11 @@ export function SubscriptionsPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [subscriptionToCancel, setSubscriptionToCancel] = useState<Subscription | null>(null);
   const [cancelling, setCancelling] = useState(false);
+
+  // Renew subscription dialog state
+  const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+  const [subscriptionToRenew, setSubscriptionToRenew] = useState<Subscription | null>(null);
+  const [renewing, setRenewing] = useState(false);
 
   // Fetch subscriptions
   const fetchSubscriptions = useCallback(async (page = 1) => {
@@ -250,6 +256,7 @@ export function SubscriptionsPage() {
         startDate: startDateIso,
         notes: notes || undefined,
       });
+      toast.success('Subscription created. A pending invoice has been generated — record the payment when the member pays.');
       setAddDialogOpen(false);
       fetchSubscriptions(1);
     } catch (error) {
@@ -265,13 +272,37 @@ export function SubscriptionsPage() {
     setCancelling(true);
     try {
       await subscriptionsApi.update(subscriptionToCancel.id, { status: 'cancelled' });
+      toast.success('Subscription cancelled');
       setCancelDialogOpen(false);
       setSubscriptionToCancel(null);
       fetchSubscriptions(pagination.page);
     } catch (error) {
+      toast.error('Failed to cancel subscription');
       console.error('Failed to cancel subscription:', error);
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // Handle renew subscription
+  const handleRenewSubscription = async () => {
+    if (!subscriptionToRenew) return;
+    setRenewing(true);
+    try {
+      const result = await subscriptionsApi.renew(subscriptionToRenew.id) as {
+        subscription: Subscription;
+        invoice: { id: string; amount: number; status: string };
+      };
+      toast.success(
+        `Subscription renewed! A pending invoice of ${formatCurrency(result.invoice?.amount || subscriptionToRenew.priceSnapshot)} has been created. Go to Payments to record the payment.`
+      );
+      setRenewDialogOpen(false);
+      setSubscriptionToRenew(null);
+      fetchSubscriptions(pagination.page);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to renew subscription');
+    } finally {
+      setRenewing(false);
     }
   };
 
@@ -292,24 +323,32 @@ export function SubscriptionsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Subscriptions</h1>
-          <p className="text-muted-foreground">Manage member subscriptions and services</p>
+          <p className="text-muted-foreground">Manage member subscriptions and renewals</p>
         </div>
         {canManage && (
           <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                Add Subscription
+                New Subscription
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add New Subscription</DialogTitle>
+                <DialogTitle>Register New Subscription</DialogTitle>
                 <DialogDescription>
-                  Create a new subscription for a member. The end date will be calculated automatically based on the service duration.
+                  Register a member for a service. The member pays you directly (cash, bank transfer, or mobile money), then you create the subscription and record the payment.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
+                {/* Info banner */}
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  <p className="text-xs">
+                    <strong>Manual Payment:</strong> The member pays you first. After creating the subscription, a pending invoice will be generated. Go to Payments to record the payment and mark the invoice as paid.
+                  </p>
+                </div>
+
                 {/* Member Select */}
                 <div className="space-y-2">
                   <Label htmlFor="member-select">Member</Label>
@@ -343,9 +382,19 @@ export function SubscriptionsPage() {
                     </SelectContent>
                   </Select>
                   {selectedService && (
-                    <p className="text-xs text-muted-foreground">
-                      Duration: {selectedService.duration} days | Price: {formatCurrency(selectedService.price)}
-                    </p>
+                    <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Duration:</span>
+                        <span className="font-medium">{selectedService.duration} days</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Price:</span>
+                        <span className="font-bold text-emerald-600">{formatCurrency(selectedService.price)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground pt-1">
+                        Collect {formatCurrency(selectedService.price)} from the member before registering.
+                      </p>
+                    </div>
                   )}
                 </div>
 
@@ -421,8 +470,8 @@ export function SubscriptionsPage() {
             <TableRow>
               <TableHead>Member</TableHead>
               <TableHead>Service</TableHead>
-              <TableHead className="hidden md:table-cell">Start Date (EC)</TableHead>
-              <TableHead className="hidden md:table-cell">End Date (EC)</TableHead>
+              <TableHead className="hidden md:table-cell">Start Date</TableHead>
+              <TableHead className="hidden md:table-cell">End Date</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="hidden sm:table-cell">Price</TableHead>
               {canManage && <TableHead>Actions</TableHead>}
@@ -489,20 +538,38 @@ export function SubscriptionsPage() {
                   </TableCell>
                   {canManage && (
                     <TableCell>
-                      {sub.status === 'active' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            setSubscriptionToCancel(sub);
-                            setCancelDialogOpen(true);
-                          }}
-                        >
-                          <Ban className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Cancel</span>
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {sub.status === 'active' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              setSubscriptionToCancel(sub);
+                              setCancelDialogOpen(true);
+                            }}
+                            title="Cancel subscription"
+                          >
+                            <Ban className="h-4 w-4" />
+                            <span className="hidden sm:inline ml-1">Cancel</span>
+                          </Button>
+                        )}
+                        {(sub.status === 'expired' || sub.status === 'cancelled') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => {
+                              setSubscriptionToRenew(sub);
+                              setRenewDialogOpen(true);
+                            }}
+                            title="Renew subscription"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            <span className="hidden sm:inline ml-1">Renew</span>
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   )}
                 </TableRow>
@@ -534,7 +601,6 @@ export function SubscriptionsPage() {
               </PaginationItem>
               {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
                 .filter((page) => {
-                  // Show first, last, current, and adjacent pages
                   return (
                     page === 1 ||
                     page === pagination.totalPages ||
@@ -611,6 +677,61 @@ export function SubscriptionsPage() {
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >
               {cancelling ? 'Cancelling...' : 'Cancel Subscription'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Renew Confirmation Dialog */}
+      <AlertDialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-emerald-600" />
+              Renew Subscription
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                {subscriptionToRenew && (
+                  <>
+                    <p>
+                      You are about to renew the <strong>{subscriptionToRenew.service.name}</strong> subscription for{' '}
+                      <strong>{formatMemberName(subscriptionToRenew.member)}</strong>.
+                    </p>
+                    <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Service:</span>
+                        <span className="font-medium">{subscriptionToRenew.service.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Price:</span>
+                        <span className="font-bold text-emerald-600">{formatCurrency(subscriptionToRenew.priceSnapshot)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Duration:</span>
+                        <span className="font-medium">{subscriptionToRenew.service.duration} days</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
+                      <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                      <p className="text-xs">
+                        <strong>Manual Payment:</strong> Make sure the member has paid you {formatCurrency(subscriptionToRenew.priceSnapshot)} before renewing. 
+                        After renewal, a pending invoice will be created — go to Payments to record it.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={renewing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRenewSubscription}
+              disabled={renewing}
+              className="bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-600"
+            >
+              {renewing ? 'Renewing...' : 'Confirm Renewal'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

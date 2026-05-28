@@ -55,6 +55,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -510,7 +511,7 @@ export function PaymentsPage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Payments</h2>
           <p className="text-muted-foreground text-sm">
-            Manage payment records, print receipts, and void transactions
+            Record payments received from members (cash, bank transfer, or mobile money)
           </p>
         </div>
         <Button onClick={() => setRecordDialogOpen(true)}>
@@ -808,11 +809,19 @@ export function PaymentsPage() {
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              Create a new payment record for a member&apos;s pending invoice.
+              Record a payment you received from a member. The member pays you directly, then you record it here.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-2">
+            {/* Manual payment info */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
+              <Info className="h-4 w-4 mt-0.5 shrink-0" />
+              <p className="text-xs">
+                <strong>Manual Payment:</strong> The member pays you directly (cash, bank transfer, or mobile money). After receiving the payment, select their pending invoice and record it here. A receipt will be generated automatically.
+              </p>
+            </div>
+
             {/* Select Member */}
             <div className="space-y-2">
               <Label htmlFor="select-member">Member</Label>

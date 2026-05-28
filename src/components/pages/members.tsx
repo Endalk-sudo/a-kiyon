@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { membersApi } from '@/lib/api-client';
+import { membersApi, subscriptionsApi } from '@/lib/api-client';
 import { StatusBadge, type StatusType } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
 import { PhotoCapture } from '@/components/photo-capture';
@@ -72,6 +72,7 @@ import {
   Ruler,
   Droplets,
   Heart,
+  RefreshCw,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -765,6 +766,25 @@ export function MembersPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{formatCurrency(sub.priceSnapshot)}</span>
                           <Badge variant={sub.status === 'active' ? 'default' : sub.status === 'expired' ? 'secondary' : 'outline'} className="text-xs">{sub.status}</Badge>
+                          {isManagerOrAbove && (sub.status === 'expired' || sub.status === 'cancelled') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+                              onClick={async () => {
+                                try {
+                                  const result = await subscriptionsApi.renew(sub.id) as { invoice: { amount: number } };
+                                  toast.success(`Subscription renewed! Pending invoice of ${formatCurrency(result.invoice?.amount || sub.priceSnapshot)}. Go to Payments to record it.`);
+                                  fetchMemberDetail(memberDetail.id);
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : 'Failed to renew subscription');
+                                }
+                              }}
+                            >
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                              Renew
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}

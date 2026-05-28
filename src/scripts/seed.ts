@@ -43,14 +43,14 @@ async function main() {
 
   console.log('Created users:', owner.email, manager.email);
 
-  // Create services
+  // Create 3 services: Gym, Karate, Aerobics
   const services = await Promise.all([
     prisma.service.create({
       data: {
-        name: 'Monthly Gym',
-        nameAm: 'ወርሃዊ ጂም',
-        description: 'Standard monthly gym access',
-        descriptionAm: 'መደበኛ ወርሃዊ የጂም ተደራሽነት',
+        name: 'Gym',
+        nameAm: 'ጂም',
+        description: 'Full gym access with all equipment and facilities',
+        descriptionAm: 'ሙሉ የጂም ተደራሽነት ከሁሉም መሳሪያዎች እና ተቋማት ጋር',
         price: 1500,
         duration: 30,
         isActive: true,
@@ -58,75 +58,42 @@ async function main() {
     }),
     prisma.service.create({
       data: {
-        name: '3-Month Gym',
-        nameAm: '3 ወር ጂም',
-        description: '3-month gym access package',
-        descriptionAm: '3 ወር የጂም ተደራሽነት ፓኬጅ',
-        price: 4000,
-        duration: 90,
-        isActive: true,
-      },
-    }),
-    prisma.service.create({
-      data: {
-        name: '6-Month Gym',
-        nameAm: '6 ወር ጂም',
-        description: '6-month gym access package',
-        descriptionAm: '6 ወር የጂም ተደራሽነት ፓኬጅ',
-        price: 7500,
-        duration: 180,
-        isActive: true,
-      },
-    }),
-    prisma.service.create({
-      data: {
-        name: 'Annual Gym',
-        nameAm: 'ዓመታዊ ጂም',
-        description: 'Annual gym access package',
-        descriptionAm: 'ዓመታዊ የጂም ተደራሽነት ፓኬጅ',
-        price: 14000,
-        duration: 365,
-        isActive: true,
-      },
-    }),
-    prisma.service.create({
-      data: {
-        name: 'Personal Training',
-        nameAm: 'የግል ስልጠና',
-        description: 'One-on-one personal training sessions',
-        descriptionAm: 'አንድ ላይ የግል ስልጠና ክፍለ ጊዜዎች',
-        price: 3000,
+        name: 'Karate',
+        nameAm: 'ካራቴ',
+        description: 'Karate training classes with professional instructors',
+        descriptionAm: 'በሙያተኞች አሰልጣኞች የሚሰጥ የካራቴ ስልጠና',
+        price: 2000,
         duration: 30,
         isActive: true,
       },
     }),
     prisma.service.create({
       data: {
-        name: 'Yoga Class',
-        nameAm: 'የዮጋ ክፍል',
-        description: 'Group yoga classes',
-        descriptionAm: 'የቡድን ዮጋ ክፍሎች',
-        price: 2000,
+        name: 'Aerobics',
+        nameAm: 'ኤሮቢክስ',
+        description: 'Aerobics and fitness classes for all levels',
+        descriptionAm: 'ለሁሉም ደረጃ የኤሮቢክስ እና የአካል ብቃት ክፍሎች',
+        price: 1200,
         duration: 30,
         isActive: true,
       },
     }),
   ]);
 
-  console.log(`Created ${services.length} services`);
+  console.log(`Created ${services.length} services: Gym, Karate, Aerobics`);
 
   // Create members with realistic Ethiopian names
   const memberData = [
-    { firstName: 'Abebe', lastName: 'Kebede', phone: '+251911001001', email: 'abebe.k@example.com' },
-    { firstName: 'Tigist', lastName: 'Haile', phone: '+251922002002', email: 'tigist.h@example.com' },
-    { firstName: 'Dawit', lastName: 'Amare', phone: '+251933003003', email: 'dawit.a@example.com' },
-    { firstName: 'Mekdes', lastName: 'Tadesse', phone: '+251944004004', email: 'mekdes.t@example.com' },
-    { firstName: 'Yonas', lastName: 'Gebre', phone: '+251955005005', email: 'yonas.g@example.com' },
-    { firstName: 'Hiwot', lastName: 'Alemu', phone: '+251966006006', email: 'hiwot.a@example.com' },
-    { firstName: 'Solomon', lastName: 'Bekele', phone: '+251977007007', email: 'solomon.b@example.com' },
-    { firstName: 'Frehiwot', lastName: 'Dinku', phone: '+251988008008', email: 'frehiwot.d@example.com' },
-    { firstName: 'Bereket', lastName: 'Fikadu', phone: '+251999009009', email: 'bereket.f@example.com' },
-    { firstName: 'Selamawit', lastName: 'Girma', phone: '+251910010010', email: 'selamawit.g@example.com' },
+    { firstName: 'Abebe', lastName: 'Kebede', phone: '+251911001001', email: 'abebe.k@example.com', address: 'Bole, Addis Ababa', weight: 75, height: 175, bloodType: 'O+', emergencyContact: '+251911001002 (Wife)' },
+    { firstName: 'Tigist', lastName: 'Haile', phone: '+251922002002', email: 'tigist.h@example.com', address: 'Kazanchis, Addis Ababa', weight: 58, height: 163, bloodType: 'A+', emergencyContact: '+251922002003 (Husband)' },
+    { firstName: 'Dawit', lastName: 'Amare', phone: '+251933003003', email: 'dawit.a@example.com', address: 'CMC, Addis Ababa', weight: 80, height: 180, bloodType: 'B+', emergencyContact: '+251933003004 (Brother)' },
+    { firstName: 'Mekdes', lastName: 'Tadesse', phone: '+251944004004', email: 'mekdes.t@example.com', address: 'Sarbet, Addis Ababa', weight: 55, height: 158, bloodType: 'AB+' },
+    { firstName: 'Yonas', lastName: 'Gebre', phone: '+251955005005', email: 'yonas.g@example.com', address: 'Megenagna, Addis Ababa', weight: 70, height: 172, bloodType: 'O-', emergencyContact: '+251955005006 (Father)' },
+    { firstName: 'Hiwot', lastName: 'Alemu', phone: '+251966006006', email: 'hiwot.a@example.com', address: 'Piassa, Addis Ababa', weight: 62, height: 165, bloodType: 'A-' },
+    { firstName: 'Solomon', lastName: 'Bekele', phone: '+251977007007', email: 'solomon.b@example.com', address: 'Lideta, Addis Ababa', weight: 85, height: 178, bloodType: 'B-', emergencyContact: '+251977007008 (Wife)' },
+    { firstName: 'Frehiwot', lastName: 'Dinku', phone: '+251988008008', email: 'frehiwot.d@example.com', address: 'Kirkos, Addis Ababa', weight: 60, height: 160, bloodType: 'AB-' },
+    { firstName: 'Bereket', lastName: 'Fikadu', phone: '+251999009009', email: 'bereket.f@example.com', address: 'Gulele, Addis Ababa', weight: 72, height: 170, bloodType: 'O+', emergencyContact: '+251999009010 (Mother)' },
+    { firstName: 'Selamawit', lastName: 'Girma', phone: '+251910010010', email: 'selamawit.g@example.com', address: 'Nifas Silk, Addis Ababa', weight: 57, height: 162, bloodType: 'A+', emergencyContact: '+251910010011 (Sister)' },
   ];
 
   const members = await Promise.all(
@@ -140,6 +107,11 @@ async function main() {
   console.log(`Created ${members.length} members`);
 
   // Create sample subscriptions, invoices, and payments
+  // Manual payment flow: 
+  // 1. Member comes and pays cash to owner/manager
+  // 2. Owner/manager creates subscription in the system
+  // 3. A pending invoice is auto-created
+  // 4. Owner/manager records the payment to mark invoice as paid
   const now = new Date();
   const receiptCounter = { value: 1000 };
 
@@ -148,11 +120,11 @@ async function main() {
     return `RCP-${receiptCounter.value.toString().padStart(6, '0')}`;
   }
 
-  // Member 0: Abebe - Monthly Gym, active
+  // Member 0: Abebe - Gym, active (paid)
   const sub0 = await prisma.subscription.create({
     data: {
       memberId: members[0].id,
-      serviceId: services[0].id,
+      serviceId: services[0].id, // Gym
       startDate: new Date(now.getFullYear(), now.getMonth(), 1),
       endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
@@ -181,13 +153,13 @@ async function main() {
     },
   });
 
-  // Member 1: Tigist - 3-Month Gym, active
+  // Member 1: Tigist - Karate, active (paid via bank transfer)
   const sub1 = await prisma.subscription.create({
     data: {
       memberId: members[1].id,
-      serviceId: services[1].id,
-      startDate: new Date(now.getFullYear(), now.getMonth() - 1, 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 2, 0),
+      serviceId: services[1].id, // Karate
+      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
+      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
       priceSnapshot: services[1].price,
     },
@@ -198,8 +170,8 @@ async function main() {
       subscriptionId: sub1.id,
       amount: services[1].price,
       status: 'paid',
-      dueDate: new Date(now.getFullYear(), now.getMonth() - 1, 5),
-      paidAt: new Date(now.getFullYear(), now.getMonth() - 1, 2),
+      dueDate: new Date(now.getFullYear(), now.getMonth(), 5),
+      paidAt: new Date(now.getFullYear(), now.getMonth(), 2),
     },
   });
   await prisma.payment.create({
@@ -207,62 +179,62 @@ async function main() {
       invoiceId: inv1.id,
       memberId: members[1].id,
       amount: services[1].price,
-      paymentDate: new Date(now.getFullYear(), now.getMonth() - 1, 2),
+      paymentDate: new Date(now.getFullYear(), now.getMonth(), 2),
       method: 'bank_transfer',
       receiptNumber: generateReceiptNumber(),
       createdBy: manager.id,
     },
   });
 
-  // Member 2: Dawit - Annual Gym, active
+  // Member 2: Dawit - Gym, active (paid)
   const sub2 = await prisma.subscription.create({
     data: {
       memberId: members[2].id,
-      serviceId: services[3].id,
-      startDate: new Date(now.getFullYear(), 0, 1),
-      endDate: new Date(now.getFullYear(), 11, 31),
+      serviceId: services[0].id, // Gym
+      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
+      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
-      priceSnapshot: services[3].price,
+      priceSnapshot: services[0].price,
     },
   });
   const inv2 = await prisma.invoice.create({
     data: {
       memberId: members[2].id,
       subscriptionId: sub2.id,
-      amount: services[3].price,
+      amount: services[0].price,
       status: 'paid',
-      dueDate: new Date(now.getFullYear(), 0, 10),
-      paidAt: new Date(now.getFullYear(), 0, 8),
+      dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
+      paidAt: new Date(now.getFullYear(), now.getMonth(), 8),
     },
   });
   await prisma.payment.create({
     data: {
       invoiceId: inv2.id,
       memberId: members[2].id,
-      amount: services[3].price,
-      paymentDate: new Date(now.getFullYear(), 0, 8),
-      method: 'mobile_money',
+      amount: services[0].price,
+      paymentDate: new Date(now.getFullYear(), now.getMonth(), 8),
+      method: 'cash',
       receiptNumber: generateReceiptNumber(),
       createdBy: owner.id,
     },
   });
 
-  // Member 3: Mekdes - Monthly Gym, expired
+  // Member 3: Mekdes - Aerobics, expired (was paid)
   const sub3 = await prisma.subscription.create({
     data: {
       memberId: members[3].id,
-      serviceId: services[0].id,
+      serviceId: services[2].id, // Aerobics
       startDate: new Date(now.getFullYear(), now.getMonth() - 2, 1),
       endDate: new Date(now.getFullYear(), now.getMonth() - 1, 0),
       status: 'expired',
-      priceSnapshot: services[0].price,
+      priceSnapshot: services[2].price,
     },
   });
   const inv3 = await prisma.invoice.create({
     data: {
       memberId: members[3].id,
       subscriptionId: sub3.id,
-      amount: services[0].price,
+      amount: services[2].price,
       status: 'paid',
       dueDate: new Date(now.getFullYear(), now.getMonth() - 2, 5),
       paidAt: new Date(now.getFullYear(), now.getMonth() - 2, 4),
@@ -272,7 +244,7 @@ async function main() {
     data: {
       invoiceId: inv3.id,
       memberId: members[3].id,
-      amount: services[0].price,
+      amount: services[2].price,
       paymentDate: new Date(now.getFullYear(), now.getMonth() - 2, 4),
       method: 'cash',
       receiptNumber: generateReceiptNumber(),
@@ -280,22 +252,22 @@ async function main() {
     },
   });
 
-  // Member 4: Yonas - Yoga Class, active
+  // Member 4: Yonas - Karate, active (paid via mobile money)
   const sub4 = await prisma.subscription.create({
     data: {
       memberId: members[4].id,
-      serviceId: services[5].id,
+      serviceId: services[1].id, // Karate
       startDate: new Date(now.getFullYear(), now.getMonth(), 1),
       endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
-      priceSnapshot: services[5].price,
+      priceSnapshot: services[1].price,
     },
   });
   const inv4 = await prisma.invoice.create({
     data: {
       memberId: members[4].id,
       subscriptionId: sub4.id,
-      amount: services[5].price,
+      amount: services[1].price,
       status: 'paid',
       dueDate: new Date(now.getFullYear(), now.getMonth(), 10),
       paidAt: new Date(now.getFullYear(), now.getMonth(), 5),
@@ -305,98 +277,98 @@ async function main() {
     data: {
       invoiceId: inv4.id,
       memberId: members[4].id,
-      amount: services[5].price,
+      amount: services[1].price,
       paymentDate: new Date(now.getFullYear(), now.getMonth(), 5),
-      method: 'cash',
+      method: 'mobile_money',
       receiptNumber: generateReceiptNumber(),
       createdBy: owner.id,
     },
   });
 
-  // Member 5: Hiwot - Personal Training, active with pending invoice
+  // Member 5: Hiwot - Aerobics, active with pending invoice (not yet paid)
   const sub5 = await prisma.subscription.create({
     data: {
       memberId: members[5].id,
-      serviceId: services[4].id,
+      serviceId: services[2].id, // Aerobics
       startDate: new Date(now.getFullYear(), now.getMonth(), 1),
       endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
-      priceSnapshot: services[4].price,
+      priceSnapshot: services[2].price,
     },
   });
   await prisma.invoice.create({
     data: {
       memberId: members[5].id,
       subscriptionId: sub5.id,
-      amount: services[4].price,
+      amount: services[2].price,
       status: 'pending',
       dueDate: new Date(now.getFullYear(), now.getMonth(), 15),
     },
   });
 
-  // Member 6: Solomon - 6-Month Gym, active
+  // Member 6: Solomon - Gym, active (paid)
   const sub6 = await prisma.subscription.create({
     data: {
       memberId: members[6].id,
-      serviceId: services[2].id,
-      startDate: new Date(now.getFullYear(), now.getMonth() - 2, 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 4, 0),
+      serviceId: services[0].id, // Gym
+      startDate: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+      endDate: new Date(now.getFullYear(), now.getMonth(), 0),
       status: 'active',
-      priceSnapshot: services[2].price,
+      priceSnapshot: services[0].price,
     },
   });
   const inv6 = await prisma.invoice.create({
     data: {
       memberId: members[6].id,
       subscriptionId: sub6.id,
-      amount: services[2].price,
+      amount: services[0].price,
       status: 'paid',
-      dueDate: new Date(now.getFullYear(), now.getMonth() - 2, 10),
-      paidAt: new Date(now.getFullYear(), now.getMonth() - 2, 7),
+      dueDate: new Date(now.getFullYear(), now.getMonth() - 1, 10),
+      paidAt: new Date(now.getFullYear(), now.getMonth() - 1, 7),
     },
   });
   await prisma.payment.create({
     data: {
       invoiceId: inv6.id,
       memberId: members[6].id,
-      amount: services[2].price,
-      paymentDate: new Date(now.getFullYear(), now.getMonth() - 2, 7),
+      amount: services[0].price,
+      paymentDate: new Date(now.getFullYear(), now.getMonth() - 1, 7),
       method: 'bank_transfer',
       receiptNumber: generateReceiptNumber(),
       createdBy: manager.id,
     },
   });
 
-  // Member 7: Frehiwot - Monthly Gym, overdue invoice
+  // Member 7: Frehiwot - Karate, active with overdue invoice
   const sub7 = await prisma.subscription.create({
     data: {
       memberId: members[7].id,
-      serviceId: services[0].id,
+      serviceId: services[1].id, // Karate
       startDate: new Date(now.getFullYear(), now.getMonth(), 1),
       endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
-      priceSnapshot: services[0].price,
+      priceSnapshot: services[1].price,
     },
   });
   await prisma.invoice.create({
     data: {
       memberId: members[7].id,
       subscriptionId: sub7.id,
-      amount: services[0].price,
+      amount: services[1].price,
       status: 'overdue',
       dueDate: new Date(now.getFullYear(), now.getMonth(), 5),
     },
   });
 
-  // Member 8: Bereket - 3-Month Gym, cancelled
+  // Member 8: Bereket - Gym, expired (cancelled subscription)
   const sub8 = await prisma.subscription.create({
     data: {
       memberId: members[8].id,
-      serviceId: services[1].id,
+      serviceId: services[0].id, // Gym
       startDate: new Date(now.getFullYear(), now.getMonth() - 3, 1),
-      endDate: new Date(now.getFullYear(), now.getMonth(), 0),
+      endDate: new Date(now.getFullYear(), now.getMonth() - 2, 0),
       status: 'cancelled',
-      priceSnapshot: services[1].price,
+      priceSnapshot: services[0].price,
       notes: 'Cancelled at member request',
     },
   });
@@ -404,17 +376,17 @@ async function main() {
     data: {
       memberId: members[8].id,
       subscriptionId: sub8.id,
-      amount: services[1].price,
+      amount: services[0].price,
       status: 'cancelled',
       dueDate: new Date(now.getFullYear(), now.getMonth() - 3, 10),
     },
   });
 
-  // Member 9: Selamawit - Monthly Gym + Yoga Class, both active
+  // Member 9: Selamawit - Gym + Aerobics, both active (paid for both)
   const sub9a = await prisma.subscription.create({
     data: {
       memberId: members[9].id,
-      serviceId: services[0].id,
+      serviceId: services[0].id, // Gym
       startDate: new Date(now.getFullYear(), now.getMonth(), 1),
       endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
@@ -437,7 +409,7 @@ async function main() {
       memberId: members[9].id,
       amount: services[0].price,
       paymentDate: new Date(now.getFullYear(), now.getMonth(), 2),
-      method: 'mobile_money',
+      method: 'cash',
       receiptNumber: generateReceiptNumber(),
       createdBy: owner.id,
     },
@@ -446,18 +418,18 @@ async function main() {
   const sub9b = await prisma.subscription.create({
     data: {
       memberId: members[9].id,
-      serviceId: services[5].id,
+      serviceId: services[2].id, // Aerobics
       startDate: new Date(now.getFullYear(), now.getMonth(), 1),
       endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
       status: 'active',
-      priceSnapshot: services[5].price,
+      priceSnapshot: services[2].price,
     },
   });
   const inv9b = await prisma.invoice.create({
     data: {
       memberId: members[9].id,
       subscriptionId: sub9b.id,
-      amount: services[5].price,
+      amount: services[2].price,
       status: 'paid',
       dueDate: new Date(now.getFullYear(), now.getMonth(), 5),
       paidAt: new Date(now.getFullYear(), now.getMonth(), 2),
@@ -467,7 +439,7 @@ async function main() {
     data: {
       invoiceId: inv9b.id,
       memberId: members[9].id,
-      amount: services[5].price,
+      amount: services[2].price,
       paymentDate: new Date(now.getFullYear(), now.getMonth(), 2),
       method: 'cash',
       receiptNumber: generateReceiptNumber(),
@@ -491,7 +463,7 @@ async function main() {
         userId: owner.id,
         action: 'service.create',
         entity: 'service',
-        details: JSON.stringify({ count: services.length }),
+        details: JSON.stringify({ services: ['Gym', 'Karate', 'Aerobics'] }),
       },
       {
         userId: manager.id,
@@ -509,7 +481,7 @@ async function main() {
         userId: manager.id,
         action: 'payment.create',
         entity: 'payment',
-        details: JSON.stringify({ info: 'Initial seed data' }),
+        details: JSON.stringify({ info: 'Initial seed data - manual payments recorded' }),
       },
     ],
   });

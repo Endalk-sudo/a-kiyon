@@ -114,6 +114,8 @@ export const subscriptionsApi = {
     apiFetch<unknown>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: unknown) =>
     apiFetch<unknown>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  renew: (id: string) =>
+    apiFetch<unknown>(`/subscriptions/${id}/renew`, { method: 'POST' }),
 };
 
 // Invoices
