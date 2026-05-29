@@ -2,46 +2,14 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiError, unauthorizedError, forbiddenError } from '@/lib/api';
-import { formatEthiopianDate, parseEthiopianDate } from '@/lib/ethiopian-calendar';
+import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 
-// GET /api/export/payments - Export payments as CSV (manager + owner)
+// GET /api/export/payments - Export all payments as CSV (manager + owner)
 export async function GET(request: NextRequest) {
   try {
     const session = await getSessionOrThrow(['owner', 'manager']);
 
-    const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-
-    // Build where clause
-    const where: Record<string, unknown> = {};
-
-    if (startDate || endDate) {
-      where.paymentDate = {};
-      if (startDate) {
-        const startParsed = parseEthiopianDate(startDate);
-        if (startParsed.success && startParsed.date) {
-          where.paymentDate.gte = startParsed.date;
-        } else {
-          where.paymentDate.gte = new Date(startDate);
-        }
-      }
-      if (endDate) {
-        const endParsed = parseEthiopianDate(endDate);
-        if (endParsed.success && endParsed.date) {
-          const end = endParsed.date;
-          end.setHours(23, 59, 59, 999);
-          where.paymentDate.lte = end;
-        } else {
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999);
-          where.paymentDate.lte = end;
-        }
-      }
-    }
-
     const payments = await db.payment.findMany({
-      where,
       include: {
         member: {
           select: {

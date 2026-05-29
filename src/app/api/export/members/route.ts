@@ -4,27 +4,15 @@ import { getSessionOrThrow } from '@/lib/auth';
 import { apiError, unauthorizedError, forbiddenError } from '@/lib/api';
 import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 
-// GET /api/export/members - Export members as CSV (manager + owner)
+// GET /api/export/members - Export all members as CSV (manager + owner)
 export async function GET(request: NextRequest) {
   try {
     const session = await getSessionOrThrow(['owner', 'manager']);
-
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
 
     // Build where clause
     const where: Record<string, unknown> = {
       isDeleted: false,
     };
-
-    // Status filter based on subscription status
-    if (status) {
-      where.subscriptions = {
-        some: {
-          status: status,
-        },
-      };
-    }
 
     const members = await db.member.findMany({
       where,

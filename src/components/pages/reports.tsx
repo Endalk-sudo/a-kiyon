@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { exportApi, dashboardApi } from '@/lib/api-client';
-import { EthiopianDateInput } from '@/components/ethiopian-date-input';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,10 +28,6 @@ export function ReportsPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<'members' | 'payments' | null>(null);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [startDateIso, setStartDateIso] = useState<string | null>(null);
-  const [endDateIso, setEndDateIso] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,11 +46,7 @@ export function ReportsPage() {
   const downloadCSV = useCallback(async (type: 'members' | 'payments') => {
     setExporting(type);
     try {
-      const params: Record<string, unknown> = {};
-      if (startDateIso) params.startDate = startDateIso;
-      if (endDateIso) params.endDate = endDateIso;
-
-      const csv = await exportApi[type](params);
+      const csv = await exportApi[type]({});
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -69,16 +60,6 @@ export function ReportsPage() {
     } finally {
       setExporting(null);
     }
-  }, [startDateIso, endDateIso]);
-
-  const handleStartDateChange = useCallback((value: string, isoDate: string | null) => {
-    setStartDate(value);
-    setStartDateIso(isoDate);
-  }, []);
-
-  const handleEndDateChange = useCallback((value: string, isoDate: string | null) => {
-    setEndDate(value);
-    setEndDateIso(isoDate);
   }, []);
 
   if (loading) {
@@ -198,26 +179,10 @@ export function ReportsPage() {
         <CardHeader>
           <CardTitle>Export Data</CardTitle>
           <CardDescription>
-            Download member or payment data as CSV files. Use date range to filter exported data.
+            Download all member or payment data as CSV files.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Date Range Selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <EthiopianDateInput
-              value={startDate}
-              onChange={handleStartDateChange}
-              label="Start Date (EC)"
-              placeholder="dd/mm/yyyy"
-            />
-            <EthiopianDateInput
-              value={endDate}
-              onChange={handleEndDateChange}
-              label="End Date (EC)"
-              placeholder="dd/mm/yyyy"
-            />
-          </div>
-
           {/* Export Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
@@ -258,7 +223,7 @@ export function ReportsPage() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Date range filter applies to payment export. Members export includes all active members.
+            All data is exported without date filtering.
           </p>
         </CardContent>
       </Card>
