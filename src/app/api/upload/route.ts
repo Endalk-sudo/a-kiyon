@@ -4,6 +4,7 @@ import { apiResponse, apiError, unauthorizedError } from '@/lib/api';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
+import { createAuditLog } from '@/lib/audit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
 
     // Return the URL path
     const photoUrl = `/uploads/${filename}`;
+
+    await createAuditLog({
+      userId: session.userId,
+      action: 'upload.photo',
+      details: { filename, originalName: file.name, size: file.size },
+      entity: 'upload',
+    });
 
     return apiResponse({ url: photoUrl });
   } catch (error: unknown) {

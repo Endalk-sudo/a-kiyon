@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiError, unauthorizedError, forbiddenError } from '@/lib/api';
 import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
+import { createAuditLog } from '@/lib/audit';
 
 // GET /api/export/payments - Export all payments as CSV (manager + owner)
 export async function GET(request: NextRequest) {
@@ -50,6 +51,13 @@ export async function GET(request: NextRequest) {
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
+
+    await createAuditLog({
+      userId: session.userId,
+      action: 'export.payments',
+      details: { count: payments.length },
+      entity: 'payment',
+    });
 
     return new Response(csvContent, {
       status: 200,

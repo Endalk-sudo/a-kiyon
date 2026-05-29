@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
-  LayoutDashboard,
+  House,
   Users,
   Dumbbell,
   Calendar,
@@ -25,14 +25,14 @@ import { toast } from 'sonner';
 import { useCallback, useState } from 'react';
 
 const navItems: { id: PageId; label: string; labelAm: string; icon: React.ElementType; roles?: string[] }[] = [
-  { id: 'dashboard', label: 'Dashboard', labelAm: 'ዳሽቦርድ', icon: LayoutDashboard },
+  { id: 'dashboard', label: 'Home', labelAm: 'ቤት', icon: House },
   { id: 'members', label: 'Members', labelAm: 'አባላት', icon: Users },
-  { id: 'services', label: 'Services', labelAm: 'አገልግሎቶች', icon: Dumbbell },
+  { id: 'services', label: 'Services', labelAm: 'አገልግሎቶች', icon: Dumbbell, roles: ['owner'] },
   { id: 'subscriptions', label: 'Subscriptions', labelAm: 'ደንበኝነት', icon: Calendar },
   { id: 'payments', label: 'Payments', labelAm: 'ክፍያዎች', icon: CreditCard },
-  { id: 'reports', label: 'Reports', labelAm: 'ሪፖርቶች', icon: BarChart3 },
+  { id: 'reports', label: 'Reports', labelAm: 'ሪፖርቶች', icon: BarChart3, roles: ['owner'] },
   { id: 'audit-logs', label: 'Audit Log', labelAm: 'የስራ ማስመዝ', icon: ClipboardList, roles: ['owner'] },
-  { id: 'settings', label: 'Settings', labelAm: 'ቅንብሮች', icon: Settings },
+  { id: 'settings', label: 'Settings', labelAm: 'ቅንብሮች', icon: Settings, roles: ['owner'] },
 ];
 
 interface AppLayoutProps {

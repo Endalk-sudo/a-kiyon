@@ -157,7 +157,8 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { setCurrentPage } = useAppStore();
+  const { setCurrentPage, session } = useAppStore();
+  const isOwner = session?.role === 'owner';
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -243,7 +244,7 @@ export function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Overview of your business</p>
         </div>
-        {data && (
+        {isOwner && data && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <TrendingUp className="h-4 w-4 text-emerald-500" />
             <span>
@@ -491,82 +492,83 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Monthly Revenue Chart */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <div className="bg-emerald-50 rounded-md p-1.5">
-                <TrendingUp className="h-4 w-4 text-emerald-600" />
+        {isOwner && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="bg-emerald-50 rounded-md p-1.5">
+                  <TrendingUp className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Monthly Revenue</CardTitle>
+                  <CardDescription className="text-xs">
+                    Last 6 months revenue trend
+                  </CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-base">Monthly Revenue</CardTitle>
-                <CardDescription className="text-xs">
-                  Last 6 months revenue trend
-                </CardDescription>
-              </div>
-            </div>
-            {data && (
-              <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-emerald-600">
-                  {formatCurrency(data.totalRevenue)}
-                </span>
-                <span className="text-xs text-muted-foreground">total</span>
-              </div>
-            )}
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-64 flex items-center justify-center">
-                <Skeleton className="h-full w-full" />
-              </div>
-            ) : !data?.monthlyRevenue?.length ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <TrendingUp className="h-8 w-8 text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  No revenue data available
-                </p>
-              </div>
-            ) : (
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={data?.monthlyRevenue || []}
-                    margin={{ top: 5, right: 5, left: -15, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="hsl(var(--border))"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      dataKey="month"
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(value) => {
-                        if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
-                        return value;
-                      }}
-                    />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar
-                      dataKey="revenue"
-                      fill="hsl(152, 69%, 31%)"
-                      radius={[4, 4, 0, 0]}
-                      maxBarSize={48}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              {data && (
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-emerald-600">
+                    {formatCurrency(data.totalRevenue)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">total</span>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="h-64 flex items-center justify-center">
+                  <Skeleton className="h-full w-full" />
+                </div>
+              ) : !data?.monthlyRevenue?.length ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <TrendingUp className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    No revenue data available
+                  </p>
+                </div>
+              ) : (
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={data?.monthlyRevenue || []}
+                      margin={{ top: 5, right: 5, left: -15, bottom: 5 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="hsl(var(--border))"
+                        opacity={0.5}
+                      />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(value) => {
+                          if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
+                          return value;
+                        }}
+                      />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Bar
+                        dataKey="revenue"
+                        fill="hsl(152, 69%, 31%)"
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={48}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
