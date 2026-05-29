@@ -38,10 +38,13 @@ export const auth = betterAuth({
       },
     },
   },
+  trustedOrigins: ['*'],
   advanced: {
     cookies: {
       sessionToken: {
         name: 'fcms_session',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
       },
     },
   },
