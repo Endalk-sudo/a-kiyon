@@ -19,6 +19,7 @@ A complete management system for fitness centers built with Next.js. Track membe
 
 | Layer | Technology |
 |-------|-----------|
+| Runtime | Bun |
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript |
 | Database | PostgreSQL |
@@ -33,9 +34,8 @@ A complete management system for fitness centers built with Next.js. Track membe
 
 ### Prerequisites
 
-- Node.js 20+
+- Bun 1.x
 - PostgreSQL 14+
-- Bun (for running the seed script)
 
 ### Setup
 
@@ -43,18 +43,18 @@ A complete management system for fitness centers built with Next.js. Track membe
 # Clone and install
 git clone <repo-url>
 cd a-kiyon-fcms
-npm install
+bun install
 
 # Configure environment
 cp .env.example .env
 # Edit .env with your PostgreSQL connection string
 
 # Set up database
-npm run db:migrate
-npm run seed
+bun run db:migrate
+bun run seed
 
 # Start development server
-npm run dev
+bun run dev
 ```
 
 Visit [http://localhost:3000](http://localhost:3000).
@@ -68,22 +68,22 @@ Visit [http://localhost:3000](http://localhost:3000).
 
 ## Role Permissions
 
-| Feature | Owner | Manager | Reader |
-|---------|-------|---------|--------|
-| View Dashboard | ✅ | ✅ | ✅ |
-| Members (view) | ✅ | ✅ | ✅ |
-| Members (create/edit) | ✅ | ✅ | ❌ |
-| Members (delete/restore) | ✅ | ❌ | ❌ |
-| Subscriptions (view) | ✅ | ✅ | ✅ |
-| Subscriptions (create/edit/renew) | ✅ | ✅ | ❌ |
-| Payments (view) | ✅ | ✅ | ✅ |
-| Payments (record) | ✅ | ✅ | ❌ |
-| Payments (void) | ✅ | ❌ | ❌ |
-| Reports & Exports | ✅ | ✅ | ❌ |
-| Services (manage) | ✅ | ❌ | ❌ |
-| Users (manage) | ✅ | ❌ | ❌ |
-| Audit Logs | ✅ | ❌ | ❌ |
-| Settings | ✅ | ❌ | ❌ |
+| Feature | Owner | Manager |
+|---------|-------|---------|
+| View Dashboard | ✅ | ✅ |
+| Members (view) | ✅ | ✅ |
+| Members (create/edit) | ✅ | ✅ |
+| Members (delete/restore) | ✅ | ❌ |
+| Subscriptions (view) | ✅ | ✅ |
+| Subscriptions (create/edit/renew) | ✅ | ✅ |
+| Payments (view) | ✅ | ✅ |
+| Payments (record) | ✅ | ✅ |
+| Payments (void) | ✅ | ❌ |
+| Reports & Exports | ✅ | ✅ |
+| Services (manage) | ✅ | ❌ |
+| Users (manage) | ✅ | ❌ |
+| Audit Logs | ✅ | ❌ |
+| Settings | ✅ | ❌ |
 
 ## Project Structure
 
@@ -112,14 +112,14 @@ src/
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start dev server on port 3000 |
-| `npm run build` | Production build |
-| `npm run start` | Start production server |
-| `npm run db:migrate` | Run Prisma migrations |
-| `npm run db:push` | Push schema changes directly |
-| `npm run db:reset` | Reset database and re-migrate |
-| `npm run seed` | Seed database with demo data |
-| `npm run lint` | Run ESLint |
+| `bun run dev` | Start dev server on port 3000 |
+| `bun run build` | Production build |
+| `bun run start` | Start production server |
+| `bun run db:migrate` | Run Prisma migrations |
+| `bun run db:push` | Push schema changes directly |
+| `bun run db:reset` | Reset database and re-migrate |
+| `bun run seed` | Seed database with demo data |
+| `bun run lint` | Run ESLint |
 
 ## Architecture Notes
 
