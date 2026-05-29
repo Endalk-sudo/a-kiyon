@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
       return apiError('Invalid payment date format');
     }
 
-    const receiptNumber = `RCPT-${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+    const receiptNumber = `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
     const payment = await db.payment.create({
       data: {

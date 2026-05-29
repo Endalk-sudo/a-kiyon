@@ -4,7 +4,7 @@ import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
 import { NextRequest } from 'next/server';
 
-// POST /api/subscriptions/[id]/renew - Renew a subscription with payment
+// POST /api/subscriptions/[id]/renew - Extend a subscription with a new payment
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,36 +42,19 @@ export async function POST(
     }
 
     const now = new Date();
-    let startDate: Date;
-    if (existing.endDate < now) {
-      startDate = now;
-    } else {
-      startDate = new Date(existing.endDate);
-      startDate.setDate(startDate.getDate() + 1);
-    }
+    const currentEndDate = existing.endDate;
+    const startDate = currentEndDate > now ? currentEndDate : now;
+    const newEndDate = new Date(startDate);
+    newEndDate.setDate(newEndDate.getDate() + existing.service.duration);
 
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + existing.service.duration);
-
-    if (existing.status === 'active') {
-      await db.subscription.update({
-        where: { id: existing.id },
-        data: { status: 'expired' },
-      });
-    }
-
-    const receiptNumber = `RCPT-${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+    const receiptNumber = `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
     const result = await db.$transaction(async (tx) => {
-      const subscription = await tx.subscription.create({
+      const subscription = await tx.subscription.update({
+        where: { id: existing.id },
         data: {
-          memberId: existing.memberId,
-          serviceId: existing.serviceId,
-          startDate,
-          endDate,
+          endDate: newEndDate,
           status: 'active',
-          priceSnapshot: existing.service.price,
-          notes: `Renewed from subscription ${existing.id}`,
         },
         include: {
           member: {
@@ -102,18 +85,17 @@ export async function POST(
       userId: session.userId,
       action: 'subscription.renew',
       details: {
-        oldSubscriptionId: existing.id,
-        newSubscriptionId: result.subscription.id,
+        subscriptionId: existing.id,
         memberId: existing.memberId,
         serviceId: existing.serviceId,
         priceSnapshot: existing.service.price,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        previousEndDate: currentEndDate.toISOString(),
+        newEndDate: newEndDate.toISOString(),
         paymentId: result.payment.id,
         receiptNumber,
       },
       entity: 'subscription',
-      entityId: result.subscription.id,
+      entityId: existing.id,
     });
 
     return apiResponse(result, 201);

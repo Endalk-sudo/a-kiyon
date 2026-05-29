@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { subscriptionsApi, membersApi, servicesApi } from '@/lib/api-client';
-import { EthiopianDateInput } from '@/components/ethiopian-date-input';
+import { subscriptionsApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { StatusBadge } from '@/components/status-badge';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
@@ -22,7 +21,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -44,10 +42,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import {
   Pagination,
   PaginationContent,
@@ -57,7 +53,6 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import {
-  Plus,
   Filter,
   Ban,
   RefreshCw,
@@ -71,14 +66,6 @@ interface Member {
   firstName: string;
   lastName: string;
   photo?: string | null;
-}
-
-interface Service {
-  id: string;
-  name: string;
-  nameAm: string | null;
-  price: number;
-  duration: number;
 }
 
 interface Subscription {
@@ -159,20 +146,6 @@ export function SubscriptionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
 
-  // Add subscription dialog state
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [selectedMemberId, setSelectedMemberId] = useState('');
-  const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [paymentDate, setPaymentDate] = useState('');
-  const [paymentDateIso, setPaymentDateIso] = useState<string | null>(null);
-
-  const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
   // Renew dialog payment method
   const [renewPaymentMethod, setRenewPaymentMethod] = useState('cash');
 
@@ -210,20 +183,6 @@ export function SubscriptionsPage() {
     }
   }, [statusFilter, searchDebounced]);
 
-  // Fetch members and services for the add dialog
-  const fetchFormData = useCallback(async () => {
-    try {
-      const [membersRes, servicesRes] = await Promise.all([
-        membersApi.list({ limit: 100, showDeleted: false }) as Promise<{ data: Member[] }>,
-        servicesApi.list({ includeInactive: false }) as Promise<{ data: Service[] }>,
-      ]);
-      setMembers(membersRes.data || []);
-      setServices(servicesRes.data || []);
-    } catch (error) {
-      console.error('Failed to fetch form data:', error);
-    }
-  }, []);
-
   useEffect(() => {
     fetchSubscriptions(1);
   }, [fetchSubscriptions]);
@@ -235,54 +194,6 @@ export function SubscriptionsPage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  useEffect(() => {
-    if (addDialogOpen) {
-      fetchFormData();
-      // Reset form
-      setSelectedMemberId('');
-      setSelectedServiceId('');
-
-      setNotes('');
-      setFormError(null);
-    }
-  }, [addDialogOpen, fetchFormData]);
-
-  // Handle add subscription
-  const handleAddSubscription = async () => {
-    if (!selectedMemberId) {
-      setFormError('Please select a member.');
-      return;
-    }
-    if (!selectedServiceId) {
-      setFormError('Please select a service.');
-      return;
-    }
-    if (!paymentDateIso) {
-      setFormError('Please enter a payment date.');
-      return;
-    }
-
-    setSubmitting(true);
-    setFormError(null);
-
-    try {
-      await subscriptionsApi.create({
-        memberId: selectedMemberId,
-        serviceId: selectedServiceId,
-        paymentMethod,
-        paymentDate: paymentDateIso,
-        notes: notes || undefined,
-      });
-      toast.success('Subscription created and payment recorded successfully.');
-      setAddDialogOpen(false);
-      fetchSubscriptions(1);
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Failed to create subscription');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // Handle cancel subscription
   const handleCancelSubscription = async () => {
@@ -332,9 +243,6 @@ export function SubscriptionsPage() {
   // Check if user can manage subscriptions
   const canManage = session?.role === 'owner' || session?.role === 'manager';
 
-  // Selected service for end date preview
-  const selectedService = services.find((s) => s.id === selectedServiceId);
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -343,125 +251,6 @@ export function SubscriptionsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Subscriptions</h1>
           <p className="text-muted-foreground">Manage member subscriptions and renewals</p>
         </div>
-        {canManage && (
-          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Subscription
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Register New Subscription</DialogTitle>
-                <DialogDescription>
-                  Register a member for a service and record the payment in one step.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
-                {/* Member Select */}
-                <div className="space-y-2">
-                  <Label htmlFor="member-select">Member</Label>
-                  <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
-                    <SelectTrigger className="w-full" id="member-select">
-                      <SelectValue placeholder="Select a member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {members.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.firstName} {member.lastName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Service Select */}
-                <div className="space-y-2">
-                  <Label htmlFor="service-select">Service</Label>
-                  <Select value={selectedServiceId} onValueChange={setSelectedServiceId}>
-                    <SelectTrigger className="w-full" id="service-select">
-                      <SelectValue placeholder="Select a service" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {services.map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          {service.name} - {formatCurrency(service.price)} ({service.duration} days)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedService && (
-                    <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Duration:</span>
-                        <span className="font-medium">{selectedService.duration} days</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Price:</span>
-                        <span className="font-bold text-emerald-600">{formatCurrency(selectedService.price)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Payment Method */}
-                <div className="space-y-2">
-                  <Label htmlFor="payment-method">Payment Method</Label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger className="w-full" id="payment-method">
-                      <SelectValue placeholder="Select payment method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                      <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Payment Date */}
-                <EthiopianDateInput
-                  value={paymentDate}
-                  onChange={(val, iso) => {
-                    setPaymentDate(val);
-                    setPaymentDateIso(iso);
-                  }}
-                  label="Payment Date (EC)"
-                  required
-                />
-
-                {/* Notes */}
-                <div className="space-y-2">
-                  <Label htmlFor="sub-notes">Notes (Optional)</Label>
-                  <Textarea
-                    id="sub-notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Any additional notes..."
-                    rows={3}
-                  />
-                </div>
-
-                {formError && (
-                  <p className="text-sm text-red-500">{formError}</p>
-                )}
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setAddDialogOpen(false)}
-                  disabled={submitting}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleAddSubscription} disabled={submitting}>
-                  {submitting ? 'Creating...' : 'Create Subscription'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
       </div>
 
       {/* Search */}

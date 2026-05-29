@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { membersApi, subscriptionsApi } from '@/lib/api-client';
+import { membersApi, servicesApi, subscriptionsApi } from '@/lib/api-client';
 import { StatusBadge, type StatusType } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
 import { PhotoCapture } from '@/components/photo-capture';
@@ -10,6 +10,7 @@ import { useAppStore } from '@/lib/store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 
+import { EthiopianDateInput } from '@/components/ethiopian-date-input';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
@@ -92,6 +93,7 @@ interface Member {
   deletedAt: string | null;
   createdAt: string;
   status: StatusType;
+  subscriptionEndDate: string | null;
 }
 
 interface MemberDetail extends Member {
@@ -214,6 +216,15 @@ export function MembersPage() {
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof MemberFormData, string>>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Optional subscription on create
+  const [addWithSubscription, setAddWithSubscription] = useState(false);
+  const [availableServices, setAvailableServices] = useState<Array<{ id: string; name: string; price: number; duration: number }>>([]);
+  const [newServiceId, setNewServiceId] = useState('');
+  const [newPaymentMethod, setNewPaymentMethod] = useState('cash');
+  const [newPaymentDate, setNewPaymentDate] = useState('');
+  const [newPaymentDateIso, setNewPaymentDateIso] = useState<string | null>(null);
+  const [newSubscriptionNotes, setNewSubscriptionNotes] = useState('');
+
   // ─── Fetch Members ──────────────────────────────────────────────────────
 
   const fetchMembers = useCallback(async () => {
@@ -311,7 +322,16 @@ export function MembersPage() {
   const handleAddMember = () => {
     setFormData(emptyFormData);
     setFormErrors({});
+    setAddWithSubscription(false);
+    setNewServiceId('');
+    setNewPaymentMethod('cash');
+    setNewPaymentDate('');
+    setNewPaymentDateIso(null);
+    setNewSubscriptionNotes('');
     setAddDialogOpen(true);
+    servicesApi.list({ includeInactive: false }).then((res) => {
+      setAvailableServices((res as { data: Array<{ id: string; name: string; price: number; duration: number }> }).data || []);
+    }).catch(() => {});
   };
 
   // ─── Form Validation ────────────────────────────────────────────────────
@@ -336,7 +356,7 @@ export function MembersPage() {
     if (!validateForm(formData)) return;
     setSubmitting(true);
     try {
-      await membersApi.create({
+      const payload: Record<string, unknown> = {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim() || null,
@@ -347,8 +367,15 @@ export function MembersPage() {
         bloodType: formData.bloodType || null,
         emergencyContact: formData.emergencyContact.trim() || null,
         notes: formData.notes.trim() || null,
-      });
-      toast.success('Member created successfully');
+      };
+      if (addWithSubscription && newServiceId) {
+        payload.serviceId = newServiceId;
+        payload.paymentMethod = newPaymentMethod;
+        if (newPaymentDateIso) payload.paymentDate = newPaymentDateIso;
+        if (newSubscriptionNotes) payload.subscriptionNotes = newSubscriptionNotes;
+      }
+      await membersApi.create(payload);
+      toast.success(addWithSubscription ? 'Member created and subscribed successfully' : 'Member created successfully');
       setAddDialogOpen(false);
       setFormData(emptyFormData);
       fetchMembers();
@@ -537,6 +564,7 @@ export function MembersPage() {
                   <TableHead>Phone</TableHead>
                   <TableHead>Blood</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="hidden md:table-cell">Expires</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -566,6 +594,9 @@ export function MembersPage() {
                       ) : '—'}
                     </TableCell>
                     <TableCell><StatusBadge status={member.status} size="sm" /></TableCell>
+                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                      {member.subscriptionEndDate ? formatDate(member.subscriptionEndDate) : '—'}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(member.createdAt)}</TableCell>
                     <TableCell className="text-right">
                       <MemberActions member={member} isOwner={isOwner} isManagerOrAbove={isManagerOrAbove}
@@ -614,6 +645,84 @@ export function MembersPage() {
             <DialogDescription>Enter member information and photo.</DialogDescription>
           </DialogHeader>
           <MemberForm formData={formData} setFormData={setFormData} formErrors={formErrors} />
+
+          {/* Optional initial subscription */}
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="add-subscription"
+                checked={addWithSubscription}
+                onCheckedChange={setAddWithSubscription}
+              />
+              <Label htmlFor="add-subscription" className="text-sm font-medium cursor-pointer">
+                Add initial subscription
+              </Label>
+            </div>
+            {addWithSubscription && (
+              <div className="space-y-3 pl-1 border-l-2 border-muted pl-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sub-service">Service</Label>
+                  <Select value={newServiceId} onValueChange={setNewServiceId}>
+                    <SelectTrigger id="sub-service">
+                      <SelectValue placeholder="Select a service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableServices.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name} — {formatCurrency(s.price)} ({s.duration} days)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newServiceId && (() => {
+                  const svc = availableServices.find((s) => s.id === newServiceId);
+                  return svc ? (
+                    <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Duration:</span>
+                        <span className="font-medium">{svc.duration} days</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Price:</span>
+                        <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+                <div className="space-y-2">
+                  <Label htmlFor="sub-payment-method">Payment Method</Label>
+                  <Select value={newPaymentMethod} onValueChange={setNewPaymentMethod}>
+                    <SelectTrigger id="sub-payment-method">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <EthiopianDateInput
+                  value={newPaymentDate}
+                  onChange={(val, iso) => { setNewPaymentDate(val); setNewPaymentDateIso(iso); }}
+                  label="Payment Date (EC)"
+                  required
+                />
+                <div className="space-y-2">
+                  <Label htmlFor="sub-notes">Notes (Optional)</Label>
+                  <Textarea
+                    id="sub-notes"
+                    value={newSubscriptionNotes}
+                    onChange={(e) => setNewSubscriptionNotes(e.target.value)}
+                    placeholder="Subscription notes..."
+                    rows={2}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={submitting}>Cancel</Button>
             <Button onClick={handleCreateMember} disabled={submitting}>{submitting ? 'Creating...' : 'Create Member'}</Button>
@@ -840,6 +949,12 @@ function MemberCard({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelet
             <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
               {member.phone && <div className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" /><span className="truncate">{member.phone}</span></div>}
               {member.bloodType && <div className="flex items-center gap-1.5"><Droplets className="h-3 w-3 shrink-0 text-red-500" /><span>{member.bloodType}</span></div>}
+              {member.subscriptionEndDate && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-muted-foreground">Expires:</span>
+                  <span className="font-medium">{formatDate(member.subscriptionEndDate)}</span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1.5 mt-3">
               <Button variant="outline" size="sm" onClick={() => onView(member)}><Eye className="h-3.5 w-3.5" /></Button>

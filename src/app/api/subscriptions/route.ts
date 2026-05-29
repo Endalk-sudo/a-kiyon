@@ -19,11 +19,26 @@ export async function GET(request: NextRequest) {
     const memberId = searchParams.get('memberId') || undefined;
     const serviceId = searchParams.get('serviceId') || undefined;
     const status = searchParams.get('status') || undefined;
+    const search = searchParams.get('search') || '';
+
+    // Auto-expire subscriptions past their end date
+    await db.subscription.updateMany({
+      where: { status: 'active', endDate: { lt: new Date() } },
+      data: { status: 'expired' },
+    });
 
     const where: Record<string, unknown> = {};
     if (memberId) where.memberId = memberId;
     if (serviceId) where.serviceId = serviceId;
     if (status) where.status = status;
+    if (search) {
+      where.member = {
+        OR: [
+          { firstName: { contains: search } },
+          { lastName: { contains: search } },
+        ],
+      };
+    }
 
     const [total, subscriptions] = await Promise.all([
       db.subscription.count({ where }),
@@ -34,7 +49,7 @@ export async function GET(request: NextRequest) {
             select: { id: true, firstName: true, lastName: true, photo: true },
           },
           service: {
-            select: { id: true, name: true, price: true },
+            select: { id: true, name: true, nameAm: true, price: true, duration: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -136,7 +151,7 @@ export async function POST(request: NextRequest) {
     parsedEndDate.setDate(parsedEndDate.getDate() + service.duration);
 
     // Generate receipt number
-    const receiptNumber = `RCPT-${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+    const receiptNumber = `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
     // Create subscription and payment in a transaction
     const result = await db.$transaction(async (tx) => {
