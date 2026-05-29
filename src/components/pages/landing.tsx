@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -152,20 +152,92 @@ function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementTy
 }
 
 export function LandingPage() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 80);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const scrollToFeatures = () => {
     document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      {/* ─── Navbar ─── */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled ? 'bg-background/95 backdrop-blur-md shadow-sm' : 'bg-transparent'
+      }`}>
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+          <button onClick={scrollToTop} className="flex items-center gap-2.5">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+              scrolled ? 'bg-primary text-primary-foreground' : 'bg-white/10 text-white'
+            }`}>
+              <Dumbbell className="w-4 h-4" />
+            </div>
+            <span className={`font-bold text-lg tracking-tight transition-colors ${
+              scrolled ? 'text-foreground' : 'text-white'
+            }`}>
+              A-kiyon
+            </span>
+          </button>
+
+          <div className="hidden md:flex items-center gap-8">
+            <button onClick={scrollToTop} className={`text-sm font-medium transition-colors ${
+              scrolled ? 'text-muted-foreground hover:text-foreground' : 'text-white/70 hover:text-white'
+            }`}>
+              Home
+            </button>
+            <button onClick={scrollToFeatures} className={`text-sm font-medium transition-colors ${
+              scrolled ? 'text-muted-foreground hover:text-foreground' : 'text-white/70 hover:text-white'
+            }`}>
+              Features
+            </button>
+            <LoginDialog>
+              <Button size="sm" className="h-9 min-w-[100px]" variant={scrolled ? 'default' : 'secondary'}>
+                Sign In
+              </Button>
+            </LoginDialog>
+          </div>
+
+          <div className="md:hidden">
+            <LoginDialog>
+              <Button size="sm" className="h-9" variant={scrolled ? 'default' : 'secondary'}>
+                Sign In
+              </Button>
+            </LoginDialog>
+          </div>
+        </div>
+      </nav>
+
       {/* ─── Hero Section ─── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-16">
         {/* Background image */}
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url("/uploads/img/hero%20img.jpg")' }} />
         {/* Dark overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70" />
 
-        <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-4xl mx-auto">
+        <style jsx>{`
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .hero-content > * {
+            opacity: 0;
+            animation: fadeInUp 0.7s ease-out forwards;
+          }
+          .hero-content > *:nth-child(1) { animation-delay: 0.1s; }
+          .hero-content > *:nth-child(2) { animation-delay: 0.2s; }
+          .hero-content > *:nth-child(3) { animation-delay: 0.3s; }
+          .hero-content > *:nth-child(4) { animation-delay: 0.4s; }
+        `}</style>
+        <div className="hero-content relative z-10 flex flex-col items-center text-center px-4 max-w-4xl mx-auto">
           {/* Logo */}
           <div className="w-20 h-20 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-6 shadow-lg shadow-primary/25">
             <Dumbbell className="w-10 h-10" />
@@ -254,38 +326,46 @@ export function LandingPage() {
       {/* ─── Stats Section ─── */}
       <section className="py-24 px-4">
         <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+              Built for efficiency
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Intelligent features that save you time and help you run your fitness center smoothly
+            </p>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <Card className="border-0 bg-primary/5 text-center">
+            <Card className="border-0 bg-gradient-to-br from-primary/5 to-primary/10 text-center hover:shadow-lg hover:shadow-primary/5 transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-6 h-6" />
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-5">
+                  <Users className="w-7 h-7" />
                 </div>
                 <div className="text-3xl font-bold mb-1">Smart</div>
                 <p className="text-sm text-muted-foreground">Member Tracking</p>
               </CardContent>
             </Card>
-            <Card className="border-0 bg-emerald-50 text-center">
+            <Card className="border-0 bg-gradient-to-br from-emerald-50 to-emerald-100 text-center hover:shadow-lg hover:shadow-emerald-100 transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="w-6 h-6" />
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-5">
+                  <Calendar className="w-7 h-7" />
                 </div>
                 <div className="text-3xl font-bold mb-1">Auto</div>
                 <p className="text-sm text-muted-foreground">Expiry Alerts</p>
               </CardContent>
             </Card>
-            <Card className="border-0 bg-amber-50 text-center">
+            <Card className="border-0 bg-gradient-to-br from-amber-50 to-amber-100 text-center hover:shadow-lg hover:shadow-amber-100 transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="w-6 h-6" />
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-5">
+                  <TrendingUp className="w-7 h-7" />
                 </div>
                 <div className="text-3xl font-bold mb-1">Real-time</div>
                 <p className="text-sm text-muted-foreground">Revenue Reports</p>
               </CardContent>
             </Card>
-            <Card className="border-0 bg-primary/5 text-center">
+            <Card className="border-0 bg-gradient-to-br from-primary/5 to-primary/10 text-center hover:shadow-lg hover:shadow-primary/5 transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-6 h-6" />
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-5">
+                  <CheckCircle className="w-7 h-7" />
                 </div>
                 <div className="text-3xl font-bold mb-1">Easy</div>
                 <p className="text-sm text-muted-foreground">CSV Exports</p>
@@ -296,17 +376,19 @@ export function LandingPage() {
       </section>
 
       {/* ─── CTA Section ─── */}
-      <section className="py-24 px-4 bg-muted/30">
+      <section className="py-32 px-4 bg-gradient-to-br from-primary/5 via-background to-primary/5">
         <div className="max-w-3xl mx-auto text-center">
-          <Shield className="w-12 h-12 mx-auto text-primary mb-6" />
+          <div className="w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-8 shadow-lg shadow-primary/25">
+            <Shield className="w-8 h-8" />
+          </div>
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
             Ready to streamline your operations?
           </h2>
-          <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
+          <p className="text-lg text-muted-foreground mb-10 max-w-xl mx-auto leading-relaxed">
             Sign in to manage your members, track subscriptions, and stay on top of your fitness center&apos;s performance.
           </p>
           <LoginDialog>
-            <Button size="lg" className="min-w-[200px] text-base h-12">
+            <Button size="lg" className="min-w-[220px] text-base h-13 px-8">
               Sign In to Get Started
             </Button>
           </LoginDialog>
@@ -314,15 +396,42 @@ export function LandingPage() {
       </section>
 
       {/* ─── Footer ─── */}
-      <footer className="py-8 px-4 border-t">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Dumbbell className="w-4 h-4" />
-            <span>A-kiyon Fitness Center</span>
+      <footer className="py-12 px-4 border-t bg-muted/20">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
+                  <Dumbbell className="w-4 h-4" />
+                </div>
+                <span className="font-bold">A-kiyon Fitness Center</span>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Complete fitness center management system for member tracking, subscriptions, payments, and reporting.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm mb-3">Quick Links</h4>
+              <div className="space-y-2">
+                <button onClick={scrollToTop} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Home</button>
+                <button onClick={scrollToFeatures} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Features</button>
+                <LoginDialog>
+                  <span className="block text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">Sign In</span>
+                </LoginDialog>
+              </div>
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm mb-3">Contact</h4>
+              <p className="text-sm text-muted-foreground">
+                For support and inquiries, please contact your system administrator.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} A-kiyon Fitness Center Management System. All rights reserved.
-          </p>
+          <div className="border-t pt-6 text-center">
+            <p className="text-xs text-muted-foreground">
+              &copy; {new Date().getFullYear()} A-kiyon Fitness Center Management System. All rights reserved.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
