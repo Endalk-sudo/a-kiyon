@@ -26,7 +26,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return apiResponse(users);
+    return apiResponse({ data: users });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return unauthorizedError();

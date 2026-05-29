@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
+
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -32,7 +32,6 @@ import {
   UserPlus,
   Shield,
   User,
-  Info,
   Mail,
   Phone,
   Loader2,
@@ -394,48 +393,7 @@ export function SettingsPage() {
         </Card>
       )}
 
-      {/* About Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-5 w-5" />
-            About
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">System</p>
-              <p className="text-sm font-medium">A-kiyon - Fitness Center</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Version</p>
-              <p className="text-sm font-medium">1.0.0</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Framework</p>
-              <p className="text-sm font-medium">Next.js 16</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Calendar</p>
-              <p className="text-sm font-medium">Ethiopian Calendar (EC) Supported</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Currency</p>
-              <p className="text-sm font-medium">Ethiopian Birr (ETB)</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Database</p>
-              <p className="text-sm font-medium">SQLite (Prisma ORM)</p>
-            </div>
-          </div>
-          <Separator className="my-4" />
-          <p className="text-xs text-muted-foreground">
-            Built for managing fitness center subscriptions, payments, and member records.
-            Supports Ethiopian calendar dates and local currency formatting.
-          </p>
-        </CardContent>
-      </Card>
+
     </div>
   );
 }
