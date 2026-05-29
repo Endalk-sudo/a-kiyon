@@ -5,7 +5,7 @@ import { membersApi, servicesApi, subscriptionsApi } from '@/lib/api-client';
 import { StatusBadge, type StatusType } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
 import { PhotoCapture } from '@/components/photo-capture';
-import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
+import { formatCurrency, formatDate, formatMemberName, getInitials } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
@@ -73,6 +73,7 @@ import {
   Droplets,
   Heart,
   RefreshCw,
+  X,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -205,6 +206,7 @@ export function MembersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
 
   // Selected member for actions
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -571,7 +573,7 @@ export function MembersPage() {
               </TableHeader>
               <TableBody>
                 {members.map((member) => (
-                  <TableRow key={member.id} className={member.isDeleted ? 'opacity-60' : ''}>
+                  <TableRow key={member.id} className={member.isDeleted ? 'opacity-60 cursor-pointer' : 'cursor-pointer'} onClick={() => handleViewMember(member)}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <MemberAvatar photo={member.photo} firstName={member.firstName} lastName={member.lastName} size="sm" />
@@ -759,15 +761,26 @@ export function MembersPage() {
           ) : memberDetail ? (
             <div className="space-y-6">
               {/* Member Header */}
-              <div className="flex items-start gap-4">
-                <MemberAvatar photo={memberDetail.photo} firstName={memberDetail.firstName} lastName={memberDetail.lastName} size="lg" />
-                <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-5">
+                {memberDetail.photo ? (
+                  <img
+                    src={memberDetail.photo}
+                    alt={formatMemberName(memberDetail)}
+                    className="w-32 h-32 rounded-xl object-cover cursor-pointer shrink-0 border"
+                    onClick={() => setPhotoPreviewOpen(true)}
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <span className="text-3xl font-bold">{getInitials(memberDetail.firstName, memberDetail.lastName)}</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0 pt-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-lg font-semibold">{formatMemberName(memberDetail)}</h3>
+                    <h3 className="text-xl font-semibold">{formatMemberName(memberDetail)}</h3>
                     <StatusBadge status={memberDetail.status} size="sm" />
                     {memberDetail.isDeleted && <Badge variant="outline" className="text-xs text-destructive border-destructive">Deleted</Badge>}
                   </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1 text-sm text-muted-foreground">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2 text-sm text-muted-foreground">
                     {memberDetail.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{memberDetail.phone}</span>}
                   </div>
                 </div>
@@ -866,32 +879,31 @@ export function MembersPage() {
                 )}
               </div>
 
-              {/* Payments */}
-              <div>
-                <h4 className="font-semibold mb-3">Payments ({memberDetail.payments?.length || 0})</h4>
-                {!memberDetail.payments?.length ? (
-                  <p className="text-sm text-muted-foreground">No payments yet</p>
-                ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {memberDetail.payments.map((pay) => (
-                      <div key={pay.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                        <div>
-                          <div className="font-medium text-sm">{pay.receiptNumber}</div>
-                          <div className="text-xs text-muted-foreground">{pay.subscription?.service?.name || 'Service'} — {formatDate(pay.paymentDate)}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{formatCurrency(pay.amount)}</span>
-                          {pay.isVoided && <Badge variant="destructive" className="text-xs">Voided</Badge>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Photo Lightbox ─────────────────────────────────────────────────── */}
+      {photoPreviewOpen && memberDetail?.photo && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center cursor-zoom-out"
+          onClick={() => setPhotoPreviewOpen(false)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10"
+            onClick={() => setPhotoPreviewOpen(false)}
+          >
+            <X className="h-8 w-8" />
+          </button>
+          <img
+            src={memberDetail.photo}
+            alt={formatMemberName(memberDetail)}
+            className="max-w-[95vw] max-h-[95vh] object-contain"
+          />
+        </div>
+      )}
 
       {/* ─── Delete Confirmation Dialog ──────────────────────────────────── */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -936,7 +948,7 @@ function MemberCard({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelet
   onView: (m: Member) => void; onEdit: (m: Member) => void; onDelete: (m: Member) => void; onRestore: (m: Member) => void;
 }) {
   return (
-    <Card className={member.isDeleted ? 'opacity-60' : ''}>
+    <Card className={member.isDeleted ? 'opacity-60 cursor-pointer' : 'cursor-pointer'} onClick={() => onView(member)}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <MemberAvatar photo={member.photo} firstName={member.firstName} lastName={member.lastName} size="md" />
@@ -957,10 +969,10 @@ function MemberCard({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelet
               )}
             </div>
             <div className="flex items-center gap-1.5 mt-3">
-              <Button variant="outline" size="sm" onClick={() => onView(member)}><Eye className="h-3.5 w-3.5" /></Button>
-              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="sm" onClick={() => onEdit(member)}><Pencil className="h-3.5 w-3.5" /></Button>}
-              {isOwner && member.isDeleted && <Button variant="outline" size="sm" onClick={() => onRestore(member)}><RotateCcw className="h-3.5 w-3.5" /></Button>}
-              {isOwner && !member.isDeleted && <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(member)}><Trash2 className="h-3.5 w-3.5" /></Button>}
+              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-3.5 w-3.5" /></Button>
+              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-3.5 w-3.5" /></Button>}
+              {isOwner && member.isDeleted && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-3.5 w-3.5" /></Button>}
+              {isOwner && !member.isDeleted && <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
             </div>
           </div>
         </div>
@@ -976,10 +988,10 @@ function MemberActions({ member, isOwner, isManagerOrAbove, onView, onEdit, onDe
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onView(member)}><Eye className="h-4 w-4" /></Button>
-      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(member)}><Pencil className="h-4 w-4" /></Button>}
-      {isOwner && member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onRestore(member)}><RotateCcw className="h-4 w-4" /></Button>}
-      {isOwner && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => onDelete(member)}><Trash2 className="h-4 w-4" /></Button>}
+      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-4 w-4" /></Button>
+      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-4 w-4" /></Button>}
+      {isOwner && member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-4 w-4" /></Button>}
+      {isOwner && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
     </div>
   );
 }
