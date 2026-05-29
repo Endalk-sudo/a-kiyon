@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { authClient } from '@/lib/auth-client';
-import { LoginForm } from '@/components/login-form';
 import { AppLayout } from '@/components/app-layout';
+import { LandingPage } from '@/components/pages/landing';
 import { DashboardPage } from '@/components/pages/dashboard';
 import { MembersPage } from '@/components/pages/members';
 import { ServicesPage } from '@/components/pages/services';
@@ -63,7 +63,7 @@ export default function Home() {
   }
 
   if (!isAuthenticated || !session) {
-    return <LoginForm />;
+    return <LandingPage />;
   }
 
   const PageComponent = pageComponents[currentPage] || DashboardPage;
