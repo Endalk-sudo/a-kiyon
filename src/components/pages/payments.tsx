@@ -1,20 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { paymentsApi, invoicesApi, membersApi } from '@/lib/api-client';
-import { EthiopianDateInput } from '@/components/ethiopian-date-input';
+import { paymentsApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName, formatPaymentMethod } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +18,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -44,18 +34,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Plus,
   Printer,
   Ban,
   CreditCard,
   ChevronLeft,
   ChevronRight,
   Search,
-  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -70,19 +56,12 @@ interface MemberInfo {
   photo?: string | null;
 }
 
-interface InvoiceInfo {
-  id: string;
-  amount: number;
-  status: string;
-  dueDate: string;
-  subscription?: {
-    service?: { name: string };
-  };
+interface SubscriptionInfo {
+  service?: { name: string };
 }
 
 interface PaymentRecord {
   id: string;
-  invoiceId: string;
   memberId: string;
   amount: number;
   paymentDate: string;
@@ -92,7 +71,7 @@ interface PaymentRecord {
   voidedAt: string | null;
   notes: string | null;
   member: MemberInfo;
-  invoice: InvoiceInfo;
+  subscription: SubscriptionInfo;
 }
 
 interface PaymentsResponse {
@@ -102,23 +81,6 @@ interface PaymentsResponse {
     page: number;
     limit: number;
     totalPages: number;
-  };
-}
-
-interface MemberOption {
-  id: string;
-  firstName: string;
-  lastName: string;
-  photo?: string | null;
-}
-
-interface PendingInvoice {
-  id: string;
-  amount: number;
-  status: string;
-  dueDate: string;
-  subscription?: {
-    service?: { name: string };
   };
 }
 
@@ -134,7 +96,7 @@ const methodFilters = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// PaymentsPage Component
+// PaymentsPage Component (read-only history)
 // ---------------------------------------------------------------------------
 
 export function PaymentsPage() {
@@ -152,21 +114,6 @@ export function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [methodFilter, setMethodFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-
-  // ---- Record Payment dialog ----
-  const [recordDialogOpen, setRecordDialogOpen] = useState(false);
-  const [members, setMembers] = useState<MemberOption[]>([]);
-  const [selectedMemberId, setSelectedMemberId] = useState('');
-  const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentDate, setPaymentDate] = useState('');
-  const [paymentDateIso, setPaymentDateIso] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [paymentNotes, setPaymentNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-  const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   // ---- Void Payment ----
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
@@ -201,138 +148,11 @@ export function PaymentsPage() {
     fetchPayments(1);
   }, [methodFilter, fetchPayments]);
 
-  // ---- Fetch members for Record Payment ----
-  useEffect(() => {
-    if (!recordDialogOpen) return;
-    let cancelled = false;
-    setLoadingMembers(true);
-    (async () => {
-      try {
-        const result = (await membersApi.list({ limit: 200 })) as {
-          data: MemberOption[];
-        };
-        if (!cancelled) {
-          setMembers(result.data || []);
-        }
-      } catch {
-        if (!cancelled) toast.error('Failed to load members');
-      } finally {
-        if (!cancelled) setLoadingMembers(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [recordDialogOpen]);
-
-  // ---- Fetch pending invoices when member selected ----
-  useEffect(() => {
-    if (!selectedMemberId) {
-      setPendingInvoices([]);
-      setSelectedInvoiceId('');
-      setPaymentAmount('');
-      return;
-    }
-    let cancelled = false;
-    setLoadingInvoices(true);
-    (async () => {
-      try {
-        const result = (await invoicesApi.list({
-          memberId: selectedMemberId,
-          status: 'pending',
-          limit: 50,
-        })) as { data: PendingInvoice[] };
-        if (!cancelled) {
-          const invoices = result.data || [];
-          // Also include overdue invoices
-          const overdueResult = (await invoicesApi.list({
-            memberId: selectedMemberId,
-            status: 'overdue',
-            limit: 50,
-          })) as { data: PendingInvoice[] };
-          const allPending = [...invoices, ...(overdueResult.data || [])];
-          setPendingInvoices(allPending);
-          if (allPending.length === 1) {
-            setSelectedInvoiceId(allPending[0].id);
-            setPaymentAmount(String(allPending[0].amount));
-          }
-        }
-      } catch {
-        if (!cancelled) toast.error('Failed to load invoices');
-      } finally {
-        if (!cancelled) setLoadingInvoices(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedMemberId]);
-
-  // ---- Handle invoice selection ----
-  const handleInvoiceSelect = (invoiceId: string) => {
-    setSelectedInvoiceId(invoiceId);
-    const inv = pendingInvoices.find((i) => i.id === invoiceId);
-    if (inv) {
-      setPaymentAmount(String(inv.amount));
-    }
-  };
-
-  // ---- Submit record payment ----
-  const handleRecordPayment = async () => {
-    if (!selectedMemberId) {
-      toast.error('Please select a member');
-      return;
-    }
-    if (!selectedInvoiceId) {
-      toast.error('Please select an invoice');
-      return;
-    }
-    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-    if (!paymentDateIso) {
-      toast.error('Please enter a valid Ethiopian date');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await paymentsApi.create({
-        invoiceId: selectedInvoiceId,
-        memberId: selectedMemberId,
-        amount: parseFloat(paymentAmount),
-        paymentDate: paymentDateIso,
-        method: paymentMethod,
-        notes: paymentNotes || undefined,
-      });
-      toast.success('Payment recorded successfully');
-      resetRecordForm();
-      setRecordDialogOpen(false);
-      fetchPayments(pagination.page);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to record payment');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const resetRecordForm = () => {
-    setSelectedMemberId('');
-    setSelectedInvoiceId('');
-    setPaymentAmount('');
-    setPaymentDate('');
-    setPaymentDateIso(null);
-    setPaymentMethod('cash');
-    setPaymentNotes('');
-    setPendingInvoices([]);
-  };
-
   // ---- Print receipt ----
   const handlePrintReceipt = (payment: PaymentRecord) => {
     const memberName = formatMemberName(payment.member);
     const serviceName =
-      payment.invoice?.subscription?.service?.name || 'N/A';
+      payment.subscription?.service?.name || 'N/A';
     const amountFormatted = formatCurrency(payment.amount);
     const dateFormatted = formatDate(payment.paymentDate);
     const methodFormatted = formatPaymentMethod(payment.method);
@@ -488,9 +308,6 @@ export function PaymentsPage() {
     fetchPayments(page);
   };
 
-  // ---- Selected member for avatar display ----
-  const selectedMember = members.find((m) => m.id === selectedMemberId);
-
   // ---- Compute filtered payments for client-side search ----
   const displayedPayments = searchQuery
     ? payments.filter(
@@ -511,13 +328,9 @@ export function PaymentsPage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Payments</h2>
           <p className="text-muted-foreground text-sm">
-            Record payments received from members (cash, bank transfer, or mobile money)
+            View payment history recorded from subscriptions
           </p>
         </div>
-        <Button onClick={() => setRecordDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Record Payment
-        </Button>
       </div>
 
       {/* Filters */}
@@ -800,182 +613,6 @@ export function PaymentsPage() {
         </div>
       )}
 
-      {/* ===== Record Payment Dialog ===== */}
-      <Dialog open={recordDialogOpen} onOpenChange={(open) => {
-        if (!open) resetRecordForm();
-        setRecordDialogOpen(open);
-      }}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-            <DialogDescription>
-              Record a payment you received from a member. The member pays you directly, then you record it here.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 py-2">
-            {/* Manual payment info */}
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
-              <Info className="h-4 w-4 mt-0.5 shrink-0" />
-              <p className="text-xs">
-                <strong>Manual Payment:</strong> The member pays you directly (cash, bank transfer, or mobile money). After receiving the payment, select their pending invoice and record it here. A receipt will be generated automatically.
-              </p>
-            </div>
-
-            {/* Select Member */}
-            <div className="space-y-2">
-              <Label htmlFor="select-member">Member</Label>
-              <Select
-                value={selectedMemberId}
-                onValueChange={(val) => {
-                  setSelectedMemberId(val);
-                  setSelectedInvoiceId('');
-                  setPaymentAmount('');
-                }}
-                disabled={loadingMembers}
-              >
-                <SelectTrigger id="select-member">
-                  <SelectValue placeholder={loadingMembers ? 'Loading members...' : 'Select a member'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.firstName} {m.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedMember && (
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <MemberAvatar
-                    photo={selectedMember.photo}
-                    firstName={selectedMember.firstName}
-                    lastName={selectedMember.lastName}
-                    size="lg"
-                  />
-                  <div>
-                    <p className="font-semibold">
-                      {selectedMember.firstName} {selectedMember.lastName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Member selected</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Select Invoice */}
-            {selectedMemberId && (
-              <div className="space-y-2">
-                <Label htmlFor="select-invoice">Invoice</Label>
-                {loadingInvoices ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                ) : pendingInvoices.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">
-                    No pending invoices found for this member.
-                  </p>
-                ) : (
-                  <Select
-                    value={selectedInvoiceId}
-                    onValueChange={handleInvoiceSelect}
-                  >
-                    <SelectTrigger id="select-invoice">
-                      <SelectValue placeholder="Select an invoice" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {pendingInvoices.map((inv) => (
-                        <SelectItem key={inv.id} value={inv.id}>
-                          {inv.subscription?.service?.name || 'Invoice'} —{' '}
-                          {formatCurrency(inv.amount)} (Due: {formatDate(inv.dueDate)})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            )}
-
-            {/* Amount */}
-            <div className="space-y-2">
-              <Label htmlFor="payment-amount">Amount (ETB)</Label>
-              <Input
-                id="payment-amount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-
-            {/* Payment Date (Ethiopian) */}
-            <EthiopianDateInput
-              value={paymentDate}
-              onChange={(val, iso) => {
-                setPaymentDate(val);
-                setPaymentDateIso(iso);
-              }}
-              label="Payment Date (EC)"
-              required
-            />
-
-            {/* Payment Method */}
-            <div className="space-y-2">
-              <Label htmlFor="payment-method">Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger id="payment-method">
-                  <SelectValue placeholder="Select method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label htmlFor="payment-notes">Notes (optional)</Label>
-              <Textarea
-                id="payment-notes"
-                value={paymentNotes}
-                onChange={(e) => setPaymentNotes(e.target.value)}
-                placeholder="Additional notes..."
-                rows={2}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                resetRecordForm();
-                setRecordDialogOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleRecordPayment}
-              disabled={submitting || !selectedInvoiceId || !paymentDateIso}
-            >
-              {submitting ? (
-                <>
-                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Recording...
-                </>
-              ) : (
-                'Record Payment'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* ===== Void Payment AlertDialog ===== */}
       <AlertDialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
         <AlertDialogContent>
@@ -990,8 +627,7 @@ export function PaymentsPage() {
                     {formatMemberName(voidTarget.member)}
                   </span>{' '}
                   of <span className="font-semibold">{formatCurrency(voidTarget.amount)}</span>?
-                  This action cannot be undone. The invoice status will be reverted if
-                  applicable.
+                  This action cannot be undone.
                 </>
               )}
             </AlertDialogDescription>

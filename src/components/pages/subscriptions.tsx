@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { subscriptionsApi, membersApi, servicesApi } from '@/lib/api-client';
-
+import { EthiopianDateInput } from '@/components/ethiopian-date-input';
 import { MemberAvatar } from '@/components/member-avatar';
 import { StatusBadge } from '@/components/status-badge';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
@@ -61,7 +61,7 @@ import {
   Filter,
   Ban,
   RefreshCw,
-  Info,
+  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -156,6 +156,8 @@ export function SubscriptionsPage() {
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatus>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
 
   // Add subscription dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -163,10 +165,16 @@ export function SubscriptionsPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentDate, setPaymentDate] = useState('');
+  const [paymentDateIso, setPaymentDateIso] = useState<string | null>(null);
 
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Renew dialog payment method
+  const [renewPaymentMethod, setRenewPaymentMethod] = useState('cash');
 
   // Cancel subscription dialog state
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -189,6 +197,9 @@ export function SubscriptionsPage() {
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
+      if (searchDebounced) {
+        params.search = searchDebounced;
+      }
       const response = await subscriptionsApi.list(params) as SubscriptionsResponse;
       setSubscriptions(response.data);
       setPagination(response.pagination);
@@ -197,7 +208,7 @@ export function SubscriptionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, searchDebounced]);
 
   // Fetch members and services for the add dialog
   const fetchFormData = useCallback(async () => {
@@ -216,6 +227,14 @@ export function SubscriptionsPage() {
   useEffect(() => {
     fetchSubscriptions(1);
   }, [fetchSubscriptions]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (addDialogOpen) {
@@ -239,6 +258,10 @@ export function SubscriptionsPage() {
       setFormError('Please select a service.');
       return;
     }
+    if (!paymentDateIso) {
+      setFormError('Please enter a payment date.');
+      return;
+    }
 
     setSubmitting(true);
     setFormError(null);
@@ -247,9 +270,11 @@ export function SubscriptionsPage() {
       await subscriptionsApi.create({
         memberId: selectedMemberId,
         serviceId: selectedServiceId,
+        paymentMethod,
+        paymentDate: paymentDateIso,
         notes: notes || undefined,
       });
-      toast.success('Subscription created. A pending invoice has been generated — record the payment when the member pays.');
+      toast.success('Subscription created and payment recorded successfully.');
       setAddDialogOpen(false);
       fetchSubscriptions(1);
     } catch (error) {
@@ -282,12 +307,12 @@ export function SubscriptionsPage() {
     if (!subscriptionToRenew) return;
     setRenewing(true);
     try {
-      const result = await subscriptionsApi.renew(subscriptionToRenew.id) as {
+      const result = await subscriptionsApi.renew(subscriptionToRenew.id, { paymentMethod: renewPaymentMethod }) as {
         subscription: Subscription;
-        invoice: { id: string; amount: number; status: string };
+        payment: { id: string; amount: number; receiptNumber: string };
       };
       toast.success(
-        `Subscription renewed! A pending invoice of ${formatCurrency(result.invoice?.amount || subscriptionToRenew.priceSnapshot)} has been created. Go to Payments to record the payment.`
+        `Subscription renewed! Payment of ${formatCurrency(result.payment?.amount || subscriptionToRenew.priceSnapshot)} recorded. Receipt: ${result.payment?.receiptNumber || ''}`
       );
       setRenewDialogOpen(false);
       setSubscriptionToRenew(null);
@@ -330,18 +355,10 @@ export function SubscriptionsPage() {
               <DialogHeader>
                 <DialogTitle>Register New Subscription</DialogTitle>
                 <DialogDescription>
-                  Register a member for a service. The member pays you directly (cash, bank transfer, or mobile money), then you create the subscription and record the payment.
+                  Register a member for a service and record the payment in one step.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
-                {/* Info banner */}
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
-                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p className="text-xs">
-                    <strong>Manual Payment:</strong> The member pays you first. After creating the subscription, a pending invoice will be generated. Go to Payments to record the payment and mark the invoice as paid.
-                  </p>
-                </div>
-
                 {/* Member Select */}
                 <div className="space-y-2">
                   <Label htmlFor="member-select">Member</Label>
@@ -384,12 +401,35 @@ export function SubscriptionsPage() {
                         <span className="text-muted-foreground">Price:</span>
                         <span className="font-bold text-emerald-600">{formatCurrency(selectedService.price)}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground pt-1">
-                        Collect {formatCurrency(selectedService.price)} from the member before registering.
-                      </p>
                     </div>
                   )}
                 </div>
+
+                {/* Payment Method */}
+                <div className="space-y-2">
+                  <Label htmlFor="payment-method">Payment Method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger className="w-full" id="payment-method">
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Payment Date */}
+                <EthiopianDateInput
+                  value={paymentDate}
+                  onChange={(val, iso) => {
+                    setPaymentDate(val);
+                    setPaymentDateIso(iso);
+                  }}
+                  label="Payment Date (EC)"
+                  required
+                />
 
                 {/* Notes */}
                 <div className="space-y-2">
@@ -422,6 +462,17 @@ export function SubscriptionsPage() {
             </DialogContent>
           </Dialog>
         )}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by member name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
       {/* Filters */}
@@ -644,7 +695,6 @@ export function SubscriptionsPage() {
                   Are you sure you want to cancel the subscription for{' '}
                   <strong>{formatMemberName(subscriptionToCancel.member)}</strong> to{' '}
                   <strong>{subscriptionToCancel.service.name}</strong>?
-                  This will also cancel any pending invoices associated with this subscription.
                   This action cannot be undone.
                 </>
               )}
@@ -664,59 +714,68 @@ export function SubscriptionsPage() {
       </AlertDialog>
 
       {/* Renew Confirmation Dialog */}
-      <AlertDialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+      <Dialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-600" />
               Renew Subscription
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                {subscriptionToRenew && (
-                  <>
-                    <p>
-                      You are about to renew the <strong>{subscriptionToRenew.service.name}</strong> subscription for{' '}
-                      <strong>{formatMemberName(subscriptionToRenew.member)}</strong>.
-                    </p>
-                    <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Service:</span>
-                        <span className="font-medium">{subscriptionToRenew.service.name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Price:</span>
-                        <span className="font-bold text-emerald-600">{formatCurrency(subscriptionToRenew.priceSnapshot)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Duration:</span>
-                        <span className="font-medium">{subscriptionToRenew.service.duration} days</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
-                      <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                      <p className="text-xs">
-                        <strong>Manual Payment:</strong> Make sure the member has paid you {formatCurrency(subscriptionToRenew.priceSnapshot)} before renewing. 
-                        After renewal, a pending invoice will be created — go to Payments to record it.
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={renewing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            </DialogTitle>
+            <DialogDescription>
+              Renew the subscription and record the payment in one step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {subscriptionToRenew && (
+              <>
+                <p className="text-sm">
+                  Renewing <strong>{subscriptionToRenew.service.name}</strong> for{' '}
+                  <strong>{formatMemberName(subscriptionToRenew.member)}</strong>.
+                </p>
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Service:</span>
+                    <span className="font-medium">{subscriptionToRenew.service.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price:</span>
+                    <span className="font-bold text-emerald-600">{formatCurrency(subscriptionToRenew.priceSnapshot)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="font-medium">{subscriptionToRenew.service.duration} days</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="renew-payment-method">Payment Method</Label>
+                  <Select value={renewPaymentMethod} onValueChange={setRenewPaymentMethod}>
+                    <SelectTrigger className="w-full" id="renew-payment-method">
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenewDialogOpen(false)} disabled={renewing}>
+              Cancel
+            </Button>
+            <Button
               onClick={handleRenewSubscription}
               disabled={renewing}
-              className="bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-600"
+              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              {renewing ? 'Renewing...' : 'Confirm Renewal'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              {renewing ? 'Renewing...' : 'Confirm Renewal & Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

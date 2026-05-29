@@ -39,32 +39,18 @@ export async function GET(
       include: {
         subscriptions: {
           include: {
-            service: { select: { id: true, name: true, nameAm: true } },
-            invoices: {
-              include: {
-                payments: {
-                  where: { isVoided: false },
-                },
-              },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-        },
-        invoices: {
-          include: {
-            subscription: { select: { id: true, service: { select: { name: true } } } },
+            service: { select: { id: true, name: true, nameAm: true, price: true } },
             payments: {
               where: { isVoided: false },
+              orderBy: { paymentDate: 'desc' },
             },
           },
           orderBy: { createdAt: 'desc' },
         },
         payments: {
           include: {
-            invoice: {
-              include: {
-                subscription: { select: { service: { select: { name: true } } } },
-              },
+            subscription: {
+              select: { service: { select: { name: true } } },
             },
           },
           orderBy: { paymentDate: 'desc' },
@@ -106,7 +92,7 @@ export async function PUT(
     }
 
     const {
-      firstName, lastName, phone, email, photo,
+      firstName, lastName, phone, photo,
       address, weight, height, bloodType,
       emergencyContact, notes,
     } = body;
@@ -117,7 +103,6 @@ export async function PUT(
         ...(firstName !== undefined && { firstName }),
         ...(lastName !== undefined && { lastName }),
         ...(phone !== undefined && { phone }),
-        ...(email !== undefined && { email }),
         ...(photo !== undefined && { photo }),
         ...(address !== undefined && { address }),
         ...(weight !== undefined && { weight: weight ? parseFloat(String(weight)) : null }),
@@ -131,7 +116,7 @@ export async function PUT(
     await createAuditLog({
       userId: session.userId,
       action: 'member.update',
-      details: { firstName, lastName, phone, email },
+      details: { firstName, lastName, phone },
       entity: 'member',
       entityId: member.id,
     });

@@ -20,12 +20,15 @@ export async function GET(
       where: { id },
       include: {
         member: {
-          select: { id: true, firstName: true, lastName: true, photo: true, phone: true, email: true },
+          select: { id: true, firstName: true, lastName: true, photo: true, phone: true },
         },
         service: {
           select: { id: true, name: true, nameAm: true, price: true, duration: true },
         },
-        invoices: true,
+        payments: {
+          where: { isVoided: false },
+          orderBy: { paymentDate: 'desc' },
+        },
       },
     });
 
@@ -77,37 +80,19 @@ export async function PUT(
       return apiError('No fields to update');
     }
 
-    const result = await db.$transaction(async (tx) => {
-      const subscription = await tx.subscription.update({
-        where: { id },
-        data: updateData,
-        include: {
-          member: {
-            select: { id: true, firstName: true, lastName: true, photo: true },
-          },
-          service: {
-            select: { id: true, name: true, price: true },
-          },
+    const subscription = await db.subscription.update({
+      where: { id },
+      data: updateData,
+      include: {
+        member: {
+          select: { id: true, firstName: true, lastName: true, photo: true },
         },
-      });
-
-      // If status changed to "cancelled", also cancel any pending invoices
-      if (status === 'cancelled') {
-        await tx.invoice.updateMany({
-          where: {
-            subscriptionId: id,
-            status: 'pending',
-          },
-          data: {
-            status: 'cancelled',
-          },
-        });
-      }
-
-      return subscription;
+        service: {
+          select: { id: true, name: true, price: true },
+        },
+      },
     });
 
-    // Create audit log entry
     await createAuditLog({
       userId: session.userId,
       action: 'subscription.update',
@@ -116,7 +101,6 @@ export async function PUT(
         previousStatus: existing.status,
         newStatus: status,
         notesUpdated: notes !== undefined,
-        cancelledPendingInvoices: status === 'cancelled',
       },
       entity: 'subscription',
       entityId: id,

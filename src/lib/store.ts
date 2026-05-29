@@ -5,7 +5,6 @@ export type PageId =
   | 'members' 
   | 'services' 
   | 'subscriptions' 
-  | 'invoices' 
   | 'payments' 
   | 'reports' 
   | 'audit-logs' 

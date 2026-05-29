@@ -63,7 +63,6 @@ import {
   Trash2,
   RotateCcw,
   Phone,
-  Mail,
   AlertTriangle,
   Users,
   UserPlus,
@@ -82,7 +81,6 @@ interface Member {
   firstName: string;
   lastName: string;
   phone: string | null;
-  email: string | null;
   photo: string | null;
   address: string | null;
   weight: number | null;
@@ -105,29 +103,6 @@ interface MemberDetail extends Member {
     priceSnapshot: number;
     notes: string | null;
     service: { id: string; name: string; nameAm: string | null };
-    invoices: Array<{
-      id: string;
-      amount: number;
-      status: string;
-      dueDate: string;
-      paidAt: string | null;
-      payments: Array<{
-        id: string;
-        amount: number;
-        paymentDate: string;
-        method: string;
-        receiptNumber: string;
-        isVoided: boolean;
-      }>;
-    }>;
-  }>;
-  invoices: Array<{
-    id: string;
-    amount: number;
-    status: string;
-    dueDate: string;
-    createdAt: string;
-    subscription: { id: string; service: { name: string } } | null;
     payments: Array<{
       id: string;
       amount: number;
@@ -145,8 +120,8 @@ interface MemberDetail extends Member {
     receiptNumber: string;
     isVoided: boolean;
     createdAt: string;
-    invoice: {
-      subscription: { service: { name: string } } | null;
+    subscription: {
+      service: { name: string } | null;
     } | null;
   }>;
 }
@@ -162,7 +137,6 @@ interface MemberFormData {
   firstName: string;
   lastName: string;
   phone: string;
-  email: string;
   address: string;
   weight: string;
   height: string;
@@ -176,7 +150,6 @@ const emptyFormData: MemberFormData = {
   firstName: '',
   lastName: '',
   phone: '',
-  email: '',
   address: '',
   weight: '',
   height: '',
@@ -313,7 +286,6 @@ export function MembersPage() {
       firstName: member.firstName,
       lastName: member.lastName,
       phone: member.phone || '',
-      email: member.email || '',
       address: member.address || '',
       weight: member.weight?.toString() || '',
       height: member.height?.toString() || '',
@@ -348,9 +320,6 @@ export function MembersPage() {
     const errors: Partial<Record<keyof MemberFormData, string>> = {};
     if (!data.firstName.trim()) errors.firstName = 'First name is required';
     if (!data.lastName.trim()) errors.lastName = 'Last name is required';
-    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-      errors.email = 'Invalid email format';
-    }
     if (data.weight && (isNaN(Number(data.weight)) || Number(data.weight) <= 0)) {
       errors.weight = 'Weight must be a positive number';
     }
@@ -371,7 +340,6 @@ export function MembersPage() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim() || null,
-        email: formData.email.trim() || null,
         photo: formData.photo,
         address: formData.address.trim() || null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
@@ -399,7 +367,6 @@ export function MembersPage() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim() || null,
-        email: formData.email.trim() || null,
         photo: formData.photo,
         address: formData.address.trim() || null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
@@ -491,7 +458,7 @@ export function MembersPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, phone, or email..."
+              placeholder="Search by name or phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -587,7 +554,6 @@ export function MembersPage() {
                               <Badge variant="outline" className="ml-2 text-xs text-destructive border-destructive">Deleted</Badge>
                             )}
                           </div>
-                          {member.email && <div className="text-xs text-muted-foreground truncate">{member.email}</div>}
                         </div>
                       </div>
                     </TableCell>
@@ -694,7 +660,6 @@ export function MembersPage() {
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1 text-sm text-muted-foreground">
                     {memberDetail.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{memberDetail.phone}</span>}
-                    {memberDetail.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" />{memberDetail.email}</span>}
                   </div>
                 </div>
               </div>
@@ -773,8 +738,8 @@ export function MembersPage() {
                               className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
                               onClick={async () => {
                                 try {
-                                  const result = await subscriptionsApi.renew(sub.id) as { invoice: { amount: number } };
-                                  toast.success(`Subscription renewed! Pending invoice of ${formatCurrency(result.invoice?.amount || sub.priceSnapshot)}. Go to Payments to record it.`);
+                                  const result = await subscriptionsApi.renew(sub.id) as { subscription: { priceSnapshot: number } };
+                                  toast.success(`Subscription renewed! Payment of ${formatCurrency(result.subscription?.priceSnapshot || sub.priceSnapshot)} has been recorded.`);
                                   fetchMemberDetail(memberDetail.id);
                                 } catch (err) {
                                   toast.error(err instanceof Error ? err.message : 'Failed to renew subscription');
@@ -785,29 +750,6 @@ export function MembersPage() {
                               Renew
                             </Button>
                           )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Invoices */}
-              <div>
-                <h4 className="font-semibold mb-3">Invoices ({memberDetail.invoices?.length || 0})</h4>
-                {!memberDetail.invoices?.length ? (
-                  <p className="text-sm text-muted-foreground">No invoices yet</p>
-                ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {memberDetail.invoices.map((inv) => (
-                      <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                        <div>
-                          <div className="font-medium text-sm">{inv.subscription?.service?.name || 'Service'}</div>
-                          <div className="text-xs text-muted-foreground">Due: {formatDate(inv.dueDate)}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{formatCurrency(inv.amount)}</span>
-                          <Badge variant={inv.status === 'paid' ? 'default' : inv.status === 'overdue' ? 'destructive' : 'secondary'} className="text-xs">{inv.status}</Badge>
                         </div>
                       </div>
                     ))}
@@ -826,7 +768,7 @@ export function MembersPage() {
                       <div key={pay.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                         <div>
                           <div className="font-medium text-sm">{pay.receiptNumber}</div>
-                          <div className="text-xs text-muted-foreground">{pay.invoice?.subscription?.service?.name || 'Service'} — {formatDate(pay.paymentDate)}</div>
+                          <div className="text-xs text-muted-foreground">{pay.subscription?.service?.name || 'Service'} — {formatDate(pay.paymentDate)}</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{formatCurrency(pay.amount)}</span>
@@ -964,16 +906,9 @@ function MemberForm({ formData, setFormData, formErrors }: {
             {formErrors.lastName && <p className="text-xs text-destructive">{formErrors.lastName}</p>}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="phone">Phone</Label>
-            <Input id="phone" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="+251..." />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} placeholder="email@example.com" />
-            {formErrors.email && <p className="text-xs text-destructive">{formErrors.email}</p>}
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="phone">Phone</Label>
+          <Input id="phone" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="+251..." />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="address">Address</Label>

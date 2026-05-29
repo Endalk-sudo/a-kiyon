@@ -27,7 +27,6 @@ export async function POST(
       return apiError('Payment is already voided');
     }
 
-    // Void the payment
     const updatedPayment = await db.payment.update({
       where: { id },
       data: {
@@ -37,58 +36,25 @@ export async function POST(
       },
       include: {
         member: {
-          select: {
-            firstName: true,
-            lastName: true,
-            photo: true,
-          },
+          select: { firstName: true, lastName: true, photo: true },
         },
-        invoice: {
+        subscription: {
           select: {
             id: true,
-            amount: true,
-            status: true,
-            dueDate: true,
+            priceSnapshot: true,
+            service: { select: { name: true } },
           },
         },
       },
     });
 
-    // Check if the invoice should revert to "pending"
-    // If no other non-voided payments cover the invoice amount, revert to pending
-    const totalPaid = await db.payment.aggregate({
-      where: {
-        invoiceId: payment.invoiceId,
-        isVoided: false,
-      },
-      _sum: {
-        amount: true,
-      },
-    });
-
-    const totalPaidAmount = totalPaid._sum.amount || 0;
-    const invoice = await db.invoice.findUnique({
-      where: { id: payment.invoiceId },
-    });
-
-    if (invoice && invoice.status === 'paid' && totalPaidAmount < invoice.amount) {
-      await db.invoice.update({
-        where: { id: payment.invoiceId },
-        data: {
-          status: 'pending',
-          paidAt: null,
-        },
-      });
-    }
-
-    // Create audit log entry
     await createAuditLog({
       userId: session.userId,
       action: 'payment.void',
       details: {
         paymentId: id,
         receiptNumber: payment.receiptNumber,
-        invoiceId: payment.invoiceId,
+        subscriptionId: payment.subscriptionId,
         amount: payment.amount,
         voidedBy: session.userId,
       },

@@ -76,7 +76,6 @@ model Member {
   firstName        String
   lastName         String
   phone            String?
-  email            String?
   photo            String?
   address          String?
   weight           Float?    // weight in kg
@@ -90,7 +89,6 @@ model Member {
   updatedAt        DateTime  @updatedAt
 
   subscriptions Subscription[]
-  invoices      Invoice[]
   payments      Payment[]
 
   @@index([phone])
@@ -126,50 +124,33 @@ model Subscription {
 
   member    Member    @relation(fields: [memberId], references: [id])
   service   Service   @relation(fields: [serviceId], references: [id])
-  invoices  Invoice[]
+  payments  Payment[]
 
   @@index([memberId, endDate])
   @@index([status])
 }
 
-model Invoice {
-  id             String   @id @default(cuid())
-  memberId       String
-  subscriptionId String
-  amount         Float
-  status         String   @default("pending") // "pending", "paid", "overdue", "cancelled"
-  dueDate        DateTime
-  paidAt         DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  member       Member      @relation(fields: [memberId], references: [id])
-  subscription Subscription @relation(fields: [subscriptionId], references: [id])
-  payments     Payment[]
-
-  @@index([status])
-}
-
 model Payment {
-  id            String    @id @default(cuid())
-  invoiceId     String
-  memberId      String
-  amount        Float
-  paymentDate   DateTime
-  method        String    @default("cash") // "cash", "bank_transfer", "mobile_money"
-  receiptNumber String    @unique
-  isVoided      Boolean   @default(false)
-  voidedAt      DateTime?
-  voidedBy      String?
-  notes         String?
-  createdBy     String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  subscriptionId String
+  memberId       String
+  amount         Float
+  paymentDate    DateTime
+  method         String    @default("cash") // "cash", "bank_transfer", "mobile_money"
+  receiptNumber  String    @unique
+  isVoided       Boolean   @default(false)
+  voidedAt       DateTime?
+  voidedBy       String?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
-  member  Member  @relation(fields: [memberId], references: [id])
-  user    User    @relation(fields: [createdBy], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  member       Member       @relation(fields: [memberId], references: [id])
+  user         User         @relation(fields: [createdBy], references: [id])
 
+  @@index([subscriptionId])
   @@index([paymentDate])
   @@index([memberId])
 }

@@ -17,12 +17,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Download, DollarSign, TrendingUp, FileText } from 'lucide-react';
+import { Download, DollarSign, TrendingUp } from 'lucide-react';
 
 interface DashboardData {
   totalRevenue: number;
   revenueThisMonth: number;
-  pendingInvoices: number;
   monthlyRevenue: { month: string; revenue: number }[];
 }
 
@@ -85,8 +84,8 @@ export function ReportsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map((i) => (
             <Card key={i}>
               <CardHeader className="pb-2">
                 <Skeleton className="h-4 w-24" />
@@ -114,7 +113,7 @@ export function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Revenue Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -145,20 +144,6 @@ export function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {dashboardData?.pendingInvoices || 0}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Awaiting payment
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Revenue Chart */}

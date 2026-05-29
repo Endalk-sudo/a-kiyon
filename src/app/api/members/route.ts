@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
         { firstName: { contains: search } },
         { lastName: { contains: search } },
         { phone: { contains: search } },
-        { email: { contains: search } },
       ];
     }
 
@@ -103,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      firstName, lastName, phone, email, photo,
+      firstName, lastName, phone, photo,
       address, weight, height, bloodType,
       emergencyContact, notes,
     } = body;
@@ -117,7 +116,6 @@ export async function POST(request: NextRequest) {
         firstName,
         lastName,
         phone: phone || null,
-        email: email || null,
         photo: photo || null,
         address: address || null,
         weight: weight ? parseFloat(String(weight)) : null,
@@ -131,7 +129,7 @@ export async function POST(request: NextRequest) {
     await createAuditLog({
       userId: session.userId,
       action: 'member.create',
-      details: { firstName, lastName, phone, email },
+      details: { firstName, lastName, phone },
       entity: 'member',
       entityId: member.id,
     });

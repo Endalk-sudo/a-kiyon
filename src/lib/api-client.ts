@@ -101,18 +101,8 @@ export const subscriptionsApi = {
     apiFetch<unknown>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: unknown) =>
     apiFetch<unknown>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  renew: (id: string) =>
-    apiFetch<unknown>(`/subscriptions/${id}/renew`, { method: 'POST' }),
-};
-
-// Invoices
-export const invoicesApi = {
-  list: (params?: Record<string, unknown>) =>
-    apiFetch<PaginatedResponse<unknown>>('/invoices', { params: params as Record<string, string | number | boolean | undefined> }),
-  get: (id: string) =>
-    apiFetch<unknown>(`/invoices/${id}`),
-  update: (id: string, data: unknown) =>
-    apiFetch<unknown>(`/invoices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  renew: (id: string, data?: unknown) =>
+    apiFetch<unknown>(`/subscriptions/${id}/renew`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
 };
 
 // Payments

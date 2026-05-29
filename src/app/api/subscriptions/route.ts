@@ -60,17 +60,26 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/subscriptions - Create subscription (manager + owner)
+// POST /api/subscriptions - Create subscription with payment (manager + owner)
 export async function POST(request: NextRequest) {
   try {
     const session = await getSessionOrThrow(['owner', 'manager']);
     const body = await request.json();
-    const { memberId, serviceId, startDate: rawStartDate, notes } = body;
+    const { memberId, serviceId, startDate: rawStartDate, paymentMethod, paymentDate: rawPaymentDate, notes } = body;
     const startDate = rawStartDate || new Date().toISOString();
 
     // Validate required fields
     if (!memberId || !serviceId) {
       return apiError('memberId and serviceId are required');
+    }
+
+    if (!paymentMethod) {
+      return apiError('paymentMethod is required');
+    }
+
+    const validMethods = ['cash', 'bank_transfer', 'mobile_money'];
+    if (!validMethods.includes(paymentMethod)) {
+      return apiError(`Invalid payment method. Must be one of: ${validMethods.join(', ')}`);
     }
 
     // Verify member exists and is not deleted
@@ -90,12 +99,9 @@ export async function POST(request: NextRequest) {
       return apiError('Service is not active');
     }
 
-    // Parse startDate: if it looks like "dd/mm/yyyy" (Ethiopian format), parse using parseEthiopianDate
-    // Otherwise treat as ISO date string
+    // Parse startDate
     let parsedStartDate: Date;
     const dateStr = String(startDate).trim();
-
-    // Check if it matches Ethiopian date format (dd/mm/yyyy or dd-mm-yyyy)
     const ethiopianPattern = /^\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*(EC)?$/i;
     if (ethiopianPattern.test(dateStr)) {
       const result = parseEthiopianDate(dateStr);
@@ -106,7 +112,22 @@ export async function POST(request: NextRequest) {
     } else {
       parsedStartDate = new Date(dateStr);
       if (isNaN(parsedStartDate.getTime())) {
-        return apiError('Invalid start date format. Use ISO string or Ethiopian dd/mm/yyyy format.');
+        return apiError('Invalid start date format');
+      }
+    }
+
+    // Parse payment date
+    let paymentDateValue = parsedStartDate;
+    if (rawPaymentDate) {
+      const paymentStr = String(rawPaymentDate).trim();
+      if (ethiopianPattern.test(paymentStr)) {
+        const result = parseEthiopianDate(paymentStr);
+        if (result.success && result.date) {
+          paymentDateValue = result.date;
+        }
+      } else {
+        const d = new Date(paymentStr);
+        if (!isNaN(d.getTime())) paymentDateValue = d;
       }
     }
 
@@ -114,7 +135,10 @@ export async function POST(request: NextRequest) {
     const parsedEndDate = new Date(parsedStartDate);
     parsedEndDate.setDate(parsedEndDate.getDate() + service.duration);
 
-    // Create subscription and invoice in a transaction
+    // Generate receipt number
+    const receiptNumber = `RCPT-${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Create subscription and payment in a transaction
     const result = await db.$transaction(async (tx) => {
       const subscription = await tx.subscription.create({
         data: {
@@ -136,21 +160,21 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Create invoice for the subscription
-      const invoice = await tx.invoice.create({
+      const payment = await tx.payment.create({
         data: {
-          memberId,
           subscriptionId: subscription.id,
+          memberId,
           amount: service.price,
-          status: 'pending',
-          dueDate: parsedStartDate,
+          paymentDate: paymentDateValue,
+          method: paymentMethod,
+          receiptNumber,
+          createdBy: session.userId,
         },
       });
 
-      return { subscription, invoice };
+      return { subscription, payment };
     });
 
-    // Create audit log entry
     await createAuditLog({
       userId: session.userId,
       action: 'subscription.create',
@@ -161,7 +185,8 @@ export async function POST(request: NextRequest) {
         priceSnapshot: service.price,
         startDate: parsedStartDate.toISOString(),
         endDate: parsedEndDate.toISOString(),
-        invoiceId: result.invoice.id,
+        paymentId: result.payment.id,
+        receiptNumber,
       },
       entity: 'subscription',
       entityId: result.subscription.id,

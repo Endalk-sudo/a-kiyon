@@ -50,11 +50,6 @@ export async function GET() {
     });
     const revenueThisMonth = revenueThisMonthResult._sum.amount || 0;
 
-    // Pending invoices
-    const pendingInvoices = await db.invoice.count({
-      where: { status: 'pending' },
-    });
-
     // Expiring soon members (with details)
     const expiringSoonSubscriptions = await db.subscription.findMany({
       where: {
@@ -178,7 +173,6 @@ export async function GET() {
       expiredCount,
       totalRevenue,
       revenueThisMonth,
-      pendingInvoices,
       expiringSoonMembers,
       recentlyExpiredMembers,
       recentPayments: recentPaymentsFormatted,

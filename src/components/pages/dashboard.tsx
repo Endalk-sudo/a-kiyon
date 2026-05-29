@@ -81,7 +81,6 @@ interface DashboardData {
   expiredCount: number;
   totalRevenue: number;
   revenueThisMonth: number;
-  pendingInvoices: number;
   expiringSoonMembers: ExpiringSoonMember[];
   recentlyExpiredMembers: RecentlyExpiredMember[];
   recentPayments: RecentPayment[];

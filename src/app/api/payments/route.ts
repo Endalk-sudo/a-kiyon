@@ -77,12 +77,14 @@ export async function GET(request: NextRequest) {
               photo: true,
             },
           },
-          invoice: {
+          subscription: {
             select: {
               id: true,
-              amount: true,
+              startDate: true,
+              endDate: true,
               status: true,
-              dueDate: true,
+              priceSnapshot: true,
+              service: { select: { name: true } },
             },
           },
         },
@@ -118,48 +120,35 @@ export async function POST(request: NextRequest) {
     const session = await getSessionOrThrow(['owner', 'manager']);
 
     const body = await request.json();
-    const { invoiceId, memberId, amount, paymentDate, method, notes } = body;
+    const { subscriptionId, memberId, amount, paymentDate, method, notes } = body;
 
-    // Validate required fields
-    if (!invoiceId || !memberId || !amount || !paymentDate || !method) {
-      return apiError('Missing required fields: invoiceId, memberId, amount, paymentDate, method');
+    if (!subscriptionId || !memberId || !amount || !paymentDate || !method) {
+      return apiError('Missing required fields: subscriptionId, memberId, amount, paymentDate, method');
     }
 
     if (amount <= 0) {
       return apiError('Amount must be greater than 0');
     }
 
-    // Validate method
     const validMethods = ['cash', 'bank_transfer', 'mobile_money'];
     if (!validMethods.includes(method)) {
       return apiError(`Invalid payment method. Must be one of: ${validMethods.join(', ')}`);
     }
 
-    // Verify invoice exists and belongs to member
-    const invoice = await db.invoice.findUnique({
-      where: { id: invoiceId },
-    });
-
-    if (!invoice) {
-      return apiError('Invoice not found', 404);
+    const subscription = await db.subscription.findUnique({ where: { id: subscriptionId } });
+    if (!subscription) {
+      return apiError('Subscription not found', 404);
     }
 
-    if (invoice.memberId !== memberId) {
-      return apiError('Invoice does not belong to the specified member');
-    }
-
-    // Parse payment date
     let paymentDateValue: Date;
     if (typeof paymentDate === 'string') {
-      // Try parsing as Ethiopian date first (dd/mm/yyyy format)
       const ethParsed = parseEthiopianDate(paymentDate);
       if (ethParsed.success && ethParsed.date) {
         paymentDateValue = ethParsed.date;
       } else {
-        // Try as ISO date string
         const isoDate = new Date(paymentDate);
         if (isNaN(isoDate.getTime())) {
-          return apiError('Invalid payment date format. Use dd/mm/yyyy (Ethiopian) or ISO format.');
+          return apiError('Invalid payment date format');
         }
         paymentDateValue = isoDate;
       }
@@ -167,15 +156,11 @@ export async function POST(request: NextRequest) {
       return apiError('Invalid payment date format');
     }
 
-    // Generate receipt number
-    const timestamp = Date.now();
-    const random4 = Math.floor(1000 + Math.random() * 9000);
-    const receiptNumber = `RCPT-${timestamp}${random4}`;
+    const receiptNumber = `RCPT-${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // Create payment
     const payment = await db.payment.create({
       data: {
-        invoiceId,
+        subscriptionId,
         memberId,
         amount: parseFloat(String(amount)),
         paymentDate: paymentDateValue,
@@ -186,53 +171,25 @@ export async function POST(request: NextRequest) {
       },
       include: {
         member: {
-          select: {
-            firstName: true,
-            lastName: true,
-            photo: true,
-          },
+          select: { firstName: true, lastName: true, photo: true },
         },
-        invoice: {
+        subscription: {
           select: {
             id: true,
-            amount: true,
-            status: true,
-            dueDate: true,
+            priceSnapshot: true,
+            service: { select: { name: true } },
           },
         },
       },
     });
 
-    // Check if payment covers the invoice - update invoice status to "paid"
-    const totalPaid = await db.payment.aggregate({
-      where: {
-        invoiceId,
-        isVoided: false,
-      },
-      _sum: {
-        amount: true,
-      },
-    });
-
-    const totalPaidAmount = totalPaid._sum.amount || 0;
-    if (totalPaidAmount >= invoice.amount) {
-      await db.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          status: 'paid',
-          paidAt: new Date(),
-        },
-      });
-    }
-
-    // Create audit log entry
     await createAuditLog({
       userId: session.userId,
       action: 'payment.create',
       details: {
         paymentId: payment.id,
         receiptNumber: payment.receiptNumber,
-        invoiceId,
+        subscriptionId,
         memberId,
         amount: payment.amount,
         method: payment.method,

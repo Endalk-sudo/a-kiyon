@@ -9,7 +9,6 @@ import { DashboardPage } from '@/components/pages/dashboard';
 import { MembersPage } from '@/components/pages/members';
 import { ServicesPage } from '@/components/pages/services';
 import { SubscriptionsPage } from '@/components/pages/subscriptions';
-import { InvoicesPage } from '@/components/pages/invoices';
 import { PaymentsPage } from '@/components/pages/payments';
 import { ReportsPage } from '@/components/pages/reports';
 import { AuditLogsPage } from '@/components/pages/audit-logs';
@@ -21,7 +20,6 @@ const pageComponents: Record<string, React.ComponentType> = {
   members: MembersPage,
   services: ServicesPage,
   subscriptions: SubscriptionsPage,
-  invoices: InvoicesPage,
   payments: PaymentsPage,
   reports: ReportsPage,
   'audit-logs': AuditLogsPage,

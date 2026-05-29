@@ -4,17 +4,18 @@ import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
 import { NextRequest } from 'next/server';
 
-// POST /api/subscriptions/[id]/renew - Renew a subscription
+// POST /api/subscriptions/[id]/renew - Renew a subscription with payment
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getSessionOrThrow(['owner', 'manager']);
+    const body = await request.json();
+    const { paymentMethod } = body;
 
     const { id } = await params;
 
-    // Find the existing subscription
     const existing = await db.subscription.findUnique({
       where: { id },
       include: {
@@ -31,23 +32,27 @@ export async function POST(
       return apiError('Cannot renew subscription for a deleted member');
     }
 
-    // Determine start date for new subscription
+    if (!paymentMethod) {
+      return apiError('paymentMethod is required');
+    }
+
+    const validMethods = ['cash', 'bank_transfer', 'mobile_money'];
+    if (!validMethods.includes(paymentMethod)) {
+      return apiError(`Invalid payment method. Must be one of: ${validMethods.join(', ')}`);
+    }
+
     const now = new Date();
     let startDate: Date;
     if (existing.endDate < now) {
-      // Old subscription expired - start today
       startDate = now;
     } else {
-      // Old subscription still active - start the day after it ends
       startDate = new Date(existing.endDate);
       startDate.setDate(startDate.getDate() + 1);
     }
 
-    // Calculate end date
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + existing.service.duration);
 
-    // If the old subscription is still active, mark it as expired
     if (existing.status === 'active') {
       await db.subscription.update({
         where: { id: existing.id },
@@ -55,7 +60,8 @@ export async function POST(
       });
     }
 
-    // Create new subscription and invoice in a transaction
+    const receiptNumber = `RCPT-${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+
     const result = await db.$transaction(async (tx) => {
       const subscription = await tx.subscription.create({
         data: {
@@ -77,21 +83,21 @@ export async function POST(
         },
       });
 
-      // Create invoice for the renewed subscription
-      const invoice = await tx.invoice.create({
+      const payment = await tx.payment.create({
         data: {
-          memberId: existing.memberId,
           subscriptionId: subscription.id,
+          memberId: existing.memberId,
           amount: existing.service.price,
-          status: 'pending',
-          dueDate: startDate,
+          paymentDate: now,
+          method: paymentMethod,
+          receiptNumber,
+          createdBy: session.userId,
         },
       });
 
-      return { subscription, invoice };
+      return { subscription, payment };
     });
 
-    // Create audit log
     await createAuditLog({
       userId: session.userId,
       action: 'subscription.renew',
@@ -103,7 +109,8 @@ export async function POST(
         priceSnapshot: existing.service.price,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        invoiceId: result.invoice.id,
+        paymentId: result.payment.id,
+        receiptNumber,
       },
       entity: 'subscription',
       entityId: result.subscription.id,
