@@ -9,10 +9,6 @@ export async function GET() {
   try {
     const session = await getSessionOrThrow(['owner']);
 
-    if (session.role !== 'owner') {
-      return forbiddenError();
-    }
-
     const users = await db.user.findMany({
       select: {
         id: true,
@@ -42,10 +38,6 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const session = await getSessionOrThrow(['owner']);
-
-    if (session.role !== 'owner') {
-      return forbiddenError();
-    }
 
     const body = await request.json();
     const { email, name, password, role, phone } = body;

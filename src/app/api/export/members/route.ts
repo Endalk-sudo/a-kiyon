@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Build CSV
-    const headers = ['Name', 'Phone', 'Email', 'Status', 'Created Date (EC)'];
+    const headers = ['Name', 'Phone', 'Status', 'Created Date (EC)'];
     const rows = members.map((member) => {
       const memberStatus = member.subscriptions.length > 0
         ? member.subscriptions[0].status
@@ -38,7 +38,6 @@ export async function GET(request: NextRequest) {
       const createdDateEC = formatEthiopianDate(member.createdAt);
       const name = `${member.firstName} ${member.lastName}`;
       const phone = member.phone || '';
-      const email = member.email || '';
 
       // Escape CSV fields (handle commas and quotes)
       const escapeCsv = (val: string) => {
@@ -48,7 +47,7 @@ export async function GET(request: NextRequest) {
         return val;
       };
 
-      return [escapeCsv(name), escapeCsv(phone), escapeCsv(email), escapeCsv(memberStatus), escapeCsv(createdDateEC)].join(',');
+      return [escapeCsv(name), escapeCsv(phone), escapeCsv(memberStatus), escapeCsv(createdDateEC)].join(',');
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');

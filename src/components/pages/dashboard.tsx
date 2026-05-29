@@ -219,7 +219,7 @@ export function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Home</h1>
           <p className="text-muted-foreground">Overview of your business</p>
         </div>
         <Card className="border-destructive/50">
@@ -241,7 +241,7 @@ export function DashboardPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Home</h1>
           <p className="text-muted-foreground">Overview of your business</p>
         </div>
         {isOwner && data && (

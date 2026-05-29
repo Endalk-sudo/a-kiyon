@@ -30,7 +30,6 @@ export async function GET(
 ) {
   try {
     const session = await getSessionOrThrow();
-    if (!session) return unauthorizedError();
 
     const { id } = await params;
 

@@ -226,8 +226,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           </Button>
           <h1 className="text-lg font-semibold truncate">
             {locale === 'en'
-              ? navItems.find((i) => i.id === currentPage)?.label
-              : navItems.find((i) => i.id === currentPage)?.labelAm}
+              ? filteredNavItems.find((i) => i.id === currentPage)?.label
+              : filteredNavItems.find((i) => i.id === currentPage)?.labelAm}
           </h1>
         </header>
 

@@ -106,7 +106,7 @@ export async function PUT(
       entityId: id,
     });
 
-    return apiResponse(result);
+    return apiResponse(subscription);
   } catch (error: unknown) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return unauthorizedError();

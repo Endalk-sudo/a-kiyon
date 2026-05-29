@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
 
-// GET /api/payments/[id] - Get single payment with member and invoice details
+// GET /api/payments/[id] - Get single payment with member details
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -25,28 +25,7 @@ export async function GET(
             firstName: true,
             lastName: true,
             phone: true,
-            email: true,
             photo: true,
-          },
-        },
-        invoice: {
-          select: {
-            id: true,
-            amount: true,
-            status: true,
-            dueDate: true,
-            paidAt: true,
-            subscription: {
-              select: {
-                id: true,
-                service: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
           },
         },
         user: {

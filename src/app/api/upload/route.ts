@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getSessionOrThrow } from '@/lib/auth';
-import { apiResponse, apiError, unauthorizedError } from '@/lib/api';
+import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     if (message === 'Unauthorized') return unauthorizedError();
+    if (message === 'Forbidden') return forbiddenError();
     return apiError(message, 500);
   }
 }

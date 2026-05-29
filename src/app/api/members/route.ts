@@ -9,7 +9,6 @@ type MemberStatus = 'active' | 'expiring_soon' | 'expired' | 'no_subscription';
 export async function GET(request: NextRequest) {
   try {
     const session = await getSessionOrThrow();
-    if (!session) return unauthorizedError();
 
     const { searchParams } = request.nextUrl;
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));

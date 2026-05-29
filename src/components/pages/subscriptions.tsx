@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { subscriptionsApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
-import { StatusBadge } from '@/components/status-badge';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
 import {

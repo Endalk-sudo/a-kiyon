@@ -44,16 +44,6 @@ export function formatPaymentMethod(method: string): string {
   return methods[method] || method;
 }
 
-export function formatInvoiceStatus(status: string): string {
-  const statuses: Record<string, string> = {
-    pending: 'Pending',
-    paid: 'Paid',
-    overdue: 'Overdue',
-    cancelled: 'Cancelled',
-  };
-  return statuses[status] || status;
-}
-
 export function formatSubscriptionStatus(status: string): string {
   const statuses: Record<string, string> = {
     active: 'Active',

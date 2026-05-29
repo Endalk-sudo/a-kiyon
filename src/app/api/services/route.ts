@@ -7,7 +7,6 @@ import { NextRequest } from 'next/server';
 export async function GET(request: NextRequest) {
   try {
     const session = await getSessionOrThrow();
-    if (!session) return unauthorizedError();
 
     const { searchParams } = request.nextUrl;
     const includeInactive = searchParams.get('includeInactive') === 'true';

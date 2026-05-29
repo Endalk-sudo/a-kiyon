@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import { getSession, getSessionOrThrow } from '@/lib/auth';
-import { apiResponse, apiError, unauthorizedError } from '@/lib/api';
+import { getSessionOrThrow } from '@/lib/auth';
+import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
 
 export async function GET() {
   try {
@@ -179,10 +179,12 @@ export async function GET() {
       monthlyRevenue,
     });
   } catch (error) {
-    if (error instanceof Error && (error.message === 'Unauthorized' || error.message === 'Forbidden')) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return unauthorizedError();
     }
-    console.error('Dashboard error:', error);
+    if (error instanceof Error && error.message === 'Forbidden') {
+      return forbiddenError();
+    }
     return apiError('An error occurred while fetching dashboard data', 500);
   }
 }

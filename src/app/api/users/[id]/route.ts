@@ -91,6 +91,10 @@ export async function PUT(
       });
     }
 
+    if (Object.keys(updateData).length === 0) {
+      return apiResponse(existing);
+    }
+
     const user = await db.user.update({
       where: { id },
       data: updateData,
