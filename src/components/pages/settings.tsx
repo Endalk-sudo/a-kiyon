@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -27,6 +28,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription as AlertDialogDesc,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle as AlertDialogTitle2,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   UserPlus,
@@ -35,6 +46,8 @@ import {
   Mail,
   Phone,
   Loader2,
+  Pencil,
+  Power,
 } from 'lucide-react';
 
 interface UserItem {
@@ -66,6 +79,18 @@ export function SettingsPage() {
     phone: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Edit user dialog
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'manager' as 'owner' | 'manager', phone: '', password: '' });
+  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  // Toggle active dialog
+  const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
+  const [togglingUser, setTogglingUser] = useState<UserItem | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     if (!isOwner) return;
@@ -144,6 +169,82 @@ export function SettingsPage() {
         delete next[field];
         return next;
       });
+    }
+  };
+
+  // Edit user
+  const openEditDialog = (user: UserItem) => {
+    setEditingUser(user);
+    setEditFormData({
+      name: user.name,
+      email: user.email,
+      role: user.role as 'owner' | 'manager',
+      phone: user.phone || '',
+      password: '',
+    });
+    setEditFormErrors({});
+    setEditDialogOpen(true);
+  };
+
+  const handleEditFormChange = (field: string, value: string) => {
+    setEditFormData((prev) => ({ ...prev, [field]: value }));
+    if (editFormErrors[field]) {
+      setEditFormErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
+    }
+  };
+
+  const validateEditForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!editFormData.email.trim()) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email)) errors.email = 'Invalid email format';
+    if (!editFormData.name.trim()) errors.name = 'Name is required';
+    if (editFormData.password && editFormData.password.length < 6) errors.password = 'Password must be at least 6 characters';
+    setEditFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser || !validateEditForm()) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        name: editFormData.name.trim(),
+        email: editFormData.email.trim(),
+        role: editFormData.role,
+        phone: editFormData.phone.trim() || null,
+      };
+      if (editFormData.password) payload.password = editFormData.password;
+      await usersApi.update(editingUser.id, payload);
+      toast.success('User updated successfully');
+      setEditDialogOpen(false);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Toggle active
+  const openToggleDialog = (user: UserItem) => {
+    setTogglingUser(user);
+    setToggleDialogOpen(true);
+  };
+
+  const handleToggleActive = async () => {
+    if (!togglingUser) return;
+    setToggling(true);
+    try {
+      await usersApi.deactivate(togglingUser.id);
+      toast.success(togglingUser.isActive ? 'User deactivated' : 'User reactivated');
+      setToggleDialogOpen(false);
+      setTogglingUser(null);
+      fetchUsers();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to toggle user status');
+    } finally {
+      setToggling(false);
     }
   };
 
@@ -334,6 +435,7 @@ export function SettingsPage() {
                       <TableHead>Role</TableHead>
                       <TableHead className="hidden sm:table-cell">Phone</TableHead>
                       <TableHead className="hidden md:table-cell">Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -370,6 +472,28 @@ export function SettingsPage() {
                             {user.isActive ? 'Active' : 'Inactive'}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => openEditDialog(user)}
+                              title="Edit user"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 ${user.id === session?.userId ? 'opacity-30 pointer-events-none' : ''}`}
+                              onClick={() => openToggleDialog(user)}
+                              title={user.isActive ? 'Deactivate user' : 'Activate user'}
+                            >
+                              <Power className={`h-4 w-4 ${user.isActive ? 'text-green-600' : 'text-red-600'}`} />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -393,6 +517,116 @@ export function SettingsPage() {
         </Card>
       )}
 
+      {/* Edit User Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update user information and role.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email *</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editFormData.email}
+                onChange={(e) => handleEditFormChange('email', e.target.value)}
+                className={editFormErrors.email ? 'border-red-500' : ''}
+              />
+              {editFormErrors.email && <p className="text-xs text-red-500">{editFormErrors.email}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Full Name *</Label>
+              <Input
+                id="edit-name"
+                value={editFormData.name}
+                onChange={(e) => handleEditFormChange('name', e.target.value)}
+                className={editFormErrors.name ? 'border-red-500' : ''}
+              />
+              {editFormErrors.name && <p className="text-xs text-red-500">{editFormErrors.name}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Role *</Label>
+              <Select value={editFormData.role} onValueChange={(v) => handleEditFormChange('role', v)}>
+                <SelectTrigger id="edit-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="owner">Owner</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">
+                Phone <span className="text-muted-foreground text-xs ml-1">(optional)</span>
+              </Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={editFormData.phone}
+                onChange={(e) => handleEditFormChange('phone', e.target.value)}
+              />
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <Label htmlFor="edit-password">
+                New Password <span className="text-muted-foreground text-xs ml-1">(leave blank to keep current)</span>
+              </Label>
+              <Input
+                id="edit-password"
+                type="password"
+                placeholder="Minimum 6 characters"
+                value={editFormData.password}
+                onChange={(e) => handleEditFormChange('password', e.target.value)}
+                className={editFormErrors.password ? 'border-red-500' : ''}
+              />
+              {editFormErrors.password && <p className="text-xs text-red-500">{editFormErrors.password}</p>}
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={saving}>Cancel</Button>
+              <Button onClick={handleSaveUser} disabled={saving}>
+                {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toggle Active Confirmation */}
+      <AlertDialog open={toggleDialogOpen} onOpenChange={setToggleDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle2>
+              {togglingUser?.isActive ? 'Deactivate User' : 'Activate User'}
+            </AlertDialogTitle2>
+            <AlertDialogDesc>
+              {togglingUser && (
+                <>
+                  Are you sure you want to {togglingUser.isActive ? 'deactivate' : 'reactivate'}{' '}
+                  <strong>{togglingUser.name}</strong>?
+                  {togglingUser.isActive
+                    ? ' They will not be able to log in.'
+                    : ' They will regain access to the system.'}
+                </>
+              )}
+            </AlertDialogDesc>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={toggling}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleToggleActive}
+              disabled={toggling}
+              className={togglingUser?.isActive ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            >
+              {toggling
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+                : togglingUser?.isActive ? 'Deactivate' : 'Activate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

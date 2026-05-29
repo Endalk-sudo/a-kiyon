@@ -133,8 +133,14 @@ export const auditLogsApi = {
 export const usersApi = {
   list: () =>
     apiFetch<{ data: unknown[] }>('/users'),
+  get: (id: string) =>
+    apiFetch<unknown>(`/users/${id}`),
   create: (data: unknown) =>
     apiFetch<unknown>('/users', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: unknown) =>
+    apiFetch<unknown>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deactivate: (id: string) =>
+    apiFetch<unknown>(`/users/${id}`, { method: 'DELETE' }),
 };
 
 // Export
