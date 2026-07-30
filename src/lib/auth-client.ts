@@ -72,7 +72,20 @@ export const authClient = {
     email: async ({ email, password }: { email: string; password: string }) => {
       try {
         const user = await login(email, password);
-        return { data: { user: { id: user.uid, email: user.email } }, error: null };
+        const token = currentToken;
+        let role = 'reader';
+        let name = user.displayName || '';
+        if (token) {
+          const decoded = JSON.parse(atob(token.split('.')[1]));
+          role = decoded.role || 'reader';
+          name = decoded.name || user.displayName || '';
+        }
+        return {
+          data: {
+            user: { id: user.uid, email: user.email, name, role },
+          },
+          error: null,
+        };
       } catch (err) {
         return { data: null, error: err instanceof Error ? err : new Error('Login failed') };
       }

@@ -147,7 +147,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       </aside>
 
       {/* Mobile Sidebar */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+      <div className="md:hidden">
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation Menu</SheetTitle>
@@ -213,6 +214,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </SheetContent>
       </Sheet>
+      </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">

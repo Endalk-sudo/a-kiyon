@@ -48,6 +48,6 @@ export const useAppStore = create<AppState>((set) => ({
   locale: 'en',
   setLocale: (locale) => set({ locale }),
   
-  sidebarOpen: true,
+  sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 }));

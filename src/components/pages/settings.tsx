@@ -99,8 +99,13 @@ export function SettingsPage() {
   useEffect(() => {
     if (!isOwner) return;
     fetch('/api/storage')
-      .then((r) => r.json())
-      .then(setStorageData)
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then((data) => {
+        if (data?.firestore && data?.storage) setStorageData(data);
+      })
       .catch(() => {});
   }, [isOwner]);
 
@@ -263,7 +268,7 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       {/* Storage Summary (owner only) */}
-      {isOwner && storageData && (
+      {isOwner && storageData?.firestore && storageData?.storage && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
