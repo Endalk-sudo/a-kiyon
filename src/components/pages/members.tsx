@@ -176,7 +176,7 @@ const PAGE_LIMIT = 20;
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function MembersPage() {
-  const { session } = useAppStore();
+  const session = useAppStore((s) => s.session);
   const isMobile = useIsMobile();
 
   const isOwner = session?.role === 'owner';

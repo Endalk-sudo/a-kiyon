@@ -100,7 +100,7 @@ const methodFilters = [
 // ---------------------------------------------------------------------------
 
 export function PaymentsPage() {
-  const { session } = useAppStore();
+  const session = useAppStore((s) => s.session);
   const isOwner = session?.role === 'owner';
 
   // ---- Table state ----

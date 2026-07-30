@@ -60,7 +60,9 @@ class ErrorBoundary extends Component<
 }
 
 export default function Home() {
-  const { session, setSession, currentPage, isAuthenticated } = useAppStore();
+  const session = useAppStore((s) => s.session);
+  const setSession = useAppStore((s) => s.setSession);
+  const currentPage = useAppStore((s) => s.currentPage);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -93,7 +95,7 @@ export default function Home() {
     );
   }
 
-  if (!isAuthenticated || !session) {
+  if (!session) {
     return <LandingPage />;
   }
 

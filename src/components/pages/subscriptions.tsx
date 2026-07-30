@@ -130,7 +130,7 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
 }
 
 export function SubscriptionsPage() {
-  const { session } = useAppStore();
+  const session = useAppStore((s) => s.session);
 
   // Data state
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);

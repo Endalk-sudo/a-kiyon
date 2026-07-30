@@ -23,7 +23,7 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 
 const navItems: { id: PageId; label: string; labelAm: string; icon: React.ElementType; roles?: string[] }[] = [
   { id: 'dashboard', label: 'Home', labelAm: 'ቤት', icon: House },
@@ -42,26 +42,21 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { session, currentPage, setCurrentPage, locale, setLocale, setSession, sidebarOpen, setSidebarOpen } = useAppStore();
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('fcms-theme');
-      if (saved === 'dark') {
-        document.documentElement.classList.add('dark');
-        return true;
-      }
-    }
-    return false;
-  });
+  const session = useAppStore((s) => s.session);
+  const currentPage = useAppStore((s) => s.currentPage);
+  const setCurrentPage = useAppStore((s) => s.setCurrentPage);
+  const locale = useAppStore((s) => s.locale);
+  const setLocale = useAppStore((s) => s.setLocale);
+  const setSession = useAppStore((s) => s.setSession);
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const resetAppState = useAppStore((s) => s.resetAppState);
 
   const toggleTheme = useCallback(() => {
-    setDarkMode((prev) => {
-      const newDark = !prev;
-      document.documentElement.classList.toggle('dark', newDark);
-      localStorage.setItem('fcms-theme', newDark ? 'dark' : 'light');
-      return newDark;
-    });
-  }, []);
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [theme, setTheme]);
 
   const toggleLocale = useCallback(() => {
     setLocale(locale === 'en' ? 'am' : 'en');
@@ -73,9 +68,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     } catch {
       // ignore
     }
-    setSession(null);
+    resetAppState();
     toast.success('Logged out');
-  }, [setSession]);
+  }, [resetAppState]);
 
   const filteredNavItems = navItems.filter(
     (item) => !item.roles || (session && item.roles.includes(session.role))
@@ -127,7 +122,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="p-3 space-y-2">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
-                {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
               <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9">
                 <Globe className="h-4 w-4" />
@@ -195,7 +190,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
-                  {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                  {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </Button>
                 <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9">
                   <Globe className="h-4 w-4" />

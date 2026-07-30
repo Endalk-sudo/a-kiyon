@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 
 function LoginDialog({ children }: { children: React.ReactNode }) {
-  const { setSession } = useAppStore();
+  const setSession = useAppStore((s) => s.setSession);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

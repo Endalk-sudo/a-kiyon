@@ -157,7 +157,8 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { setCurrentPage, session } = useAppStore();
+  const session = useAppStore((s) => s.session);
+  const setCurrentPage = useAppStore((s) => s.setCurrentPage);
   const isOwner = session?.role === 'owner';
 
   const fetchDashboard = useCallback(async () => {

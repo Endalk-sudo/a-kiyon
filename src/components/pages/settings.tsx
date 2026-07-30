@@ -63,7 +63,7 @@ interface UserItem {
 }
 
 export function SettingsPage() {
-  const { session } = useAppStore();
+  const session = useAppStore((s) => s.session);
   const isOwner = session?.role === 'owner';
 
   // Users list

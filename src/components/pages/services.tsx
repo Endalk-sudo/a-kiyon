@@ -63,7 +63,8 @@ const emptyForm: ServiceFormData = {
 };
 
 export function ServicesPage() {
-  const { session, locale } = useAppStore();
+  const session = useAppStore((s) => s.session);
+  const locale = useAppStore((s) => s.locale);
   const isOwner = session?.role === 'owner';
 
   const [services, setServices] = useState<Service[]>([]);
