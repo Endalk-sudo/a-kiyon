@@ -59,6 +59,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+const PAGE_LIMIT = 20;
+
 // Types
 interface Member {
   id: string;
@@ -162,17 +164,13 @@ export function SubscriptionsPage() {
   const fetchSubscriptions = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const params: Record<string, unknown> = {
+      const params = {
         page,
-        limit: 10,
+        limit: PAGE_LIMIT,
+        ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        ...(searchDebounced ? { search: searchDebounced } : {}),
       };
-      if (statusFilter !== 'all') {
-        params.status = statusFilter;
-      }
-      if (searchDebounced) {
-        params.search = searchDebounced;
-      }
-      const response = await subscriptionsApi.list(params) as SubscriptionsResponse;
+      const response = await subscriptionsApi.list(params);
       setSubscriptions(response.data);
       setPagination(response.pagination);
     } catch (error) {
@@ -217,10 +215,7 @@ export function SubscriptionsPage() {
     if (!subscriptionToRenew) return;
     setRenewing(true);
     try {
-      const result = await subscriptionsApi.renew(subscriptionToRenew.id, { paymentMethod: renewPaymentMethod }) as {
-        subscription: Subscription;
-        payment: { id: string; amount: number; receiptNumber: string };
-      };
+      const result = await subscriptionsApi.renew(subscriptionToRenew.id, { paymentMethod: renewPaymentMethod });
       toast.success(
         `Subscription renewed! Payment of ${formatCurrency(result.payment?.amount || subscriptionToRenew.priceSnapshot)} recorded. Receipt: ${result.payment?.receiptNumber || ''}`
       );
@@ -283,8 +278,8 @@ export function SubscriptionsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border">
+      {/* Desktop table */}
+      <div className="hidden md:block rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -299,7 +294,6 @@ export function SubscriptionsPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              // Loading skeleton
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell>
@@ -313,7 +307,7 @@ export function SubscriptionsPage() {
                   <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
                   <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-16" /></TableCell>
-                  {canManage && <TableCell><Skeleton className="h-8 w-8" /></TableCell>}
+                  {canManage && <TableCell><Skeleton className="h-9 w-9" /></TableCell>}
                 </TableRow>
               ))
             ) : subscriptions.length === 0 ? (
@@ -371,7 +365,7 @@ export function SubscriptionsPage() {
                             title="Cancel subscription"
                           >
                             <Ban className="h-4 w-4" />
-                            <span className="hidden sm:inline ml-1">Cancel</span>
+                            <span className="ml-1">Cancel</span>
                           </Button>
                         )}
                         {(sub.status === 'expired' || sub.status === 'cancelled') && (
@@ -386,7 +380,7 @@ export function SubscriptionsPage() {
                             title="Renew subscription"
                           >
                             <RefreshCw className="h-4 w-4" />
-                            <span className="hidden sm:inline ml-1">Renew</span>
+                            <span className="ml-1">Renew</span>
                           </Button>
                         )}
                       </div>
@@ -397,6 +391,88 @@ export function SubscriptionsPage() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+          ))
+        ) : subscriptions.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <p className="text-lg font-medium">No subscriptions found</p>
+            {statusFilter !== 'all' && (
+              <p className="text-sm">Try changing the filter to see more results.</p>
+            )}
+          </div>
+        ) : (
+          subscriptions.map((sub) => (
+            <div key={sub.id} className="rounded-lg border p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <MemberAvatar
+                    photo={sub.member.photo}
+                    firstName={sub.member.firstName}
+                    lastName={sub.member.lastName}
+                    size="sm"
+                  />
+                  <span className="font-medium text-sm truncate">
+                    {formatMemberName(sub.member)}
+                  </span>
+                </div>
+                <SubscriptionStatusBadge status={sub.status} />
+              </div>
+              <p className="text-sm text-muted-foreground">{sub.service.name}</p>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {formatDate(sub.startDate)} — {formatDate(sub.endDate)}
+                </span>
+                <span className="font-semibold">{formatCurrency(sub.priceSnapshot)}</span>
+              </div>
+              {canManage && (
+                <div className="flex gap-2 pt-1">
+                  {sub.status === 'active' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
+                      onClick={() => {
+                        setSubscriptionToCancel(sub);
+                        setCancelDialogOpen(true);
+                      }}
+                    >
+                      <Ban className="h-4 w-4 mr-1" />
+                      Cancel
+                    </Button>
+                  )}
+                  {(sub.status === 'expired' || sub.status === 'cancelled') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                      onClick={() => {
+                        setSubscriptionToRenew(sub);
+                        setRenewDialogOpen(true);
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-1" />
+                      Renew
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
 
       {/* Pagination */}

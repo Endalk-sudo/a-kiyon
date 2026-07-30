@@ -1,0 +1,54 @@
+{
+  "indexes": [
+    { "collectionGroup": "members", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "isDeleted", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "endDate", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "endDate", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "endDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "subscriptionId", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "method", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "userId", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "entity", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]}
+  ]
+}

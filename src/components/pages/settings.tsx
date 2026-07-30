@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { Badge } from '@/components/ui/badge';
+import { HardDrive } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -91,6 +93,16 @@ export function SettingsPage() {
   const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
   const [togglingUser, setTogglingUser] = useState<UserItem | null>(null);
   const [toggling, setToggling] = useState(false);
+
+  // Storage summary
+  const [storageData, setStorageData] = useState<{ firestore: { totalBytes: number; freeLimit: number; usedPercent: number }; storage: { bytes: number; freeLimit: number; usedPercent: number } } | null>(null);
+  useEffect(() => {
+    if (!isOwner) return;
+    fetch('/api/storage')
+      .then((r) => r.json())
+      .then(setStorageData)
+      .catch(() => {});
+  }, [isOwner]);
 
   const fetchUsers = useCallback(async () => {
     if (!isOwner) return;
@@ -250,6 +262,34 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Storage Summary (owner only) */}
+      {isOwner && storageData && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <HardDrive className="h-4 w-4" />
+              Storage Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Firestore</span>
+                <span className="font-medium">{storageData.firestore.usedPercent}%</span>
+              </div>
+              <Progress value={storageData.firestore.usedPercent} className="h-1.5" indicatorClassName="bg-emerald-500" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">File Storage</span>
+                <span className="font-medium">{storageData.storage.usedPercent}%</span>
+              </div>
+              <Progress value={storageData.storage.usedPercent} className="h-1.5" indicatorClassName="bg-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Current User Info */}
       <Card>
         <CardHeader>
@@ -426,79 +466,132 @@ export function SettingsPage() {
                 <p>No users found</p>
               </div>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead className="hidden sm:table-cell">Phone</TableHead>
-                      <TableHead className="hidden md:table-cell">Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
-                              {user.name.charAt(0).toUpperCase()}
-                            </div>
-                            <span>{user.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {user.email}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={user.role === 'owner' ? 'default' : 'secondary'}>
-                            {user.role === 'owner' ? 'Owner' : 'Manager'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                          {user.phone ? (
-                            <span className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {user.phone}
-                            </span>
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <Badge variant={user.isActive ? 'default' : 'destructive'} className="text-xs">
-                            {user.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openEditDialog(user)}
-                              title="Edit user"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`h-8 w-8 ${user.id === session?.userId ? 'opacity-30 pointer-events-none' : ''}`}
-                              onClick={() => openToggleDialog(user)}
-                              title={user.isActive ? 'Deactivate user' : 'Activate user'}
-                            >
-                              <Power className={`h-4 w-4 ${user.isActive ? 'text-green-600' : 'text-red-600'}`} />
-                            </Button>
-                          </div>
-                        </TableCell>
+              <>
+                <div className="hidden md:block rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead className="hidden sm:table-cell">Phone</TableHead>
+                        <TableHead className="hidden md:table-cell">Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
+                                {user.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span>{user.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {user.email}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={user.role === 'owner' ? 'default' : 'secondary'}>
+                              {user.role === 'owner' ? 'Owner' : 'Manager'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                            {user.phone ? (
+                              <span className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {user.phone}
+                              </span>
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <Badge variant={user.isActive ? 'default' : 'destructive'} className="text-xs">
+                              {user.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() => openEditDialog(user)}
+                                title="Edit user"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-9 w-9 ${user.id === session?.userId ? 'opacity-30 pointer-events-none' : ''}`}
+                                onClick={() => openToggleDialog(user)}
+                                title={user.isActive ? 'Deactivate user' : 'Activate user'}
+                              >
+                                <Power className={`h-4 w-4 ${user.isActive ? 'text-green-600' : 'text-red-600'}`} />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="md:hidden space-y-3">
+                  {users.map((user) => (
+                    <div key={user.id} className="rounded-lg border p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0">
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{user.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                          </div>
+                        </div>
+                        <Badge variant={user.role === 'owner' ? 'default' : 'secondary'}>
+                          {user.role === 'owner' ? 'Owner' : 'Manager'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {user.phone || 'No phone'}
+                        </span>
+                        <Badge variant={user.isActive ? 'default' : 'destructive'} className="text-xs">
+                          {user.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => openEditDialog(user)}
+                        >
+                          <Pencil className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        {user.id !== session?.userId && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`flex-1 ${user.isActive ? 'text-destructive border-destructive/30' : 'text-emerald-600 border-emerald-200'}`}
+                            onClick={() => openToggleDialog(user)}
+                          >
+                            <Power className="h-4 w-4 mr-1" />
+                            {user.isActive ? 'Deactivate' : 'Activate'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

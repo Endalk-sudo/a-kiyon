@@ -1,211 +1,81 @@
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
-import { apiResponse, paginatedResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
+import { paginatedResponse, apiResponse, apiError } from '@/lib/api';
+import { apiHandler } from '@/lib/api-handler';
+import { createPaymentSchema } from '@/lib/schemas';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
+import { listPayments, createPayment } from '@/services/payment.service';
+import { autoExpireSubscriptions } from '@/services/subscription.service';
+import { getDocById } from '@/lib/db';
 
-// GET /api/payments - List payments with server-side pagination
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getSessionOrThrow();
-    if (!['owner', 'manager'].includes(session.role)) {
-      return forbiddenError();
-    }
+export const GET = apiHandler(async (request: NextRequest) => {
+  const session = await getSessionOrThrow(undefined, request);
+  if (!['owner', 'manager'].includes(session.role)) throw new Error('Forbidden');
 
-    const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
-    const memberId = searchParams.get('memberId');
-    const method = searchParams.get('method');
-    const isVoided = searchParams.get('isVoided');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
+  await autoExpireSubscriptions();
 
-    const skip = (page - 1) * limit;
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
+  const memberId = searchParams.get('memberId') || undefined;
+  const method = searchParams.get('method') || undefined;
+  const isVoidedParam = searchParams.get('isVoided');
+  const isVoided = isVoidedParam !== null ? isVoidedParam === 'true' : undefined;
+  const startDate = searchParams.get('startDate') || undefined;
+  const endDate = searchParams.get('endDate') || undefined;
 
-    // Build where clause
-    const where: Record<string, unknown> = {};
+  const { data, pagination } = await listPayments({ page, limit, memberId, method, isVoided, startDate, endDate });
+  return paginatedResponse(data, pagination);
+});
 
-    if (memberId) {
-      where.memberId = memberId;
-    }
+export const POST = apiHandler(async (request: NextRequest) => {
+  const session = await getSessionOrThrow(['owner', 'manager'], request);
 
-    if (method) {
-      where.method = method;
-    }
+  const body = await request.json();
+  const data = createPaymentSchema.parse(body);
 
-    if (isVoided !== null && isVoided !== undefined) {
-      where.isVoided = isVoided === 'true';
-    }
+  const subscription = await getDocById<{ memberId: string; serviceId: string; status: string }>('subscriptions', data.subscriptionId);
+  if (!subscription) return apiError('Subscription not found', 404);
 
-    if (startDate || endDate) {
-      where.paymentDate = {};
-      if (startDate) {
-        const startParsed = parseEthiopianDate(startDate);
-        if (startParsed.success && startParsed.date) {
-          where.paymentDate.gte = startParsed.date;
-        } else {
-          // Try as ISO date
-          where.paymentDate.gte = new Date(startDate);
-        }
-      }
-      if (endDate) {
-        const endParsed = parseEthiopianDate(endDate);
-        if (endParsed.success && endParsed.date) {
-          // End of day
-          const end = endParsed.date;
-          end.setHours(23, 59, 59, 999);
-          where.paymentDate.lte = end;
-        } else {
-          // Try as ISO date
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999);
-          where.paymentDate.lte = end;
-        }
-      }
-    }
-
-    const [payments, total] = await Promise.all([
-      db.payment.findMany({
-        where,
-        include: {
-          member: {
-            select: {
-              firstName: true,
-              lastName: true,
-              photo: true,
-            },
-          },
-          subscription: {
-            select: {
-              id: true,
-              startDate: true,
-              endDate: true,
-              status: true,
-              priceSnapshot: true,
-              service: { select: { name: true } },
-            },
-          },
-        },
-        orderBy: { paymentDate: 'desc' },
-        skip,
-        take: limit,
-      }),
-      db.payment.count({ where }),
-    ]);
-
-    const totalPages = Math.ceil(total / limit);
-
-    return paginatedResponse(payments, {
-      total,
-      page,
-      limit,
-      totalPages,
-    });
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return unauthorizedError();
-    }
-    if (error instanceof Error && error.message === 'Forbidden') {
-      return forbiddenError();
-    }
-    return apiError('Failed to fetch payments', 500);
-  }
-}
-
-// POST /api/payments - Record a new payment (manager + owner)
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getSessionOrThrow(['owner', 'manager']);
-
-    const body = await request.json();
-    const { subscriptionId, memberId, amount, paymentDate, method, notes } = body;
-
-    if (!subscriptionId || !memberId || !amount || !paymentDate || !method) {
-      return apiError('Missing required fields: subscriptionId, memberId, amount, paymentDate, method');
-    }
-
-    if (amount <= 0) {
-      return apiError('Amount must be greater than 0');
-    }
-
-    const validMethods = ['cash', 'bank_transfer', 'mobile_money'];
-    if (!validMethods.includes(method)) {
-      return apiError(`Invalid payment method. Must be one of: ${validMethods.join(', ')}`);
-    }
-
-    const subscription = await db.subscription.findUnique({ where: { id: subscriptionId } });
-    if (!subscription) {
-      return apiError('Subscription not found', 404);
-    }
-
-    let paymentDateValue: Date;
-    if (typeof paymentDate === 'string') {
-      const ethParsed = parseEthiopianDate(paymentDate);
-      if (ethParsed.success && ethParsed.date) {
-        paymentDateValue = ethParsed.date;
-      } else {
-        const isoDate = new Date(paymentDate);
-        if (isNaN(isoDate.getTime())) {
-          return apiError('Invalid payment date format');
-        }
-        paymentDateValue = isoDate;
-      }
+  let paymentDate: Date;
+  if (typeof data.paymentDate === 'string') {
+    const ethParsed = parseEthiopianDate(data.paymentDate);
+    if (ethParsed.success && ethParsed.date) {
+      paymentDate = ethParsed.date;
     } else {
-      return apiError('Invalid payment date format');
+      const isoDate = new Date(data.paymentDate);
+      if (isNaN(isoDate.getTime())) return apiError('Invalid payment date format');
+      paymentDate = isoDate;
     }
-
-    const receiptNumber = `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
-
-    const payment = await db.payment.create({
-      data: {
-        subscriptionId,
-        memberId,
-        amount: parseFloat(String(amount)),
-        paymentDate: paymentDateValue,
-        method,
-        receiptNumber,
-        notes: notes || null,
-        createdBy: session.userId,
-      },
-      include: {
-        member: {
-          select: { firstName: true, lastName: true, photo: true },
-        },
-        subscription: {
-          select: {
-            id: true,
-            priceSnapshot: true,
-            service: { select: { name: true } },
-          },
-        },
-      },
-    });
-
-    await createAuditLog({
-      userId: session.userId,
-      action: 'payment.create',
-      details: {
-        paymentId: payment.id,
-        receiptNumber: payment.receiptNumber,
-        subscriptionId,
-        memberId,
-        amount: payment.amount,
-        method: payment.method,
-      },
-      entity: 'payment',
-      entityId: payment.id,
-    });
-
-    return apiResponse(payment, 201);
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return unauthorizedError();
-    }
-    if (error instanceof Error && error.message === 'Forbidden') {
-      return forbiddenError();
-    }
-    return apiError('Failed to record payment', 500);
+  } else {
+    return apiError('Invalid payment date format');
   }
-}
+
+  const payment = await createPayment({
+    subscriptionId: data.subscriptionId,
+    memberId: data.memberId,
+    amount: data.amount,
+    paymentDate,
+    method: data.method,
+    notes: data.notes || null,
+    createdBy: session.userId,
+  });
+
+  await createAuditLog({
+    userId: session.userId,
+    action: 'payment.create',
+    details: {
+      paymentId: payment.id,
+      receiptNumber: payment.receiptNumber,
+      subscriptionId: data.subscriptionId,
+      memberId: data.memberId,
+      amount: payment.amount,
+      method: data.method,
+    },
+    entity: 'payment',
+    entityId: payment.id,
+  });
+
+  return apiResponse(payment, 201);
+});

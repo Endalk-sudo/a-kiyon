@@ -1,107 +1,83 @@
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { adminAuth } from '@/lib/auth';
 import { getSessionOrThrow } from '@/lib/auth';
+import { createDocWithId } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
-import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
-import bcrypt from 'bcryptjs';
+import { apiResponse, apiError } from '@/lib/api';
+import { apiHandler } from '@/lib/api-handler';
+import { createUserSchema } from '@/lib/schemas';
 
-export async function GET() {
-  try {
-    const session = await getSessionOrThrow(['owner']);
+export const GET = apiHandler(async (request: NextRequest) => {
+  const session = await getSessionOrThrow(['owner'], request);
 
-    const users = await db.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        phone: true,
-        isActive: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
+  const { searchParams } = request.nextUrl;
+  const page = parseInt(searchParams.get('page') || '');
+  const limit = parseInt(searchParams.get('limit') || '');
+
+  const listUsersResult = await adminAuth.listUsers(1000);
+  let users = listUsersResult.users.map(u => ({
+    id: u.uid,
+    email: u.email || '',
+    name: u.displayName || '',
+    role: (u.customClaims?.role as string) || 'manager',
+    phone: (u.customClaims?.phone as string) || null,
+    isActive: !u.disabled,
+    createdAt: u.metadata.creationTime,
+  }));
+
+  if (page && limit) {
+    const total = users.length;
+    const start = (page - 1) * limit;
+    const paged = users.slice(start, start + limit);
+    return apiResponse({
+      data: paged,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
-
-    return apiResponse({ data: users });
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return unauthorizedError();
-    }
-    if (error instanceof Error && error.message === 'Forbidden') {
-      return forbiddenError();
-    }
-    console.error('List users error:', error);
-    return apiError('An error occurred while fetching users', 500);
   }
-}
 
-export async function POST(request: NextRequest) {
+  return apiResponse({ data: users });
+});
+
+export const POST = apiHandler(async (request: NextRequest) => {
+  const session = await getSessionOrThrow(['owner'], request);
+
+  const body = await request.json();
+  const data = createUserSchema.parse(body);
+
   try {
-    const session = await getSessionOrThrow(['owner']);
-
-    const body = await request.json();
-    const { email, name, password, role, phone } = body;
-
-    if (!email || !name || !password || !role) {
-      return apiError('Email, name, password, and role are required', 400);
-    }
-
-    if (!['owner', 'manager'].includes(role)) {
-      return apiError('Role must be "owner" or "manager"', 400);
-    }
-
-    // Check if email already exists
-    const existingUser = await db.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return apiError('A user with this email already exists', 409);
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await db.user.create({
-      data: {
-        email,
-        name,
-        role,
-        phone: phone || null,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        phone: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
-
-    await db.account.create({
-      data: {
-        userId: user.id,
-        accountId: user.id,
-        providerId: 'credential',
-        password: hashedPassword,
-      },
-    });
-
-    await createAuditLog({
-      userId: session.userId,
-      action: 'user.create',
-      details: { email, name, role },
-      entity: 'user',
-      entityId: user.id,
-    });
-
-    return apiResponse(user, 201);
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return unauthorizedError();
-    }
-    if (error instanceof Error && error.message === 'Forbidden') {
-      return forbiddenError();
-    }
-    console.error('Create user error:', error);
-    return apiError('An error occurred while creating user', 500);
+    const existing = await adminAuth.getUserByEmail(data.email);
+    if (existing) return apiError('A user with this email already exists', 409);
+  } catch {
+    // user not found — proceed
   }
-}
+
+  const userRecord = await adminAuth.createUser({
+    email: data.email,
+    displayName: data.name,
+    password: data.password,
+  });
+
+  await adminAuth.setCustomUserClaims(userRecord.uid, { role: data.role });
+
+  if (data.phone) {
+    await createDocWithId('users', userRecord.uid, { phone: data.phone });
+  }
+
+  await createAuditLog({
+    userId: session.userId,
+    action: 'user.create',
+    details: { email: data.email, name: data.name, role: data.role },
+    entity: 'user',
+    entityId: userRecord.uid,
+  });
+
+  return apiResponse({
+    id: userRecord.uid,
+    email: data.email,
+    name: data.name,
+    role: data.role,
+    phone: data.phone || null,
+    isActive: true,
+    createdAt: userRecord.metadata.creationTime,
+  }, 201);
+});

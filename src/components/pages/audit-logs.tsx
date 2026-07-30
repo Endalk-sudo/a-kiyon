@@ -97,17 +97,17 @@ export function AuditLogsPage() {
   const fetchLogs = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const params: Record<string, unknown> = { page, limit: 20 };
-      if (filterAction && filterAction !== 'all') params.action = filterAction;
-      if (filterEntity && filterEntity !== 'all') params.entity = filterEntity;
-      if (filterUser.trim()) params.userId = filterUser.trim();
-      if (filterStartDateIso) params.startDate = filterStartDateIso;
-      if (filterEndDateIso) params.endDate = filterEndDateIso;
-
-      const result = (await auditLogsApi.list(params)) as {
-        data: AuditLog[];
-        pagination: PaginationInfo;
+      const params = {
+        page,
+        limit: 20,
+        ...(filterAction && filterAction !== 'all' ? { action: filterAction } : {}),
+        ...(filterEntity && filterEntity !== 'all' ? { entity: filterEntity } : {}),
+        ...(filterUser.trim() ? { userId: filterUser.trim() } : {}),
+        ...(filterStartDateIso ? { startDate: filterStartDateIso } : {}),
+        ...(filterEndDateIso ? { endDate: filterEndDateIso } : {}),
       };
+
+      const result = await auditLogsApi.list(params);
       setLogs(result.data);
       setPagination(result.pagination);
     } catch {
@@ -275,7 +275,7 @@ export function AuditLogsPage() {
             </div>
           ) : (
             <>
-              <div className="rounded-md border overflow-x-auto">
+              <div className="hidden md:block rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -329,14 +329,52 @@ export function AuditLogsPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <Eye className="h-3.5 w-3.5" />
+                          <Button variant="ghost" size="icon" className="h-9 w-9">
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3">
+                {logs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="rounded-lg border p-4 space-y-2 cursor-pointer active:bg-muted/50"
+                    onClick={() => setSelectedLog(log)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(log.createdAt)}
+                        </p>
+                        <p className="text-sm font-medium truncate">
+                          {log.user?.name || 'System'}
+                        </p>
+                      </div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${getActionBadgeColor(log.action)}`}>
+                        {log.action}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="capitalize text-muted-foreground">
+                        {log.entity || '-'}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 -mr-2"
+                        onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Pagination */}

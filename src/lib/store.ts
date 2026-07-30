@@ -8,7 +8,8 @@ export type PageId =
   | 'payments' 
   | 'reports' 
   | 'audit-logs' 
-  | 'settings';
+  | 'settings'
+  | 'storage';
 
 interface Session {
   userId: string;

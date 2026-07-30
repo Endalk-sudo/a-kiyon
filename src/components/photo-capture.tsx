@@ -67,35 +67,6 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
     return () => stopCamera();
   }, [mode, startCamera, stopCamera]);
 
-  // Capture photo from video
-  const capturePhoto = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const size = Math.min(video.videoWidth, video.videoHeight);
-    canvas.width = size;
-    canvas.height = size;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Center crop to square
-    const offsetX = (video.videoWidth - size) / 2;
-    const offsetY = (video.videoHeight - size) / 2;
-    ctx.drawImage(video, offsetX, offsetY, size, size, 0, 0, size, size);
-
-    // Convert to blob and upload
-    canvas.toBlob(
-      async (blob) => {
-        if (!blob) return;
-        await uploadBlob(blob, `capture-${Date.now()}.jpg`);
-      },
-      'image/jpeg',
-      0.85
-    );
-  }, []);
-
   // Upload blob to server
   const uploadBlob = async (blob: Blob, filename: string) => {
     setUploading(true);
@@ -121,6 +92,33 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
       setUploading(false);
     }
   };
+
+  // Capture photo from video
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const size = Math.min(video.videoWidth, video.videoHeight);
+    canvas.width = size;
+    canvas.height = size;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const offsetX = (video.videoWidth - size) / 2;
+    const offsetY = (video.videoHeight - size) / 2;
+    ctx.drawImage(video, offsetX, offsetY, size, size, 0, 0, size, size);
+
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) return;
+        await uploadBlob(blob, `capture-${Date.now()}.jpg`);
+      },
+      'image/jpeg',
+      0.85
+    );
+  }, []);
 
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

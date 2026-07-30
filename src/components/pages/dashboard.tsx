@@ -454,40 +454,58 @@ export function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-6 px-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Member</TableHead>
-                      <TableHead className="text-xs">Amount</TableHead>
-                      <TableHead className="text-xs">Method</TableHead>
-                      <TableHead className="text-xs">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data?.recentPayments?.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="text-sm font-medium py-2">
-                          {payment.memberName}
-                        </TableCell>
-                        <TableCell className="text-sm py-2">
-                          <span className="font-medium text-emerald-600">
-                            {formatCurrency(payment.amount)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm py-2">
-                          <Badge variant="secondary" className="text-xs font-normal">
-                            {formatPaymentMethod(payment.method)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground py-2">
-                          {formatDate(payment.paymentDate)}
-                        </TableCell>
+              <>
+                <div className="hidden md:block overflow-x-auto -mx-6 px-6">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Member</TableHead>
+                        <TableHead className="text-xs">Amount</TableHead>
+                        <TableHead className="text-xs">Method</TableHead>
+                        <TableHead className="text-xs">Date</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {data?.recentPayments?.map((payment) => (
+                        <TableRow key={payment.id}>
+                          <TableCell className="text-sm font-medium py-2">
+                            {payment.memberName}
+                          </TableCell>
+                          <TableCell className="text-sm py-2">
+                            <span className="font-medium text-emerald-600">
+                              {formatCurrency(payment.amount)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm py-2">
+                            <Badge variant="secondary" className="text-xs font-normal">
+                              {formatPaymentMethod(payment.method)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground py-2">
+                            {formatDate(payment.paymentDate)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="md:hidden space-y-2">
+                  {data?.recentPayments?.map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between rounded-lg border p-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{payment.memberName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatPaymentMethod(payment.method)} · {formatDate(payment.paymentDate)}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-emerald-600 shrink-0 ml-2">
+                        {formatCurrency(payment.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

@@ -1,3 +1,16 @@
+import type {
+  PaginatedResponse,
+  MemberResponse,
+  ServiceRecord,
+  SubscriptionRecord,
+  PaymentRecord,
+  AuditLogRecord,
+  UserRecord,
+  CreateUserBody,
+  DashboardData,
+} from './api-types';
+import { getCurrentToken } from './auth-client';
+
 const API_BASE = '/api';
 
 interface FetchOptions extends RequestInit {
@@ -9,7 +22,7 @@ export async function apiFetch<T = unknown>(
   options: FetchOptions = {}
 ): Promise<T> {
   const { params, ...fetchOptions } = options;
-  
+
   let url = `${API_BASE}${path}`;
   if (params) {
     const searchParams = new URLSearchParams();
@@ -22,19 +35,21 @@ export async function apiFetch<T = unknown>(
     if (qs) url += `?${qs}`;
   }
 
+  const token = getCurrentToken();
+
   const response = await fetch(url, {
     ...fetchOptions,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...fetchOptions.headers,
     },
   });
 
   if (response.status === 401) {
-    // Silently return empty data instead of throwing — the login form will show
-    return { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } } as unknown as T;
+    return { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } } as T;
   }
-  
+
   if (response.status === 403) {
     throw new Error('Forbidden');
   }
@@ -44,109 +59,98 @@ export async function apiFetch<T = unknown>(
     throw new Error(data.error || `HTTP ${response.status}`);
   }
 
-  // For CSV downloads
   const contentType = response.headers.get('content-type');
   if (contentType?.includes('text/csv')) {
-    return response.text() as unknown as T;
+    return response.text() as T;
   }
 
   return response.json();
 }
 
-export interface PaginatedResponse<T> {
-  data: T[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}
-
 // Members
 export const membersApi = {
-  list: (params?: Record<string, unknown>) =>
-    apiFetch<PaginatedResponse<unknown>>('/members', { params: params as Record<string, string | number | boolean | undefined> }),
+  list: (params?: Record<string, string | number | boolean | undefined>) =>
+    apiFetch<PaginatedResponse<MemberResponse>>('/members', { params }),
   get: (id: string) =>
-    apiFetch<unknown>(`/members/${id}`),
-  create: (data: unknown) =>
-    apiFetch<unknown>('/members', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: unknown) =>
-    apiFetch<unknown>(`/members/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    apiFetch<MemberResponse>(`/members/${id}`),
+  create: (data: Partial<MemberResponse>) =>
+    apiFetch<MemberResponse>('/members', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<MemberResponse>) =>
+    apiFetch<MemberResponse>(`/members/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
-    apiFetch<unknown>(`/members/${id}`, { method: 'DELETE' }),
+    apiFetch<{ message: string }>(`/members/${id}`, { method: 'DELETE' }),
   restore: (id: string) =>
-    apiFetch<unknown>(`/members/${id}/restore`, { method: 'POST' }),
+    apiFetch<MemberResponse>(`/members/${id}/restore`, { method: 'POST' }),
 };
 
 // Services
 export const servicesApi = {
-  list: (params?: Record<string, unknown>) =>
-    apiFetch<{ data: unknown[] }>('/services', { params: params as Record<string, string | number | boolean | undefined> }),
-  create: (data: unknown) =>
-    apiFetch<unknown>('/services', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: unknown) =>
-    apiFetch<unknown>(`/services/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  list: (params?: Record<string, string | number | boolean | undefined>) =>
+    apiFetch<{ data: ServiceRecord[] }>('/services', { params }),
+  create: (data: Partial<ServiceRecord>) =>
+    apiFetch<ServiceRecord>('/services', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<ServiceRecord>) =>
+    apiFetch<ServiceRecord>(`/services/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
-    apiFetch<unknown>(`/services/${id}`, { method: 'DELETE' }),
+    apiFetch<{ message: string }>(`/services/${id}`, { method: 'DELETE' }),
 };
 
 // Subscriptions
 export const subscriptionsApi = {
-  list: (params?: Record<string, unknown>) =>
-    apiFetch<PaginatedResponse<unknown>>('/subscriptions', { params: params as Record<string, string | number | boolean | undefined> }),
+  list: (params?: Record<string, string | number | boolean | undefined>) =>
+    apiFetch<PaginatedResponse<SubscriptionRecord>>('/subscriptions', { params }),
   get: (id: string) =>
-    apiFetch<unknown>(`/subscriptions/${id}`),
-  create: (data: unknown) =>
-    apiFetch<unknown>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: unknown) =>
-    apiFetch<unknown>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  renew: (id: string, data?: unknown) =>
-    apiFetch<unknown>(`/subscriptions/${id}/renew`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+    apiFetch<SubscriptionRecord>(`/subscriptions/${id}`),
+  create: (data: Partial<SubscriptionRecord>) =>
+    apiFetch<SubscriptionRecord>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<SubscriptionRecord>) =>
+    apiFetch<SubscriptionRecord>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  renew: (id: string, data?: { paymentMethod: string }) =>
+    apiFetch<{ subscription: SubscriptionRecord; payment: { id: string; amount: number; receiptNumber: string } }>(`/subscriptions/${id}/renew`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
 };
 
 // Payments
 export const paymentsApi = {
-  list: (params?: Record<string, unknown>) =>
-    apiFetch<PaginatedResponse<unknown>>('/payments', { params: params as Record<string, string | number | boolean | undefined> }),
+  list: (params?: Record<string, string | number | boolean | undefined>) =>
+    apiFetch<PaginatedResponse<PaymentRecord>>('/payments', { params }),
   get: (id: string) =>
-    apiFetch<unknown>(`/payments/${id}`),
-  create: (data: unknown) =>
-    apiFetch<unknown>('/payments', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch<PaymentRecord>(`/payments/${id}`),
+  create: (data: Partial<PaymentRecord>) =>
+    apiFetch<PaymentRecord>('/payments', { method: 'POST', body: JSON.stringify(data) }),
   void: (id: string) =>
-    apiFetch<unknown>(`/payments/${id}/void`, { method: 'POST' }),
+    apiFetch<PaymentRecord>(`/payments/${id}/void`, { method: 'POST' }),
 };
 
 // Dashboard
 export const dashboardApi = {
   get: () =>
-    apiFetch<unknown>('/dashboard'),
+    apiFetch<DashboardData>('/dashboard'),
 };
 
 // Audit Logs
 export const auditLogsApi = {
-  list: (params?: Record<string, unknown>) =>
-    apiFetch<PaginatedResponse<unknown>>('/audit-logs', { params: params as Record<string, string | number | boolean | undefined> }),
+  list: (params?: Record<string, string | number | boolean | undefined>) =>
+    apiFetch<PaginatedResponse<AuditLogRecord>>('/audit-logs', { params }),
 };
 
 // Users
 export const usersApi = {
   list: () =>
-    apiFetch<{ data: unknown[] }>('/users'),
+    apiFetch<{ data: UserRecord[] }>('/users'),
   get: (id: string) =>
-    apiFetch<unknown>(`/users/${id}`),
-  create: (data: unknown) =>
-    apiFetch<unknown>('/users', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: unknown) =>
-    apiFetch<unknown>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    apiFetch<UserRecord>(`/users/${id}`),
+  create: (data: CreateUserBody) =>
+    apiFetch<UserRecord>('/users', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<UserRecord>) =>
+    apiFetch<UserRecord>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deactivate: (id: string) =>
-    apiFetch<unknown>(`/users/${id}`, { method: 'DELETE' }),
+    apiFetch<{ message: string }>(`/users/${id}`, { method: 'DELETE' }),
 };
 
 // Export
 export const exportApi = {
-  members: (params?: Record<string, unknown>) =>
-    apiFetch<string>('/export/members', { params: params as Record<string, string | number | boolean | undefined> }),
-  payments: (params?: Record<string, unknown>) =>
-    apiFetch<string>('/export/payments', { params: params as Record<string, string | number | boolean | undefined> }),
+  members: (params?: Record<string, string | number | boolean | undefined>) =>
+    apiFetch<string>('/export/members', { params }),
+  payments: (params?: Record<string, string | number | boolean | undefined>) =>
+    apiFetch<string>('/export/payments', { params }),
 };

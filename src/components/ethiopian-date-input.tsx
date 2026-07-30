@@ -35,7 +35,7 @@ export function EthiopianDateInput({
       }
 
       const result = parseEthiopianDate(raw);
-      if (result.valid && result.date) {
+      if (result.success && result.date) {
         setLocalError(null);
         onChange(raw, result.date.toISOString());
       } else {
@@ -49,7 +49,7 @@ export function EthiopianDateInput({
   const setToday = useCallback(() => {
     const today = getCurrentEthiopianDateString();
     const result = parseEthiopianDate(today);
-    if (result.valid && result.date) {
+    if (result.success && result.date) {
       onChange(today, result.date.toISOString());
       setLocalError(null);
     }

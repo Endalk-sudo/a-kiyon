@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   Globe,
+  HardDrive,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCallback, useState } from 'react';
@@ -32,6 +33,7 @@ const navItems: { id: PageId; label: string; labelAm: string; icon: React.Elemen
   { id: 'payments', label: 'Payments', labelAm: 'ክፍያዎች', icon: CreditCard },
   { id: 'reports', label: 'Reports', labelAm: 'ሪፖርቶች', icon: BarChart3, roles: ['owner'] },
   { id: 'audit-logs', label: 'Audit Log', labelAm: 'የስራ ማስመዝ', icon: ClipboardList, roles: ['owner'] },
+  { id: 'storage', label: 'Storage', labelAm: 'ማከማቻ', icon: HardDrive, roles: ['owner'] },
   { id: 'settings', label: 'Settings', labelAm: 'ቅንብሮች', icon: Settings, roles: ['owner'] },
 ];
 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
-import { authClient } from '@/lib/auth-client';
+import { authClient, initAuth, onAuthChange } from '@/lib/auth-client';
+import { auth } from '@/lib/firebase-client';
 import { AppLayout } from '@/components/app-layout';
 import { LandingPage } from '@/components/pages/landing';
 import { DashboardPage } from '@/components/pages/dashboard';
@@ -13,6 +14,7 @@ import { PaymentsPage } from '@/components/pages/payments';
 import { ReportsPage } from '@/components/pages/reports';
 import { AuditLogsPage } from '@/components/pages/audit-logs';
 import { SettingsPage } from '@/components/pages/settings';
+import { StoragePage } from '@/components/pages/storage';
 import { Loader2 } from 'lucide-react';
 
 const pageComponents: Record<string, React.ComponentType> = {
@@ -24,34 +26,63 @@ const pageComponents: Record<string, React.ComponentType> = {
   reports: ReportsPage,
   'audit-logs': AuditLogsPage,
   settings: SettingsPage,
+  storage: StoragePage,
 };
+
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+          <h2 className="text-xl font-bold text-destructive mb-2">Something went wrong</h2>
+          <p className="text-muted-foreground mb-4">An unexpected error occurred. Try refreshing the page.</p>
+          <button
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+            onClick={() => this.setState({ hasError: false })}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function Home() {
   const { session, setSession, currentPage, isAuthenticated } = useAppStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const { data } = await authClient.getSession();
-        if (data?.user) {
-          const u = data.user as { id: string; email: string; name: string | null; role?: string };
-          setSession({
-            userId: u.id,
-            email: u.email,
-            name: u.name || '',
-            role: u.role || 'manager',
-          });
-        } else {
-          setSession(null);
-        }
-      } catch {
+    initAuth();
+
+    const unsub = onAuthChange(async (user) => {
+      if (user) {
+        const token = await user.getIdToken();
+        const decoded = JSON.parse(atob(token.split('.')[1]));
+        setSession({
+          userId: user.uid,
+          email: user.email || '',
+          name: (decoded.name as string) || user.displayName || '',
+          role: (decoded.role as string) || 'reader',
+        });
+      } else {
         setSession(null);
-      } finally {
-        setLoading(false);
       }
-    };
-    checkSession();
+      setLoading(false);
+    });
+
+    return () => unsub();
   }, [setSession]);
 
   if (loading) {
@@ -70,7 +101,9 @@ export default function Home() {
 
   return (
     <AppLayout>
-      <PageComponent />
+      <ErrorBoundary>
+        <PageComponent />
+      </ErrorBoundary>
     </AppLayout>
   );
 }

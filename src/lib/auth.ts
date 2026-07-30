@@ -1,59 +1,4 @@
-import { betterAuth } from 'better-auth';
-import { prismaAdapter } from '@better-auth/prisma-adapter';
-import { db } from '@/lib/db';
-import { headers } from 'next/headers';
-
-export const auth = betterAuth({
-  database: prismaAdapter(db, {
-    provider: 'postgresql',
-  }),
-  emailAndPassword: {
-    enabled: true,
-    password: {
-      hash: async (password) => {
-        const bcrypt = await import('bcryptjs');
-        return bcrypt.hash(password, 10);
-      },
-      verify: async ({ hash, password }) => {
-        const bcrypt = await import('bcryptjs');
-        return bcrypt.compare(password, hash);
-      },
-    },
-  },
-  user: {
-    additionalFields: {
-      role: {
-        type: 'string',
-        defaultValue: 'manager',
-      },
-      phone: {
-        type: 'string',
-      },
-      isActive: {
-        type: 'boolean',
-        defaultValue: true,
-      },
-      photo: {
-        type: 'string',
-      },
-    },
-  },
-  trustedOrigins: ['*'],
-  advanced: {
-    cookies: {
-      sessionToken: {
-        name: 'fcms_session',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-      },
-    },
-  },
-});
-
-interface BetterSession {
-  user: Record<string, unknown>;
-  session: Record<string, unknown>;
-}
+import { adminAuth } from './firebase-admin';
 
 export interface Session {
   userId: string;
@@ -63,30 +8,42 @@ export interface Session {
   expiresAt: number;
 }
 
-export async function getSession(): Promise<Session | null> {
-  try {
-    const headersList = await headers();
-    const result = await auth.api.getSession({ headers: headersList }) as BetterSession | null;
-    if (!result) return null;
-    const user = result.user as { id: string; email: string; name: string | null; role?: string; isActive?: boolean };
-    const sess = result.session as { expiresAt: Date };
+type AuthenticatedRequest = { headers: { get(name: string): string | null } };
 
-    if (user.isActive === false) return null;
+async function extractToken(request: AuthenticatedRequest): Promise<string | null> {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  return authHeader.slice(7);
+}
+
+export async function getSession(request?: AuthenticatedRequest): Promise<Session | null> {
+  try {
+    const token = request ? await extractToken(request) : null;
+    if (!token) return null;
+
+    const decoded = await adminAuth.verifyIdToken(token);
+    if (!decoded) return null;
 
     return {
-      userId: user.id,
-      email: user.email,
-      name: user.name || '',
-      role: (user.role as string) || 'manager',
-      expiresAt: sess.expiresAt.getTime(),
+      userId: decoded.uid,
+      email: decoded.email || '',
+      name: (decoded.name as string) || '',
+      role: (decoded.role as string) || 'reader',
+      expiresAt: (decoded.exp as number) * 1000,
     };
   } catch {
     return null;
   }
 }
 
-export async function getSessionOrThrow(allowedRoles?: string[]): Promise<Session> {
-  const session = await getSession();
+export async function getSessionOrThrow(
+  allowedRoles?: string[],
+  request?: AuthenticatedRequest
+): Promise<Session> {
+  if (!request) {
+    throw new Error('Unauthorized');
+  }
+  const session = await getSession(request);
   if (!session) {
     throw new Error('Unauthorized');
   }
@@ -95,3 +52,5 @@ export async function getSessionOrThrow(allowedRoles?: string[]): Promise<Sessio
   }
   return session;
 }
+
+export { adminAuth };

@@ -1,76 +1,81 @@
-import { db } from '@/lib/db';
+import { NextRequest } from 'next/server';
+import { getDocs, countDocs, createDoc } from '@/lib/db';
+import type { WhereClause } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
-import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
-import { NextRequest } from 'next/server';
+import { apiResponse } from '@/lib/api';
+import { apiHandler } from '@/lib/api-handler';
+import { createServiceSchema } from '@/lib/schemas';
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getSessionOrThrow();
+export const GET = apiHandler(async (request: NextRequest) => {
+  const session = await getSessionOrThrow(undefined, request);
 
-    const { searchParams } = request.nextUrl;
-    const includeInactive = searchParams.get('includeInactive') === 'true';
+  const { searchParams } = request.nextUrl;
+  const includeInactive = searchParams.get('includeInactive') === 'true';
+  const page = parseInt(searchParams.get('page') || '');
+  const limit = parseInt(searchParams.get('limit') || '');
 
-    const where = includeInactive ? {} : { isActive: true };
+  const where: WhereClause[] = includeInactive ? [] : [['isActive', '==', true]];
 
-    const services = await db.service.findMany({
-      where,
-      orderBy: { name: 'asc' },
-    });
-
-    return apiResponse({ data: services });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    if (message === 'Unauthorized') return unauthorizedError();
-    if (message === 'Forbidden') return forbiddenError();
-    return apiError(message, 500);
+  if (page && limit) {
+    const [services, total] = await Promise.all([
+      getDocs<{
+        name: string;
+        nameAm: string | null;
+        description: string | null;
+        descriptionAm: string | null;
+        price: number;
+        duration: number;
+        isActive: boolean;
+      }>('services', where.length ? where : undefined, ['name', 'asc'], limit, (page - 1) * limit),
+      countDocs('services', where.length ? where : undefined),
+    ]);
+    return apiResponse({ data: services, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } });
   }
-}
 
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getSessionOrThrow(['owner']);
+  const services = await getDocs<{
+    name: string;
+    nameAm: string | null;
+    description: string | null;
+    descriptionAm: string | null;
+    price: number;
+    duration: number;
+    isActive: boolean;
+  }>('services', where.length ? where : undefined, ['name', 'asc']);
 
-    const body = await request.json();
-    const { name, nameAm, description, descriptionAm, price, duration, isActive } = body;
+  return apiResponse({ data: services });
+});
 
-    if (!name || price === undefined || duration === undefined) {
-      return apiError('Name, price, and duration are required');
-    }
+export const POST = apiHandler(async (request: NextRequest) => {
+  const session = await getSessionOrThrow(['owner'], request);
+  const body = await request.json();
+  const data = createServiceSchema.parse(body);
 
-    if (typeof price !== 'number' || price < 0) {
-      return apiError('Price must be a non-negative number');
-    }
+  const service = await createDoc<{
+    name: string;
+    nameAm: string | null;
+    description: string | null;
+    descriptionAm: string | null;
+    price: number;
+    duration: number;
+    isActive: boolean;
+  }>('services', {
+    name: data.name,
+    nameAm: data.nameAm || null,
+    description: data.description || null,
+    descriptionAm: data.descriptionAm || null,
+    price: data.price,
+    duration: data.duration,
+    isActive: data.isActive !== undefined ? data.isActive : true,
+  });
 
-    if (typeof duration !== 'number' || duration < 1) {
-      return apiError('Duration must be a positive integer (days)');
-    }
+  await createAuditLog({
+    userId: session.userId,
+    action: 'service.create',
+    details: { name: data.name, price: data.price, duration: data.duration },
+    entity: 'service',
+    entityId: service.id,
+  });
 
-    const service = await db.service.create({
-      data: {
-        name,
-        nameAm: nameAm || null,
-        description: description || null,
-        descriptionAm: descriptionAm || null,
-        price,
-        duration,
-        isActive: isActive !== undefined ? isActive : true,
-      },
-    });
-
-    await createAuditLog({
-      userId: session.userId,
-      action: 'service.create',
-      details: { name, price, duration },
-      entity: 'service',
-      entityId: service.id,
-    });
-
-    return apiResponse(service, 201);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    if (message === 'Unauthorized') return unauthorizedError();
-    if (message === 'Forbidden') return forbiddenError();
-    return apiError(message, 500);
-  }
-}
+  return apiResponse(service, 201);
+});

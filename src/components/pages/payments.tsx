@@ -125,14 +125,12 @@ export function PaymentsPage() {
     async (page = 1) => {
       setLoading(true);
       try {
-        const params: Record<string, unknown> = {
+        const params = {
           page,
           limit: pagination.limit,
+          ...(methodFilter !== 'all' ? { method: methodFilter } : {}),
         };
-        if (methodFilter !== 'all') {
-          params.method = methodFilter;
-        }
-        const result = (await paymentsApi.list(params)) as PaymentsResponse;
+        const result = await paymentsApi.list(params);
         setPayments(result.data || []);
         setPagination(result.pagination || { total: 0, page: 1, limit: 10, totalPages: 0 });
       } catch {
@@ -271,12 +269,23 @@ export function PaymentsPage() {
       </html>
     `;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printWindow = window.open('', '_blank', 'width=400,height=600,noopener,noreferrer');
     if (printWindow) {
       printWindow.document.write(receiptHtml);
       printWindow.document.close();
     } else {
-      toast.error('Please allow popups to print receipts');
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '-9999px';
+      iframe.style.width = '400px';
+      iframe.style.height = '600px';
+      document.body.appendChild(iframe);
+      iframe.contentDocument?.write(receiptHtml);
+      iframe.contentDocument?.close();
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        setTimeout(() => document.body.removeChild(iframe), 1000);
+      }, 500);
     }
   };
 

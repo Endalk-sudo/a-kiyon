@@ -231,15 +231,15 @@ export function MembersPage() {
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, unknown> = {
+      const params = {
         page: pagination.page,
         limit: PAGE_LIMIT,
+        ...(searchDebounced ? { search: searchDebounced } : {}),
+        ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+        ...(showDeleted ? { showDeleted: 'true' as const } : {}),
       };
-      if (searchDebounced) params.search = searchDebounced;
-      if (statusFilter !== 'all') params.status = statusFilter;
-      if (showDeleted) params.showDeleted = true;
 
-      const result = await membersApi.list(params) as { data: Member[]; pagination: PaginationInfo };
+      const result = await membersApi.list(params);
       setMembers(result.data || []);
       setPagination((prev) => ({
         ...result.pagination,
@@ -859,8 +859,8 @@ export function MembersPage() {
                               className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
                               onClick={async () => {
                                 try {
-                                  const result = await subscriptionsApi.renew(sub.id) as { subscription: { priceSnapshot: number } };
-                                  toast.success(`Subscription renewed! Payment of ${formatCurrency(result.subscription?.priceSnapshot || sub.priceSnapshot)} has been recorded.`);
+                                  const result = await subscriptionsApi.renew(sub.id);
+                                  toast.success(`Subscription renewed! Payment of ${formatCurrency(result.subscription.priceSnapshot || sub.priceSnapshot)} has been recorded.`);
                                   fetchMemberDetail(memberDetail.id);
                                 } catch (err) {
                                   toast.error(err instanceof Error ? err.message : 'Failed to renew subscription');
@@ -987,10 +987,10 @@ function MemberActions({ member, isOwner, isManagerOrAbove, onView, onEdit, onDe
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-4 w-4" /></Button>
-      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-4 w-4" /></Button>}
-      {isOwner && member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-4 w-4" /></Button>}
-      {isOwner && !member.isDeleted && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
+      <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-4 w-4" /></Button>
+      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-4 w-4" /></Button>}
+      {isOwner && member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-4 w-4" /></Button>}
+      {isOwner && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
     </div>
   );
 }
@@ -1047,7 +1047,7 @@ function MemberForm({ formData, setFormData, formErrors }: {
       {/* Physical Info */}
       <div className="space-y-3">
         <h4 className="text-sm font-semibold text-muted-foreground">Physical Information</h4>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="weight">Weight (kg)</Label>
             <Input id="weight" type="number" step="0.1" value={formData.weight} onChange={(e) => updateField('weight', e.target.value)} placeholder="70" />

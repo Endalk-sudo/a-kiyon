@@ -1,55 +1,52 @@
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { getDocById } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
-import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
+import { apiResponse, apiError } from '@/lib/api';
+import { apiHandler } from '@/lib/api-handler';
+import { getUser } from '@/services/user.service';
 
-// GET /api/payments/[id] - Get single payment with member details
-export async function GET(
-  _request: NextRequest,
+export const GET = apiHandler(async (
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSessionOrThrow();
-    if (!['owner', 'manager'].includes(session.role)) {
-      return forbiddenError();
-    }
+) => {
+  const session = await getSessionOrThrow(undefined, request);
+  if (!['owner', 'manager'].includes(session.role)) throw new Error('Forbidden');
 
-    const { id } = await params;
+  const { id } = await params;
 
-    const payment = await db.payment.findUnique({
-      where: { id },
-      include: {
-        member: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-            photo: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
+  const payment = await getDocById<{
+    subscriptionId: string;
+    memberId: string;
+    amount: number;
+    paymentDate: string;
+    method: string;
+    receiptNumber: string;
+    isVoided: boolean;
+    voidedAt: string | null;
+    voidedBy: string | null;
+    notes: string | null;
+    createdBy: string;
+  }>('payments', id);
 
-    if (!payment) {
-      return apiError('Payment not found', 404);
-    }
+  if (!payment) return apiError('Payment not found', 404);
 
-    return apiResponse(payment);
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return unauthorizedError();
-    }
-    if (error instanceof Error && error.message === 'Forbidden') {
-      return forbiddenError();
-    }
-    return apiError('Failed to fetch payment', 500);
-  }
-}
+  const [member, user] = await Promise.all([
+    getDocById<{ firstName: string; lastName: string; phone: string; photo: string }>('members', payment.memberId),
+    (async () => {
+      try {
+        const u = await getUser(payment.createdBy);
+        return { id: u.id, name: u.name, email: u.email };
+      } catch {
+        return null;
+      }
+    })(),
+  ]);
+
+  return apiResponse({
+    ...payment,
+    member: member
+      ? { id: member.id, firstName: member.firstName, lastName: member.lastName, phone: member.phone || null, photo: member.photo || null }
+      : null,
+    user: user || null,
+  });
+});

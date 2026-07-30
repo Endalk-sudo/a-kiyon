@@ -1,179 +1,88 @@
-import { db } from '@/lib/db';
+import { getDocById, getDocs } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
-import { apiResponse, apiError, unauthorizedError, forbiddenError } from '@/lib/api';
+import { apiResponse, apiError } from '@/lib/api';
+import { apiHandler } from '@/lib/api-handler';
+import { updateMemberSchema } from '@/lib/schemas';
+import { getMember, updateMember, softDeleteMember } from '@/services/member.service';
+import { computeMemberStatus } from '@/lib/member-status';
 import { NextRequest } from 'next/server';
 
-type MemberStatus = 'active' | 'expiring_soon' | 'expired' | 'no_subscription';
-
-function computeStatus(subscriptions: { endDate: Date; status: string }[]): MemberStatus {
-  if (subscriptions.length === 0) return 'no_subscription';
-
-  const now = new Date();
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  const hasActive = subscriptions.some(
-    (s) => s.endDate >= now && s.status !== 'cancelled'
-  );
-  const hasExpiringSoon = subscriptions.some(
-    (s) => s.endDate >= now && s.endDate <= sevenDaysFromNow && s.status !== 'cancelled'
-  );
-
-  if (hasExpiringSoon) return 'expiring_soon';
-  if (hasActive) return 'active';
-  return 'expired';
-}
-
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSessionOrThrow();
-
-    const { id } = await params;
-
-    const member = await db.member.findUnique({
-      where: { id },
-      include: {
-        subscriptions: {
-          include: {
-            service: { select: { id: true, name: true, nameAm: true, price: true } },
-            payments: {
-              where: { isVoided: false },
-              orderBy: { paymentDate: 'desc' },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-        },
-        payments: {
-          include: {
-            subscription: {
-              select: { service: { select: { name: true } } },
-            },
-          },
-          orderBy: { paymentDate: 'desc' },
-        },
-      },
-    });
-
-    if (!member) {
-      return apiError('Member not found', 404);
-    }
-
-    const status = computeStatus(member.subscriptions);
-
-    return apiResponse({ ...member, status });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    if (message === 'Unauthorized') return unauthorizedError();
-    if (message === 'Forbidden') return forbiddenError();
-    return apiError(message, 500);
-  }
-}
-
-export async function PUT(
+export const GET = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSessionOrThrow(['owner', 'manager']);
+) => {
+  const session = await getSessionOrThrow(undefined, request);
 
-    const { id } = await params;
-    const body = await request.json();
+  const { id } = await params;
+  const member = await getMember(id);
 
-    const existing = await db.member.findUnique({ where: { id } });
-    if (!existing) {
-      return apiError('Member not found', 404);
-    }
-    if (existing.isDeleted) {
-      return apiError('Cannot update a deleted member');
-    }
+  if (!member) return apiError('Member not found', 404);
 
-    const {
-      firstName, lastName, phone, photo,
-      address, weight, height, bloodType,
-      emergencyContact, notes,
-    } = body;
+  return apiResponse(member);
+});
 
-    const member = await db.member.update({
-      where: { id },
-      data: {
-        ...(firstName !== undefined && { firstName }),
-        ...(lastName !== undefined && { lastName }),
-        ...(phone !== undefined && { phone }),
-        ...(photo !== undefined && { photo }),
-        ...(address !== undefined && { address }),
-        ...(weight !== undefined && { weight: weight ? parseFloat(String(weight)) : null }),
-        ...(height !== undefined && { height: height ? parseFloat(String(height)) : null }),
-        ...(bloodType !== undefined && { bloodType }),
-        ...(emergencyContact !== undefined && { emergencyContact }),
-        ...(notes !== undefined && { notes }),
-      },
-    });
-
-    await createAuditLog({
-      userId: session.userId,
-      action: 'member.update',
-      details: { firstName, lastName, phone },
-      entity: 'member',
-      entityId: member.id,
-    });
-
-    // Compute status for updated member
-    const subscriptions = await db.subscription.findMany({
-      where: { memberId: id },
-      select: { endDate: true, status: true },
-    });
-    const status = computeStatus(subscriptions);
-
-    return apiResponse({ ...member, status });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    if (message === 'Unauthorized') return unauthorizedError();
-    if (message === 'Forbidden') return forbiddenError();
-    return apiError(message, 500);
-  }
-}
-
-export async function DELETE(
-  _request: NextRequest,
+export const PUT = apiHandler(async (
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSessionOrThrow(['owner']);
+) => {
+  const session = await getSessionOrThrow(['owner', 'manager'], request);
 
-    const { id } = await params;
+  const { id } = await params;
+  const body = await request.json();
+  const data = updateMemberSchema.parse(body);
 
-    const existing = await db.member.findUnique({ where: { id } });
-    if (!existing) {
-      return apiError('Member not found', 404);
-    }
-    if (existing.isDeleted) {
-      return apiError('Member is already deleted');
-    }
+  const existing = await getDocById<Record<string, unknown>>('members', id);
+  if (!existing) return apiError('Member not found', 404);
+  if (existing.isDeleted) return apiError('Cannot update a deleted member');
 
-    const member = await db.member.update({
-      where: { id },
-      data: {
-        isDeleted: true,
-        deletedAt: new Date(),
-      },
-    });
+  const member = await updateMember(id, {
+    ...(data.firstName !== undefined && { firstName: data.firstName }),
+    ...(data.lastName !== undefined && { lastName: data.lastName }),
+    ...(data.phone !== undefined && { phone: data.phone }),
+    ...(data.photo !== undefined && { photo: data.photo }),
+    ...(data.address !== undefined && { address: data.address }),
+    ...(data.weight !== undefined && { weight: data.weight }),
+    ...(data.height !== undefined && { height: data.height }),
+    ...(data.bloodType !== undefined && { bloodType: data.bloodType }),
+    ...(data.emergencyContact !== undefined && { emergencyContact: data.emergencyContact }),
+    ...(data.notes !== undefined && { notes: data.notes }),
+  });
 
-    await createAuditLog({
-      userId: session.userId,
-      action: 'member.delete',
-      details: { firstName: existing.firstName, lastName: existing.lastName },
-      entity: 'member',
-      entityId: member.id,
-    });
+  await createAuditLog({
+    userId: session.userId,
+    action: 'member.update',
+    details: { firstName: data.firstName, lastName: data.lastName, phone: data.phone },
+    entity: 'member',
+    entityId: member!.id,
+  });
 
-    return apiResponse({ message: 'Member deleted successfully' });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    if (message === 'Unauthorized') return unauthorizedError();
-    if (message === 'Forbidden') return forbiddenError();
-    return apiError(message, 500);
-  }
-}
+  const subs = await getDocs<{ endDate: string; status: string }>('subscriptions', [['memberId', '==', id]]);
+
+  return apiResponse({ ...member, status: computeMemberStatus(subs) });
+});
+
+export const DELETE = apiHandler(async (
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) => {
+  const session = await getSessionOrThrow(['owner'], request);
+
+  const { id } = await params;
+
+  const existing = await getDocById<Record<string, unknown>>('members', id);
+  if (!existing) return apiError('Member not found', 404);
+  if (existing.isDeleted) return apiError('Member is already deleted');
+
+  const member = await softDeleteMember(id);
+
+  await createAuditLog({
+    userId: session.userId,
+    action: 'member.delete',
+    details: { firstName: existing.firstName as string, lastName: existing.lastName as string },
+    entity: 'member',
+    entityId: member!.id,
+  });
+
+  return apiResponse({ message: 'Member deleted successfully' });
+});

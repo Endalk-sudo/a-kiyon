@@ -1,121 +1,127 @@
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import 'dotenv/config';
+import { adminAuth, adminDb } from '../lib/firebase-admin';
+import { computeMemberStatus } from '@/lib/member-status';
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: process.env.DIRECT_URL || process.env.DATABASE_URL } },
-});
+function generateReceiptNumber(): string {
+  return `RCPT-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
 
-async function wakeDatabase(retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      return;
-    } catch {
-      if (i < retries - 1) {
-        console.log('Waking database... (attempt ' + (i + 1) + ')');
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-    }
-  }
+async function deleteAllDocs(collectionName: string) {
+  const snap = await adminDb.collection(collectionName).get();
+  if (snap.empty) return;
+  const batch = adminDb.batch();
+  snap.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
 }
 
 async function main() {
-  console.log('Seeding database...');
+  console.log('Seeding Firebase...');
 
-  await wakeDatabase();
+  // ── Clean existing Firestore data ──
+  console.log('Cleaning Firestore collections...');
+  await Promise.all([
+    deleteAllDocs('payments'),
+    deleteAllDocs('subscriptions'),
+    deleteAllDocs('auditLogs'),
+    deleteAllDocs('members'),
+    deleteAllDocs('services'),
+  ]);
 
-  // Clean existing data
-  await prisma.payment.deleteMany();
-  await prisma.subscription.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.member.deleteMany();
-  await prisma.service.deleteMany();
-  await prisma.user.deleteMany();
+  // ── Clean existing Firebase Auth users ──
+  console.log('Cleaning Firebase Auth users...');
+  const listResult = await adminAuth.listUsers();
+  if (listResult.users.length > 0) {
+    await adminAuth.deleteUsers(listResult.users.map((u) => u.uid));
+  }
 
-  // Create users
-  const ownerPassword = await bcrypt.hash('owner123', 10);
-  const managerPassword = await bcrypt.hash('manager123', 10);
+  // ── Create users via Firebase Auth ──
+  const ownerUser = await adminAuth.createUser({
+    email: 'owner@fcms.com',
+    password: 'owner123',
+    displayName: 'Owner',
+  });
+  await adminAuth.setCustomUserClaims(ownerUser.uid, { role: 'owner' });
 
-  const owner = await prisma.user.create({
-    data: {
-      email: 'owner@fcms.com',
-      name: 'Owner',
-      role: 'owner',
-      phone: '+251911000000',
+  const managerUser = await adminAuth.createUser({
+    email: 'manager@fcms.com',
+    password: 'manager123',
+    displayName: 'Manager',
+  });
+  await adminAuth.setCustomUserClaims(managerUser.uid, { role: 'manager' });
+
+  // Store user profiles in Firestore
+  const ownerId = ownerUser.uid;
+  const managerId = managerUser.uid;
+
+  await adminDb.collection('users').doc(ownerId).set({
+    email: 'owner@fcms.com',
+    name: 'Owner',
+    role: 'owner',
+    phone: '+251911000000',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  });
+
+  await adminDb.collection('users').doc(managerId).set({
+    email: 'manager@fcms.com',
+    name: 'Manager',
+    role: 'manager',
+    phone: '+251922000000',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  });
+
+  console.log('Created users:', 'owner@fcms.com', 'manager@fcms.com');
+
+  // ── Create 3 services ──
+  const gymRef = adminDb.collection('services').doc();
+  const karateRef = adminDb.collection('services').doc();
+  const aerobicsRef = adminDb.collection('services').doc();
+  const now = new Date().toISOString();
+
+  await Promise.all([
+    gymRef.set({
+      name: 'Gym',
+      nameAm: 'ጂም',
+      description: 'Full gym access with all equipment and facilities',
+      descriptionAm: 'ሙሉ የጂም ተደራሽነት ከሁሉም መሳሪያዎች እና ተቋማት ጋር',
+      price: 1500,
+      duration: 30,
       isActive: true,
-    },
-  });
-
-  await prisma.account.create({
-    data: {
-      userId: owner.id,
-      accountId: owner.id,
-      providerId: 'credential',
-      password: ownerPassword,
-    },
-  });
-
-  const manager = await prisma.user.create({
-    data: {
-      email: 'manager@fcms.com',
-      name: 'Manager',
-      role: 'manager',
-      phone: '+251922000000',
+      createdAt: now,
+      updatedAt: now,
+    }),
+    karateRef.set({
+      name: 'Karate',
+      nameAm: 'ካራቴ',
+      description: 'Karate training classes with professional instructors',
+      descriptionAm: 'በሙያተኞች አሰልጣኞች የሚሰጥ የካራቴ ስልጠና',
+      price: 2000,
+      duration: 30,
       isActive: true,
-    },
-  });
-
-  await prisma.account.create({
-    data: {
-      userId: manager.id,
-      accountId: manager.id,
-      providerId: 'credential',
-      password: managerPassword,
-    },
-  });
-
-  console.log('Created users:', owner.email, manager.email);
-
-  // Create 3 services: Gym, Karate, Aerobics
-  const services = await Promise.all([
-    prisma.service.create({
-      data: {
-        name: 'Gym',
-        nameAm: 'ጂም',
-        description: 'Full gym access with all equipment and facilities',
-        descriptionAm: 'ሙሉ የጂም ተደራሽነት ከሁሉም መሳሪያዎች እና ተቋማት ጋር',
-        price: 1500,
-        duration: 30,
-        isActive: true,
-      },
+      createdAt: now,
+      updatedAt: now,
     }),
-    prisma.service.create({
-      data: {
-        name: 'Karate',
-        nameAm: 'ካራቴ',
-        description: 'Karate training classes with professional instructors',
-        descriptionAm: 'በሙያተኞች አሰልጣኞች የሚሰጥ የካራቴ ስልጠና',
-        price: 2000,
-        duration: 30,
-        isActive: true,
-      },
-    }),
-    prisma.service.create({
-      data: {
-        name: 'Aerobics',
-        nameAm: 'ኤሮቢክስ',
-        description: 'Aerobics and fitness classes for all levels',
-        descriptionAm: 'ለሁሉም ደረጃ የኤሮቢክስ እና የአካል ብቃት ክፍሎች',
-        price: 1200,
-        duration: 30,
-        isActive: true,
-      },
+    aerobicsRef.set({
+      name: 'Aerobics',
+      nameAm: 'ኤሮቢክስ',
+      description: 'Aerobics and fitness classes for all levels',
+      descriptionAm: 'ለሁሉም ደረጃ የኤሮቢክስ እና የአካል ብቃት ክፍሎች',
+      price: 1200,
+      duration: 30,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
     }),
   ]);
 
-  console.log(`Created ${services.length} services: Gym, Karate, Aerobics`);
+  const gymId = gymRef.id;
+  const karateId = karateRef.id;
+  const aerobicsId = aerobicsRef.id;
 
-  // Create members with realistic Ethiopian names
+  console.log('Created 3 services: Gym, Karate, Aerobics');
+
+  // ── Create 10 members ──
   const memberData = [
     { firstName: 'Abebe', lastName: 'Kebede', phone: '+251911001001', address: 'Bole, Addis Ababa', weight: 75, height: 175, bloodType: 'O+', emergencyContact: '+251911001002 (Wife)' },
     { firstName: 'Tigist', lastName: 'Haile', phone: '+251922002002', address: 'Kazanchis, Addis Ababa', weight: 58, height: 163, bloodType: 'A+', emergencyContact: '+251922002003 (Husband)' },
@@ -129,286 +135,159 @@ async function main() {
     { firstName: 'Selamawit', lastName: 'Girma', phone: '+251910010010', address: 'Nifas Silk, Addis Ababa', weight: 57, height: 162, bloodType: 'A+', emergencyContact: '+251910010011 (Sister)' },
   ];
 
-  const members = await Promise.all(
-    memberData.map((m) =>
-      prisma.member.create({
-        data: m,
-      })
-    )
+  const memberRefs = await Promise.all(
+    memberData.map((m) => {
+      const ref = adminDb.collection('members').doc();
+      return ref.set({
+        firstName: m.firstName,
+        lastName: m.lastName,
+        phone: m.phone,
+        photo: null,
+        address: m.address,
+        weight: m.weight,
+        height: m.height,
+        bloodType: m.bloodType,
+        emergencyContact: m.emergencyContact || null,
+        notes: null,
+        isDeleted: false,
+        deletedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      }).then(() => ref.id);
+    }),
   );
 
+  const members = memberRefs;
   console.log(`Created ${members.length} members`);
 
-  // Create sample subscriptions and payments
-  // Flow: subscription + payment created in one transaction
-  const now = new Date();
-  const receiptCounter = { value: 1000 };
+  // ── Create 11 subscriptions and 8 payments ──
+  const date = new Date();
+  const ts = date.toISOString();
 
-  function generateReceiptNumber(): string {
-    receiptCounter.value++;
-    return `RCP-${receiptCounter.value.toString().padStart(6, '0')}`;
+  // Helper to create a subscription + optional payment in a batch
+  async function createSubWithPayment(
+    memberIndex: number,
+    serviceId: string,
+    startOffsetMonths: number,
+    endOffsetMonths: number,
+    status: string,
+    price: number,
+    paymentInfo?: { method: string; dayOffset: number; createdBy: string },
+    notes?: string,
+  ): Promise<string> {
+    const start = new Date(date.getFullYear(), date.getMonth() + startOffsetMonths, 1);
+    const end = new Date(date.getFullYear(), date.getMonth() + endOffsetMonths, 0);
+
+    const subRef = adminDb.collection('subscriptions').doc();
+    const batch = adminDb.batch();
+
+    batch.set(subRef, {
+      memberId: members[memberIndex],
+      serviceId,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      status,
+      priceSnapshot: price,
+      notes: notes || null,
+      createdAt: ts,
+      updatedAt: ts,
+    });
+
+    if (paymentInfo) {
+      const payDate = new Date(date.getFullYear(), date.getMonth() + paymentInfo.dayOffset, 3);
+      const payRef = adminDb.collection('payments').doc();
+      batch.set(payRef, {
+        subscriptionId: subRef.id,
+        memberId: members[memberIndex],
+        amount: price,
+        paymentDate: payDate.toISOString(),
+        method: paymentInfo.method,
+        receiptNumber: generateReceiptNumber(),
+        createdBy: paymentInfo.createdBy,
+        isVoided: false,
+        voidedAt: null,
+        voidedBy: null,
+        notes: null,
+        createdAt: ts,
+        updatedAt: ts,
+      });
+    }
+
+    await batch.commit();
+    return subRef.id;
   }
 
   // Member 0: Abebe - Gym, active (paid cash)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[0].id,
-      serviceId: services[0].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[0].price,
-      payments: {
-        create: {
-          memberId: members[0].id,
-          amount: services[0].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth(), 3),
-          method: 'cash',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: owner.id,
-        },
-      },
-    },
-  });
+  await createSubWithPayment(0, gymId, 0, 1, 'active', 1500, { method: 'cash', dayOffset: 0, createdBy: ownerId });
 
-  // Member 1: Tigist - Karate, active (paid via bank transfer)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[1].id,
-      serviceId: services[1].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[1].price,
-      payments: {
-        create: {
-          memberId: members[1].id,
-          amount: services[1].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth(), 2),
-          method: 'bank_transfer',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: manager.id,
-        },
-      },
-    },
-  });
+  // Member 1: Tigist - Karate, active (paid bank_transfer)
+  await createSubWithPayment(1, karateId, 0, 1, 'active', 2000, { method: 'bank_transfer', dayOffset: 0, createdBy: managerId });
 
   // Member 2: Dawit - Gym, active (paid cash)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[2].id,
-      serviceId: services[0].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[0].price,
-      payments: {
-        create: {
-          memberId: members[2].id,
-          amount: services[0].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth(), 8),
-          method: 'cash',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: owner.id,
-        },
-      },
-    },
-  });
+  await createSubWithPayment(2, gymId, 0, 1, 'active', 1500, { method: 'cash', dayOffset: 0, createdBy: ownerId });
 
   // Member 3: Mekdes - Aerobics, expired (was paid)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[3].id,
-      serviceId: services[2].id,
-      startDate: new Date(now.getFullYear(), now.getMonth() - 2, 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() - 1, 0),
-      status: 'expired',
-      priceSnapshot: services[2].price,
-      payments: {
-        create: {
-          memberId: members[3].id,
-          amount: services[2].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth() - 2, 4),
-          method: 'cash',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: manager.id,
-        },
-      },
-    },
-  });
+  await createSubWithPayment(3, aerobicsId, -2, -1, 'expired', 1200, { method: 'cash', dayOffset: -2, createdBy: managerId });
 
-  // Member 4: Yonas - Karate, active (paid via mobile money)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[4].id,
-      serviceId: services[1].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[1].price,
-      payments: {
-        create: {
-          memberId: members[4].id,
-          amount: services[1].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth(), 5),
-          method: 'mobile_money',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: owner.id,
-        },
-      },
-    },
-  });
+  // Member 4: Yonas - Karate, active (paid mobile_money)
+  await createSubWithPayment(4, karateId, 0, 1, 'active', 2000, { method: 'mobile_money', dayOffset: 0, createdBy: ownerId });
 
   // Member 5: Hiwot - Aerobics, active (no payment yet - pending)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[5].id,
-      serviceId: services[2].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[2].price,
-    },
-  });
+  await createSubWithPayment(5, aerobicsId, 0, 1, 'active', 1200);
 
-  // Member 6: Solomon - Gym, active (paid via bank transfer)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[6].id,
-      serviceId: services[0].id,
-      startDate: new Date(now.getFullYear(), now.getMonth() - 1, 1),
-      endDate: new Date(now.getFullYear(), now.getMonth(), 0),
-      status: 'active',
-      priceSnapshot: services[0].price,
-      payments: {
-        create: {
-          memberId: members[6].id,
-          amount: services[0].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth() - 1, 7),
-          method: 'bank_transfer',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: manager.id,
-        },
-      },
-    },
-  });
+  // Member 6: Solomon - Gym, active (paid bank transfer)
+  await createSubWithPayment(6, gymId, -1, 0, 'active', 1500, { method: 'bank_transfer', dayOffset: -1, createdBy: managerId });
 
   // Member 7: Frehiwot - Karate, active (no payment yet - pending)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[7].id,
-      serviceId: services[1].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[1].price,
-    },
-  });
+  await createSubWithPayment(7, karateId, 0, 1, 'active', 2000);
 
   // Member 8: Bereket - Gym, cancelled
-  await prisma.subscription.create({
-    data: {
-      memberId: members[8].id,
-      serviceId: services[0].id,
-      startDate: new Date(now.getFullYear(), now.getMonth() - 3, 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() - 2, 0),
-      status: 'cancelled',
-      priceSnapshot: services[0].price,
-      notes: 'Cancelled at member request',
-    },
-  });
+  await createSubWithPayment(8, gymId, -3, -2, 'cancelled', 1500, undefined, 'Cancelled at member request');
 
   // Member 9: Selamawit - Gym + Aerobics, both active (paid cash for both)
-  await prisma.subscription.create({
-    data: {
-      memberId: members[9].id,
-      serviceId: services[0].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[0].price,
-      payments: {
-        create: {
-          memberId: members[9].id,
-          amount: services[0].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth(), 2),
-          method: 'cash',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: owner.id,
-        },
-      },
-    },
+  await createSubWithPayment(9, gymId, 0, 1, 'active', 1500, { method: 'cash', dayOffset: 0, createdBy: ownerId });
+  await createSubWithPayment(9, aerobicsId, 0, 1, 'active', 1200, { method: 'cash', dayOffset: 0, createdBy: managerId });
+
+  console.log('Created 11 subscriptions and 8 payments');
+
+  // ── Update member statuses based on subscriptions (for seed data integrity) ──
+  for (let i = 0; i < members.length; i++) {
+    const subsSnap = await adminDb.collection('subscriptions')
+      .where('memberId', '==', members[i])
+      .get();
+    const subs = subsSnap.docs.map((d) => d.data() as { endDate: string; status: string });
+    const status = computeMemberStatus(subs);
+    await adminDb.collection('members').doc(members[i]).update({ status, updatedAt: ts });
+  }
+
+  // ── Create 5 audit logs ──
+  const auditLogs = [
+    { userId: ownerId, action: 'user.create', entity: 'user', entityId: managerId, details: JSON.stringify({ email: 'manager@fcms.com', role: 'manager' }) },
+    { userId: ownerId, action: 'service.create', entity: 'service', details: JSON.stringify({ services: ['Gym', 'Karate', 'Aerobics'] }) },
+    { userId: managerId, action: 'member.create', entity: 'member', details: JSON.stringify({ count: members.length }) },
+    { userId: ownerId, action: 'subscription.create', entity: 'subscription', details: JSON.stringify({ info: 'Initial seed data' }) },
+    { userId: managerId, action: 'payment.create', entity: 'payment', details: JSON.stringify({ info: 'Initial seed data - payments recorded' }) },
+  ];
+
+  const auditBatch = adminDb.batch();
+  auditLogs.forEach((log) => {
+    const ref = adminDb.collection('auditLogs').doc();
+    auditBatch.set(ref, {
+      userId: log.userId || null,
+      action: log.action,
+      details: log.details || null,
+      entity: log.entity || null,
+      entityId: log.entityId || null,
+      createdAt: ts,
+    });
   });
+  await auditBatch.commit();
 
-  await prisma.subscription.create({
-    data: {
-      memberId: members[9].id,
-      serviceId: services[2].id,
-      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-      status: 'active',
-      priceSnapshot: services[2].price,
-      payments: {
-        create: {
-          memberId: members[9].id,
-          amount: services[2].price,
-          paymentDate: new Date(now.getFullYear(), now.getMonth(), 2),
-          method: 'cash',
-          receiptNumber: generateReceiptNumber(),
-          createdBy: manager.id,
-        },
-      },
-    },
-  });
-
-  console.log('Created sample subscriptions and payments');
-
-  // Create some audit logs
-  await prisma.auditLog.createMany({
-    data: [
-      {
-        userId: owner.id,
-        action: 'user.create',
-        entity: 'user',
-        entityId: manager.id,
-        details: JSON.stringify({ email: manager.email, role: manager.role }),
-      },
-      {
-        userId: owner.id,
-        action: 'service.create',
-        entity: 'service',
-        details: JSON.stringify({ services: ['Gym', 'Karate', 'Aerobics'] }),
-      },
-      {
-        userId: manager.id,
-        action: 'member.create',
-        entity: 'member',
-        details: JSON.stringify({ count: members.length }),
-      },
-      {
-        userId: owner.id,
-        action: 'subscription.create',
-        entity: 'subscription',
-        details: JSON.stringify({ info: 'Initial seed data' }),
-      },
-      {
-        userId: manager.id,
-        action: 'payment.create',
-        entity: 'payment',
-        details: JSON.stringify({ info: 'Initial seed data - payments recorded' }),
-      },
-    ],
-  });
-
-  console.log('Created audit logs');
+  console.log('Created 5 audit logs');
   console.log('Seeding complete!');
 }
 
-main()
-  .catch((e) => {
-    console.error('Seeding failed:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((e) => {
+  console.error('Seeding failed:', e);
+  process.exit(1);
+});

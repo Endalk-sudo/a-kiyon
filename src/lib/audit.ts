@@ -1,39 +1,24 @@
-import { Prisma } from '@prisma/client';
-import { db } from '@/lib/db';
+import { db } from './db';
 
-export async function createAuditLog(params: {
+interface AuditParams {
   userId?: string;
   action: string;
   details?: Record<string, unknown>;
   entity?: string;
   entityId?: string;
-}) {
+}
+
+export async function createAuditLog(params: AuditParams): Promise<void> {
   try {
-    await db.auditLog.create({
-      data: {
-        userId: params.userId,
-        action: params.action,
-        details: params.details ? JSON.stringify(params.details) : null,
-        entity: params.entity,
-        entityId: params.entityId,
-      },
+    await db.collection('auditLogs').add({
+      userId: params.userId || null,
+      action: params.action,
+      details: params.details ? JSON.stringify(params.details) : null,
+      entity: params.entity || null,
+      entityId: params.entityId || null,
+      createdAt: new Date().toISOString(),
     });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2003'
-    ) {
-      await db.auditLog.create({
-        data: {
-          userId: null,
-          action: params.action,
-          details: params.details ? JSON.stringify(params.details) : null,
-          entity: params.entity,
-          entityId: params.entityId,
-        },
-      });
-    } else {
-      throw error;
-    }
+  } catch {
+    // silent — never crash the main operation
   }
 }
