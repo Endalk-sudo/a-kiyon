@@ -7,6 +7,8 @@ import { MemberAvatar } from '@/components/member-avatar';
 import { PhotoCapture } from '@/components/photo-capture';
 import { formatCurrency, formatDate, formatMemberName, getInitials } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 
@@ -177,6 +179,7 @@ const PAGE_LIMIT = 20;
 
 export function MembersPage() {
   const session = useAppStore((s) => s.session);
+  const locale = useAppStore((s) => s.locale);
   const isMobile = useIsMobile();
 
   const isOwner = session?.role === 'owner';
@@ -215,6 +218,7 @@ export function MembersPage() {
   // Form data
   const [formData, setFormData] = useState<MemberFormData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof MemberFormData, string>>>({});
+  const [subscriptionErrors, setSubscriptionErrors] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Optional subscription on create
@@ -246,7 +250,7 @@ export function MembersPage() {
         page: prev.page,
       }));
     } catch (err) {
-      toast.error('Failed to load members');
+      toast.error(t(locale, 'Failed to load members', 'አባላትን መጫን አልተሳካም'));
     } finally {
       setLoading(false);
     }
@@ -278,7 +282,7 @@ export function MembersPage() {
       const detail = await membersApi.get(id) as MemberDetail;
       setMemberDetail(detail);
     } catch {
-      toast.error('Failed to load member details');
+      toast.error(t(locale, 'Failed to load member details', 'የአባል ዝርዝሮችን መጫን አልተሳካም'));
     } finally {
       setDetailLoading(false);
     }
@@ -329,23 +333,44 @@ export function MembersPage() {
     setNewPaymentDate('');
     setNewPaymentDateIso(null);
     setNewSubscriptionNotes('');
+    setSubscriptionErrors(null);
     setAddDialogOpen(true);
     servicesApi.list({ includeInactive: false }).then((res) => {
       setAvailableServices((res as { data: Array<{ id: string; name: string; price: number; duration: number }> }).data || []);
-    }).catch(() => {});
+    }).catch(() => toast.error(t(locale, 'Failed to load services', 'አገልግሎቶችን መጫን አልተሳካም')));
   };
 
   // ─── Form Validation ────────────────────────────────────────────────────
 
   const validateForm = (data: MemberFormData): boolean => {
     const errors: Partial<Record<keyof MemberFormData, string>> = {};
-    if (!data.firstName.trim()) errors.firstName = 'First name is required';
-    if (!data.lastName.trim()) errors.lastName = 'Last name is required';
+    if (!data.firstName.trim()) errors.firstName = t(locale, 'First name is required', 'ስም ያስፈልጋል');
+    if (!data.lastName.trim()) errors.lastName = t(locale, 'Last name is required', 'የአባት ስም ያስፈልጋል');
+    if (data.phone.trim() && !/^\+251\d{9}$/.test(data.phone.trim())) {
+      errors.phone = t(locale, 'Phone must be in format +251XXXXXXXXX', 'ስልክ ቁጥር በ+251 መቅረብ አለበት');
+    }
+    if (data.emergencyContact.trim() && data.emergencyContact.trim().length < 2) {
+      errors.emergencyContact = t(locale, 'Emergency contact name is too short', 'የአደጋ ጊዜ እውቂያ ስም በጣም አጭር ነው');
+    }
+    if (data.address.length > 256) {
+      errors.address = t(locale, 'Address must be under 256 characters', 'አድራሻ ከ256 ቁምፊ መብለጥ የለበትም');
+    }
+    if (data.notes.length > 512) {
+      errors.notes = t(locale, 'Notes must be under 512 characters', 'ማስታወሻ ከ512 ቁምፊ መብለጥ የለበትም');
+    }
     if (data.weight && (isNaN(Number(data.weight)) || Number(data.weight) <= 0)) {
-      errors.weight = 'Weight must be a positive number';
+      errors.weight = t(locale, 'Weight must be a positive number', 'ክብደት አዎንታዊ ቁጥር መሆን አለበት');
     }
     if (data.height && (isNaN(Number(data.height)) || Number(data.height) <= 0)) {
-      errors.height = 'Height must be a positive number';
+      errors.height = t(locale, 'Height must be a positive number', 'ቁመት አዎንታዊ ቁጥር መሆን አለበት');
+    }
+    if (data.bloodType && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(data.bloodType)) {
+      errors.bloodType = t(locale, 'Select a valid blood type', 'ትክክለኛ የደም አይነት ይምረጡ');
+    }
+    if (addWithSubscription && !newServiceId) {
+      setSubscriptionErrors(t(locale, 'Please select a service', 'እባክዎ አገልግሎት ይምረጡ'));
+    } else {
+      setSubscriptionErrors(null);
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -376,12 +401,12 @@ export function MembersPage() {
         if (newSubscriptionNotes) payload.subscriptionNotes = newSubscriptionNotes;
       }
       await membersApi.create(payload);
-      toast.success(addWithSubscription ? 'Member created and subscribed successfully' : 'Member created successfully');
+      toast.success(addWithSubscription ? t(locale, 'Member created and subscribed successfully', 'አባል ተፈጥሯል እና ምዝገባ ተሰራ') : t(locale, 'Member created successfully', 'አባል በተሳካ ሁኔታ ተፈጥሯል'));
       setAddDialogOpen(false);
       setFormData(emptyFormData);
       fetchMembers();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create member');
+      toast.error(sanitizeError(err, locale, 'Failed to create member', 'አባል መፍጠር አልተሳካም'));
     } finally {
       setSubmitting(false);
     }
@@ -403,11 +428,11 @@ export function MembersPage() {
         emergencyContact: formData.emergencyContact.trim() || null,
         notes: formData.notes.trim() || null,
       });
-      toast.success('Member updated successfully');
+      toast.success(t(locale, 'Member updated successfully', 'አባል በተሳካ ሁኔታ ዘምኗል'));
       setEditDialogOpen(false);
       fetchMembers();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update member');
+      toast.error(sanitizeError(err, locale, 'Failed to update member', 'አባል ማዘመን አልተሳካም'));
     } finally {
       setSubmitting(false);
     }
@@ -417,11 +442,11 @@ export function MembersPage() {
     if (!selectedMember) return;
     try {
       await membersApi.delete(selectedMember.id);
-      toast.success('Member deleted successfully');
+      toast.success(t(locale, 'Member deleted successfully', 'አባል በተሳካ ሁኔታ ተሰርዟል'));
       setDeleteDialogOpen(false);
       fetchMembers();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete member');
+      toast.error(sanitizeError(err, locale, 'Failed to delete member', 'አባል መሰረዝ አልተሳካም'));
     }
   };
 
@@ -429,11 +454,11 @@ export function MembersPage() {
     if (!selectedMember) return;
     try {
       await membersApi.restore(selectedMember.id);
-      toast.success('Member restored successfully');
+      toast.success(t(locale, 'Member restored successfully', 'አባል በተሳካ ሁኔታ ተመልሷል'));
       setRestoreDialogOpen(false);
       fetchMembers();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to restore member');
+      toast.error(sanitizeError(err, locale, 'Failed to restore member', 'አባል መመለስ አልተሳካም'));
     }
   };
 
@@ -676,6 +701,7 @@ export function MembersPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {subscriptionErrors && <p className="text-xs text-destructive">{subscriptionErrors}</p>}
                 </div>
                 {newServiceId && (() => {
                   const svc = availableServices.find((s) => s.id === newServiceId);
@@ -860,10 +886,10 @@ export function MembersPage() {
                               onClick={async () => {
                                 try {
                                   const result = await subscriptionsApi.renew(sub.id);
-                                  toast.success(`Subscription renewed! Payment of ${formatCurrency(result.subscription.priceSnapshot || sub.priceSnapshot)} has been recorded.`);
+                                  toast.success(t(locale, `Subscription renewed! Payment of ${formatCurrency(result.subscription.priceSnapshot || sub.priceSnapshot)} has been recorded.`, `ምዝገባ ታድሷል! ክፍያ ተመዝግቧል`));
                                   fetchMemberDetail(memberDetail.id);
                                 } catch (err) {
-                                  toast.error(err instanceof Error ? err.message : 'Failed to renew subscription');
+                                  toast.error(sanitizeError(err, locale, 'Failed to renew subscription', 'ምዝገባ ማደስ አልተሳካም'));
                                 }
                               }}
                             >
@@ -1023,22 +1049,24 @@ function MemberForm({ formData, setFormData, formErrors }: {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="firstName">First Name *</Label>
-            <Input id="firstName" value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} placeholder="First name" />
+            <Input id="firstName" value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} placeholder="First name" className={formErrors.firstName ? 'border-destructive' : ''} />
             {formErrors.firstName && <p className="text-xs text-destructive">{formErrors.firstName}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="lastName">Last Name *</Label>
-            <Input id="lastName" value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} placeholder="Last name" />
+            <Input id="lastName" value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} placeholder="Last name" className={formErrors.lastName ? 'border-destructive' : ''} />
             {formErrors.lastName && <p className="text-xs text-destructive">{formErrors.lastName}</p>}
           </div>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="phone">Phone</Label>
-          <Input id="phone" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="+251..." />
+          <Input id="phone" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="+251..." className={formErrors.phone ? 'border-destructive' : ''} />
+          {formErrors.phone && <p className="text-xs text-destructive">{formErrors.phone}</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="address">Address</Label>
-          <Input id="address" value={formData.address} onChange={(e) => updateField('address', e.target.value)} placeholder="Street, City" />
+          <Input id="address" value={formData.address} onChange={(e) => updateField('address', e.target.value)} placeholder="Street, City" className={formErrors.address ? 'border-destructive' : ''} />
+          {formErrors.address && <p className="text-xs text-destructive">{formErrors.address}</p>}
         </div>
       </div>
 
@@ -1050,12 +1078,12 @@ function MemberForm({ formData, setFormData, formErrors }: {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="weight">Weight (kg)</Label>
-            <Input id="weight" type="number" step="0.1" value={formData.weight} onChange={(e) => updateField('weight', e.target.value)} placeholder="70" />
+            <Input id="weight" type="number" step="0.1" value={formData.weight} onChange={(e) => updateField('weight', e.target.value)} placeholder="70" className={formErrors.weight ? 'border-destructive' : ''} />
             {formErrors.weight && <p className="text-xs text-destructive">{formErrors.weight}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="height">Height (cm)</Label>
-            <Input id="height" type="number" step="0.1" value={formData.height} onChange={(e) => updateField('height', e.target.value)} placeholder="175" />
+            <Input id="height" type="number" step="0.1" value={formData.height} onChange={(e) => updateField('height', e.target.value)} placeholder="175" className={formErrors.height ? 'border-destructive' : ''} />
             {formErrors.height && <p className="text-xs text-destructive">{formErrors.height}</p>}
           </div>
           <div className="space-y-1.5">
@@ -1068,6 +1096,7 @@ function MemberForm({ formData, setFormData, formErrors }: {
                 ))}
               </SelectContent>
             </Select>
+            {formErrors.bloodType && <p className="text-xs text-destructive">{formErrors.bloodType}</p>}
           </div>
         </div>
         {/* BMI Preview */}
@@ -1086,11 +1115,13 @@ function MemberForm({ formData, setFormData, formErrors }: {
         <h4 className="text-sm font-semibold text-muted-foreground">Additional Information</h4>
         <div className="space-y-1.5">
           <Label htmlFor="emergencyContact">Emergency Contact</Label>
-          <Input id="emergencyContact" value={formData.emergencyContact} onChange={(e) => updateField('emergencyContact', e.target.value)} placeholder="Name and phone number" />
+          <Input id="emergencyContact" value={formData.emergencyContact} onChange={(e) => updateField('emergencyContact', e.target.value)} placeholder="Name and phone number" className={formErrors.emergencyContact ? 'border-destructive' : ''} />
+          {formErrors.emergencyContact && <p className="text-xs text-destructive">{formErrors.emergencyContact}</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="notes">Notes</Label>
-          <Textarea id="notes" value={formData.notes} onChange={(e) => updateField('notes', e.target.value)} placeholder="Any additional notes..." rows={2} />
+          <Textarea id="notes" value={formData.notes} onChange={(e) => updateField('notes', e.target.value)} placeholder="Any additional notes..." rows={2} className={formErrors.notes ? 'border-destructive' : ''} />
+          {formErrors.notes && <p className="text-xs text-destructive">{formErrors.notes}</p>}
         </div>
       </div>
     </div>

@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { subscriptionsApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import { useAppStore } from '@/lib/store';
 import {
   Table,
@@ -131,6 +133,7 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
 
 export function SubscriptionsPage() {
   const session = useAppStore((s) => s.session);
+  const locale = useAppStore((s) => s.locale);
 
   // Data state
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -174,6 +177,7 @@ export function SubscriptionsPage() {
       setSubscriptions(response.data);
       setPagination(response.pagination);
     } catch (error) {
+      toast.error(sanitizeError(error, locale, 'Failed to load subscriptions', 'ምዝገባዎችን መጫን አልተሳካም'));
       console.error('Failed to fetch subscriptions:', error);
     } finally {
       setLoading(false);
@@ -198,12 +202,12 @@ export function SubscriptionsPage() {
     setCancelling(true);
     try {
       await subscriptionsApi.update(subscriptionToCancel.id, { status: 'cancelled' });
-      toast.success('Subscription cancelled');
+      toast.success(t(locale, 'Subscription cancelled', 'ምዝገባ ተሰርዟል'));
       setCancelDialogOpen(false);
       setSubscriptionToCancel(null);
       fetchSubscriptions(pagination.page);
     } catch (error) {
-      toast.error('Failed to cancel subscription');
+      toast.error(t(locale, 'Failed to cancel subscription', 'ምዝገባ መሰረዝ አልተሳካም'));
       console.error('Failed to cancel subscription:', error);
     } finally {
       setCancelling(false);
@@ -216,14 +220,12 @@ export function SubscriptionsPage() {
     setRenewing(true);
     try {
       const result = await subscriptionsApi.renew(subscriptionToRenew.id, { paymentMethod: renewPaymentMethod });
-      toast.success(
-        `Subscription renewed! Payment of ${formatCurrency(result.payment?.amount || subscriptionToRenew.priceSnapshot)} recorded. Receipt: ${result.payment?.receiptNumber || ''}`
-      );
+      toast.success(t(locale, `Subscription renewed! Payment recorded. Receipt: ${result.payment?.receiptNumber || ''}`, `ምዝገባ ታድሷል! ደረሰኝ ቁጥር: ${result.payment?.receiptNumber || ''}`));
       setRenewDialogOpen(false);
       setSubscriptionToRenew(null);
       fetchSubscriptions(pagination.page);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to renew subscription');
+      toast.error(sanitizeError(error, locale, 'Failed to renew subscription', 'ምዝገባ ማደስ አልተሳካም'));
     } finally {
       setRenewing(false);
     }

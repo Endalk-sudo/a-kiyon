@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { db, getDocById, getDocs } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { paginatedResponse, apiResponse } from '@/lib/api';
@@ -7,6 +7,7 @@ import { createMemberSchema } from '@/lib/schemas';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
 import { listMembers, createMember } from '@/services/member.service';
 import { autoExpireSubscriptions } from '@/services/subscription.service';
+import { generateReceiptNumber } from '@/services/payment.service';
 import { NextRequest } from 'next/server';
 
 export const GET = apiHandler(async (request: NextRequest) => {
@@ -45,6 +46,13 @@ export const POST = apiHandler(async (request: NextRequest) => {
     const service = { id: serviceSnap.id, ...serviceSnap.data() } as { id: string; name: string; nameAm?: string; price: number; duration: number; isActive: boolean };
     if (!service.isActive) throw new Error('Service is not active');
 
+    const existingActive = await getDocs('subscriptions', [
+      ['memberId', '==', member.id],
+      ['serviceId', '==', data.serviceId],
+      ['status', '==', 'active'],
+    ]);
+    if (existingActive.length > 0) throw new Error('Member already has an active subscription for this service');
+
     const startDate = new Date();
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + service.duration);
@@ -61,7 +69,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
       }
     }
 
-    const receiptNumber = `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+    const receiptNumber = generateReceiptNumber();
 
     const { subscriptionId, paymentId } = await db.runTransaction(async (tx) => {
       const subRef = db.collection('subscriptions').doc();

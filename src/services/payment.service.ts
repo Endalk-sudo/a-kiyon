@@ -92,13 +92,29 @@ export async function voidPayment(id: string, voidedBy: string) {
 
   const [member, subscription] = await Promise.all([
     getDocById<{ firstName: string; lastName: string; photo: string | null }>('members', payment.memberId),
-    getDocById<{ priceSnapshot: number; serviceId: string }>('subscriptions', payment.subscriptionId),
+    getDocById<{ priceSnapshot: number; serviceId: string; status: string }>('subscriptions', payment.subscriptionId),
   ]);
 
   let serviceName: string | undefined;
   if (subscription) {
     const service = await getDocById<{ name: string }>('services', subscription.serviceId);
     serviceName = service?.name;
+
+    const otherPayments = await countDocs('payments', [
+      ['subscriptionId', '==', payment.subscriptionId],
+      ['isVoided', '==', false],
+    ]);
+    if (otherPayments === 0 && subscription.status === 'active') {
+      await updateDoc('subscriptions', payment.subscriptionId, {
+        status: 'cancelled',
+        hasVoidedPayment: true,
+        voidedPaymentNote: `Cancelled — sole payment ${payment.receiptNumber} voided`,
+      });
+    } else {
+      await updateDoc('subscriptions', payment.subscriptionId, {
+        hasVoidedPayment: true,
+      });
+    }
   }
 
   return {

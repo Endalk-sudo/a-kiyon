@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { servicesApi } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +21,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Plus,
   Pencil,
@@ -73,8 +85,13 @@ export function ServicesPage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [form, setForm] = useState<ServiceFormData>(emptyForm);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [serviceToToggle, setServiceToToggle] = useState<Service | null>(null);
 
   const fetchServices = useCallback(async () => {
     try {
@@ -86,9 +103,7 @@ export function ServicesPage() {
       setServices(data);
     } catch (err) {
       toast.error(
-        locale === 'en'
-          ? 'Failed to load services'
-          : 'አገልግሎቶችን መጫን አልተሳካም'
+        sanitizeError(err, locale, 'Failed to load services', 'አገልግሎቶችን መጫን አልተሳካም')
       );
     } finally {
       setLoading(false);
@@ -99,13 +114,33 @@ export function ServicesPage() {
     fetchServices();
   }, [fetchServices]);
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const filteredServices = services.filter((s) => {
+    if (!searchDebounced) return true;
+    const term = searchDebounced.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(term) ||
+      (s.nameAm || '').toLowerCase().includes(term) ||
+      (s.description || '').toLowerCase().includes(term)
+    );
+  });
+
   const openAddDialog = () => {
     setForm(emptyForm);
+    setFormErrors({});
     setShowAddDialog(true);
   };
 
   const openEditDialog = (service: Service) => {
     setEditingService(service);
+    setFormErrors({});
     setForm({
       name: service.name,
       nameAm: service.nameAm || '',
@@ -119,26 +154,27 @@ export function ServicesPage() {
   };
 
   const handleAddService = async () => {
+    const errors: Record<string, string> = {};
     if (!form.name.trim()) {
-      toast.error(locale === 'en' ? 'Name is required' : 'ስም ያስፈልጋል');
-      return;
+      errors.name = t(locale, 'Name is required', 'ስም ያስፈልጋል');
+    }
+    if (form.nameAm.length > 256) {
+      errors.nameAm = t(locale, 'Amharic name must be under 256 characters', 'የአማርኛ ስም ከ256 ቁምፊ መብለጥ የለበትም');
+    }
+    if (form.description.length > 1024) {
+      errors.description = t(locale, 'Description must be under 1024 characters', 'መግለጫ ከ1024 ቁምፊ መብለጥ የለበትም');
+    }
+    if (form.descriptionAm.length > 1024) {
+      errors.descriptionAm = t(locale, 'Amharic description must be under 1024 characters', 'የአማርኛ መግለጫ ከ1024 ቁምፊ መብለጥ የለበትም');
     }
     if (!form.price || Number(form.price) < 0) {
-      toast.error(
-        locale === 'en'
-          ? 'Valid price is required'
-          : 'ትክክለኛ ዋጋ ያስፈልጋል'
-      );
-      return;
+      errors.price = t(locale, 'Valid price is required', 'ትክክለኛ ዋጋ ያስፈልጋል');
     }
     if (!form.duration || Number(form.duration) < 1) {
-      toast.error(
-        locale === 'en'
-          ? 'Duration must be at least 1 day'
-          : 'ርዝመት ቢያንስ 1 ቀን መሆን አለበት'
-      );
-      return;
+      errors.duration = t(locale, 'Duration must be at least 1 day', 'ርዝመት ቢያንስ 1 ቀን መሆን አለበት');
     }
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     try {
       setSubmitting(true);
@@ -151,18 +187,12 @@ export function ServicesPage() {
         duration: Number(form.duration),
         isActive: form.isActive,
       });
-      toast.success(
-        locale === 'en'
-          ? 'Service created successfully'
-          : 'አገልግሎት በተሳካ ሁኔታ ተፈጥሯል'
-      );
+      toast.success(t(locale, 'Service created successfully', 'አገልግሎት በተሳካ ሁኔታ ተፈጥሯል'));
       setShowAddDialog(false);
       fetchServices();
     } catch (err) {
       toast.error(
-        locale === 'en'
-          ? 'Failed to create service'
-          : 'አገልግሎት መፍጠር አልተሳካም'
+        sanitizeError(err, locale, 'Failed to create service', 'አገልግሎት መፍጠር አልተሳካም')
       );
     } finally {
       setSubmitting(false);
@@ -171,26 +201,27 @@ export function ServicesPage() {
 
   const handleEditService = async () => {
     if (!editingService) return;
+    const errors: Record<string, string> = {};
     if (!form.name.trim()) {
-      toast.error(locale === 'en' ? 'Name is required' : 'ስም ያስፈልጋል');
-      return;
+      errors.name = t(locale, 'Name is required', 'ስም ያስፈልጋል');
+    }
+    if (form.nameAm.length > 256) {
+      errors.nameAm = t(locale, 'Amharic name must be under 256 characters', 'የአማርኛ ስም ከ256 ቁምፊ መብለጥ የለበትም');
+    }
+    if (form.description.length > 1024) {
+      errors.description = t(locale, 'Description must be under 1024 characters', 'መግለጫ ከ1024 ቁምፊ መብለጥ የለበትም');
+    }
+    if (form.descriptionAm.length > 1024) {
+      errors.descriptionAm = t(locale, 'Amharic description must be under 1024 characters', 'የአማርኛ መግለጫ ከ1024 ቁምፊ መብለጥ የለበትም');
     }
     if (!form.price || Number(form.price) < 0) {
-      toast.error(
-        locale === 'en'
-          ? 'Valid price is required'
-          : 'ትክክለኛ ዋጋ ያስፈልጋል'
-      );
-      return;
+      errors.price = t(locale, 'Valid price is required', 'ትክክለኛ ዋጋ ያስፈልጋል');
     }
     if (!form.duration || Number(form.duration) < 1) {
-      toast.error(
-        locale === 'en'
-          ? 'Duration must be at least 1 day'
-          : 'ርዝመት ቢያንስ 1 ቀን መሆን አለበት'
-      );
-      return;
+      errors.duration = t(locale, 'Duration must be at least 1 day', 'ርዝመት ቢያንስ 1 ቀን መሆን አለበት');
     }
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     try {
       setSubmitting(true);
@@ -203,19 +234,13 @@ export function ServicesPage() {
         duration: Number(form.duration),
         isActive: form.isActive,
       });
-      toast.success(
-        locale === 'en'
-          ? 'Service updated successfully'
-          : 'አገልግሎት በተሳካ ሁኔታ ዘምኗል'
-      );
+      toast.success(t(locale, 'Service updated successfully', 'አገልግሎት በተሳካ ሁኔታ ዘምኗል'));
       setShowEditDialog(false);
       setEditingService(null);
       fetchServices();
     } catch (err) {
       toast.error(
-        locale === 'en'
-          ? 'Failed to update service'
-          : 'አገልግሎት ማዘመን አልተሳካም'
+        sanitizeError(err, locale, 'Failed to update service', 'አገልግሎት ማዘመን አልተሳካም')
       );
     } finally {
       setSubmitting(false);
@@ -224,6 +249,17 @@ export function ServicesPage() {
 
   const handleToggleActive = async (service: Service) => {
     const newActiveState = !service.isActive;
+
+    if (!newActiveState) {
+      setServiceToToggle(service);
+      setDeactivateDialogOpen(true);
+      return;
+    }
+
+    await executeToggleActive(service, true);
+  };
+
+  const executeToggleActive = async (service: Service, newActiveState: boolean) => {
     const action = newActiveState
       ? locale === 'en'
         ? 'activate'
@@ -248,9 +284,7 @@ export function ServicesPage() {
       fetchServices();
     } catch (err) {
       toast.error(
-        locale === 'en'
-          ? `Failed to ${action} service`
-          : `አገልግሎት ${action} አልተሳካም`
+        sanitizeError(err, locale, `Failed to ${action} service`, 'አገልግሎቱን ማሻሻል አልተሳካም')
       );
     }
   };
@@ -266,11 +300,18 @@ export function ServicesPage() {
           <Input
             id="name"
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, name: e.target.value });
+              setFormErrors((prev) => ({ ...prev, name: '' }));
+            }}
             placeholder={
               locale === 'en' ? 'e.g. Monthly Membership' : 'ለምሳሌ ወርሃዊ አባልነት'
             }
+            className={formErrors.name ? 'border-destructive' : ''}
           />
+          {formErrors.name && (
+            <p className="text-xs text-destructive">{formErrors.name}</p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="nameAm">
@@ -279,10 +320,15 @@ export function ServicesPage() {
           <Input
             id="nameAm"
             value={form.nameAm}
-            onChange={(e) => setForm({ ...form, nameAm: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, nameAm: e.target.value });
+              setFormErrors((prev) => ({ ...prev, nameAm: '' }));
+            }}
             placeholder="ለምሳሌ ወርሃዊ አባልነት"
-            dir="rtl"
           />
+          {formErrors.nameAm && (
+            <p className="text-xs text-destructive">{formErrors.nameAm}</p>
+          )}
         </div>
       </div>
 
@@ -301,6 +347,9 @@ export function ServicesPage() {
           }
           rows={3}
         />
+        {formErrors.description && (
+          <p className="text-xs text-destructive">{formErrors.description}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -315,8 +364,10 @@ export function ServicesPage() {
           }
           placeholder="አገልግሎቱን ይግለጹ..."
           rows={3}
-          dir="rtl"
         />
+        {formErrors.descriptionAm && (
+          <p className="text-xs text-destructive">{formErrors.descriptionAm}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -331,9 +382,16 @@ export function ServicesPage() {
             min="0"
             step="0.01"
             value={form.price}
-            onChange={(e) => setForm({ ...form, price: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, price: e.target.value });
+              setFormErrors((prev) => ({ ...prev, price: '' }));
+            }}
             placeholder="0.00"
+            className={formErrors.price ? 'border-destructive' : ''}
           />
+          {formErrors.price && (
+            <p className="text-xs text-destructive">{formErrors.price}</p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="duration">
@@ -346,9 +404,16 @@ export function ServicesPage() {
             min="1"
             step="1"
             value={form.duration}
-            onChange={(e) => setForm({ ...form, duration: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, duration: e.target.value });
+              setFormErrors((prev) => ({ ...prev, duration: '' }));
+            }}
             placeholder="30"
+            className={formErrors.duration ? 'border-destructive' : ''}
           />
+          {formErrors.duration && (
+            <p className="text-xs text-destructive">{formErrors.duration}</p>
+          )}
         </div>
       </div>
 
@@ -386,6 +451,12 @@ export function ServicesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Input
+            placeholder={locale === 'en' ? 'Search services...' : 'አገልግሎቶችን ፈልግ...'}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-48 sm:w-56"
+          />
           {isOwner && (
             <div className="flex items-center gap-2">
               <Switch
@@ -415,7 +486,7 @@ export function ServicesPage() {
       )}
 
       {/* Empty State */}
-      {!loading && services.length === 0 && (
+      {!loading && filteredServices.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Dumbbell className="h-12 w-12 text-muted-foreground mb-4" />
@@ -443,7 +514,7 @@ export function ServicesPage() {
       {/* Services Grid */}
       {!loading && services.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {services.map((service) => (
+          {filteredServices.map((service) => (
             <Card
               key={service.id}
               className={!service.isActive ? 'opacity-60' : ''}
@@ -603,6 +674,38 @@ export function ServicesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Deactivate Confirmation Dialog */}
+      <AlertDialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {locale === 'en' ? 'Deactivate Service' : 'አገልግሎት አጥፋ'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {locale === 'en'
+                ? `Are you sure you want to deactivate "${serviceToToggle?.name}"? Existing subscriptions will not be affected, but the service won't be available for new subscriptions.`
+                : `"${serviceToToggle?.name}" አገልግሎቱን ማጥፋት እርግጠኛ ነዎት? ነባር ደንበኞች አይጎዱም, ነገር ግን አገልግሎቱ ለአዳዲስ ደንበኞች አይገኝም.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {locale === 'en' ? 'Cancel' : 'ሰርዝ'}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (serviceToToggle) {
+                  await executeToggleActive(serviceToToggle, false);
+                }
+                setDeactivateDialogOpen(false);
+                setServiceToToggle(null);
+              }}
+            >
+              {locale === 'en' ? 'Deactivate' : 'አጥፋ'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

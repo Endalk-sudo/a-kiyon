@@ -6,6 +6,8 @@ import { StatusBadge } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName, formatPaymentMethod } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -159,6 +161,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const session = useAppStore((s) => s.session);
   const setCurrentPage = useAppStore((s) => s.setCurrentPage);
+  const locale = useAppStore((s) => s.locale);
   const isOwner = session?.role === 'owner';
 
   const fetchDashboard = useCallback(async () => {
@@ -168,11 +171,11 @@ export function DashboardPage() {
       const result = await dashboardApi.get() as DashboardData;
       setData(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      setError(sanitizeError(err, locale, 'Failed to load dashboard data', 'የዳሽቦርድ መረጃዎችን መጫን አልተሳካም'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     fetchDashboard();
@@ -188,6 +191,7 @@ export function DashboardPage() {
           color: 'text-primary',
           bgColor: 'bg-primary/10',
           description: 'All registered members',
+          navigateTo: 'members' as const,
         },
         {
           title: 'Active Subscriptions',
@@ -196,6 +200,7 @@ export function DashboardPage() {
           color: 'text-emerald-600',
           bgColor: 'bg-emerald-50',
           description: 'Currently active',
+          navigateTo: 'subscriptions' as const,
         },
         {
           title: 'Expiring Soon',
@@ -204,6 +209,7 @@ export function DashboardPage() {
           color: 'text-amber-600',
           bgColor: 'bg-amber-50',
           description: 'Within 7 days',
+          navigateTo: 'subscriptions' as const,
         },
         {
           title: 'Expired',
@@ -212,6 +218,7 @@ export function DashboardPage() {
           color: 'text-red-600',
           bgColor: 'bg-red-50',
           description: 'Needs renewal',
+          navigateTo: 'subscriptions' as const,
         },
       ]
     : [];
@@ -263,7 +270,14 @@ export function DashboardPage() {
           statsCards.map((card) => {
             const Icon = card.icon;
             return (
-              <Card key={card.title} className="relative overflow-hidden">
+              <Card
+                  key={card.title}
+                  className="relative overflow-hidden cursor-pointer transition-colors hover:bg-accent/50"
+                  onClick={() => setCurrentPage(card.navigateTo)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setCurrentPage(card.navigateTo); }}
+                >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardDescription className="text-xs font-medium">
                     {card.title}

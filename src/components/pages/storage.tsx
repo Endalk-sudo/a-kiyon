@@ -17,6 +17,9 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import {
   Database,
   FolderOpen,
@@ -84,6 +87,7 @@ function UsageBar({ used, label }: { used: number; label: string }) {
 }
 
 export function StoragePage() {
+  const locale = useAppStore((s) => s.locale);
   const [data, setData] = useState<StorageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState<string | null>(null);
@@ -94,7 +98,7 @@ export function StoragePage() {
       const result = await apiFetch<StorageData>('/storage');
       setData(result);
     } catch {
-      toast.error('Failed to load storage data');
+      toast.error(t(locale, 'Failed to load storage data', 'የማከማቻ መረጃዎችን መጫን አልተሳካም'));
     } finally {
       setLoading(false);
     }
@@ -113,7 +117,7 @@ export function StoragePage() {
       toast.success(result.message);
       fetchData();
     } catch {
-      toast.error(`Failed to ${label}`);
+      toast.error(t(locale, `Failed to ${label.toLowerCase()}`, `ማጽዳት አልተሳካም`));
     } finally {
       setCleaning(null);
     }

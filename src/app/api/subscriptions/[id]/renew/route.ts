@@ -5,6 +5,7 @@ import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { renewSubscriptionSchema } from '@/lib/schemas';
 import { getSubscription } from '@/services/subscription.service';
+import { generateReceiptNumber } from '@/services/payment.service';
 import { NextRequest } from 'next/server';
 
 // POST /api/subscriptions/[id]/renew - Extend a subscription with a new payment
@@ -31,7 +32,7 @@ export const POST = apiHandler(async (
   const newEndDate = new Date(startDate);
   newEndDate.setDate(newEndDate.getDate() + existing.service.duration);
 
-  const receiptNumber = `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+  const receiptNumber = generateReceiptNumber();
 
   const { paymentId } = await db.runTransaction(async (tx) => {
     const subRef = db.collection('subscriptions').doc(id);

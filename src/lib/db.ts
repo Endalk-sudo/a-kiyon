@@ -93,13 +93,17 @@ export async function updateDoc<T>(
   id: string,
   data: Record<string, unknown>,
 ): Promise<Doc<T> | null> {
-  const existing = await getDocById<T>(collection, id);
-  if (!existing) return null;
-  await db.collection(collection).doc(id).update({
-    ...data,
-    updatedAt: new Date().toISOString(),
-  });
-  return getDocById<T>(collection, id);
+  try {
+    await db.collection(collection).doc(id).update({
+      ...data,
+      updatedAt: new Date().toISOString(),
+    });
+    return getDocById<T>(collection, id);
+  } catch (e: unknown) {
+    const err = e as { code?: number };
+    if (err.code === 5) return null;
+    throw e;
+  }
 }
 
 export async function deleteDoc(collection: string, id: string): Promise<void> {

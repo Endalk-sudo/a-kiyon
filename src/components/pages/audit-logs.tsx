@@ -20,6 +20,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import {
   ChevronLeft,
   ChevronRight,
@@ -73,6 +76,7 @@ const ENTITY_TYPES = [
 ];
 
 export function AuditLogsPage() {
+  const locale = useAppStore((s) => s.locale);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     total: 0,
@@ -111,7 +115,7 @@ export function AuditLogsPage() {
       setLogs(result.data);
       setPagination(result.pagination);
     } catch {
-      toast.error('Failed to load audit logs');
+      toast.error(t(locale, 'Failed to load audit logs', 'የክትትል ምዝግቦችን መጫን አልተሳካም'));
     } finally {
       setLoading(false);
     }

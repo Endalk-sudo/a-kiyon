@@ -1,4 +1,4 @@
-import { db, getDocById } from '@/lib/db';
+import { db, getDocById, getDocs } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { createAuditLog } from '@/lib/audit';
 import { apiResponse, paginatedResponse, apiError } from '@/lib/api';
@@ -6,6 +6,7 @@ import { apiHandler } from '@/lib/api-handler';
 import { createSubscriptionSchema } from '@/lib/schemas';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
 import { listSubscriptions } from '@/services/subscription.service';
+import { generateReceiptNumber } from '@/services/payment.service';
 import { NextRequest } from 'next/server';
 
 // GET /api/subscriptions - List subscriptions with server-side pagination
@@ -41,6 +42,15 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (!service) return apiError('Service not found', 404);
   if (!service.isActive) return apiError('Service is not active');
 
+  const existingActive = await getDocs('subscriptions', [
+    ['memberId', '==', data.memberId],
+    ['serviceId', '==', data.serviceId],
+    ['status', '==', 'active'],
+  ]);
+  if (existingActive.length > 0) {
+    return apiError('Member already has an active subscription for this service');
+  }
+
   let parsedStartDate: Date;
   const dateStr = String(startDate).trim();
   const ethiopianPattern = /^\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*(EC)?$/i;
@@ -68,7 +78,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const parsedEndDate = new Date(parsedStartDate);
   parsedEndDate.setDate(parsedEndDate.getDate() + service.duration);
 
-  const receiptNumber = `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+  const receiptNumber = generateReceiptNumber();
 
   const { subscriptionId, paymentId } = await db.runTransaction(async (tx) => {
     const subRef = db.collection('subscriptions').doc();

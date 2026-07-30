@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { paymentsApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName, formatPaymentMethod } from '@/lib/format';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import { useAppStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -101,6 +103,7 @@ const methodFilters = [
 
 export function PaymentsPage() {
   const session = useAppStore((s) => s.session);
+  const locale = useAppStore((s) => s.locale);
   const isOwner = session?.role === 'owner';
 
   // ---- Table state ----
@@ -134,7 +137,7 @@ export function PaymentsPage() {
         setPayments(result.data || []);
         setPagination(result.pagination || { total: 0, page: 1, limit: 10, totalPages: 0 });
       } catch {
-        toast.error('Failed to load payments');
+        toast.error(t(locale, 'Failed to load payments', 'ክፍያዎችን መጫን አልተሳካም'));
       } finally {
         setLoading(false);
       }
@@ -295,12 +298,12 @@ export function PaymentsPage() {
     setVoiding(true);
     try {
       await paymentsApi.void(voidTarget.id);
-      toast.success('Payment voided successfully');
+      toast.success(t(locale, 'Payment voided successfully', 'ክፍያ በተሳካ ሁኔታ ተሰርዟል'));
       setVoidDialogOpen(false);
       setVoidTarget(null);
       fetchPayments(pagination.page);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to void payment');
+      toast.error(sanitizeError(err, locale, 'Failed to void payment', 'ክፍያ መሰረዝ አልተሳካም'));
     } finally {
       setVoiding(false);
     }

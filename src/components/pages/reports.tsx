@@ -7,6 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import {
   BarChart,
   Bar,
@@ -25,6 +28,7 @@ interface DashboardData {
 }
 
 export function ReportsPage() {
+  const locale = useAppStore((s) => s.locale);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<'members' | 'payments' | null>(null);
@@ -35,28 +39,28 @@ export function ReportsPage() {
         const data = (await dashboardApi.get()) as DashboardData;
         setDashboardData(data);
       } catch {
-        toast.error('Failed to load report data');
+        toast.error(t(locale, 'Failed to load report data', 'የሪፖርት መረጃዎችን መጫን አልተሳካም'));
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [locale]);
 
   const downloadCSV = useCallback(async (type: 'members' | 'payments') => {
     setExporting(type);
     try {
-      const csv = await exportApi[type]({});
-      const blob = new Blob([csv], { type: 'text/csv' });
+      const result = await exportApi[type]({});
+      const blob = new Blob([result], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `${type}_export_${new Date().toISOString().split('T')[0]}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`${type === 'members' ? 'Members' : 'Payments'} CSV exported successfully`);
+      toast.success(t(locale, `${type === 'members' ? 'Members' : 'Payments'} CSV exported successfully`, `${type === 'members' ? 'የአባላት' : 'የክፍያ'} ሪፖርት በተሳካ ሁኔታ ወርዷል`));
     } catch {
-      toast.error(`Failed to export ${type} CSV`);
+      toast.error(t(locale, `Failed to export ${type === 'members' ? 'members' : 'payments'} CSV`, `${type === 'members' ? 'የአባላት' : 'የክፍያ'} ሪፖርት ማውረድ አልተሳካም`));
     } finally {
       setExporting(null);
     }

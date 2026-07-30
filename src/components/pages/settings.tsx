@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usersApi } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,11 +66,14 @@ interface UserItem {
 
 export function SettingsPage() {
   const session = useAppStore((s) => s.session);
+  const locale = useAppStore((s) => s.locale);
   const isOwner = session?.role === 'owner';
 
   // Users list
   const [users, setUsers] = useState<UserItem[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchDebounced, setUserSearchDebounced] = useState('');
 
   // Create user dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -106,7 +111,7 @@ export function SettingsPage() {
       .then((data) => {
         if (data?.firestore && data?.storage) setStorageData(data);
       })
-      .catch(() => {});
+      .catch(() => toast.error(t(locale, 'Failed to load storage data', 'የማከማቻ መረጃዎችን መጫን አልተሳካም')));
   }, [isOwner]);
 
   const fetchUsers = useCallback(async () => {
@@ -116,7 +121,7 @@ export function SettingsPage() {
       const result = (await usersApi.list()) as { data: UserItem[] };
       setUsers(result.data);
     } catch {
-      toast.error('Failed to load users');
+      toast.error(t(locale, 'Failed to load users', 'ተጠቃሚዎችን መጫን አልተሳካም'));
     } finally {
       setUsersLoading(false);
     }
@@ -126,27 +131,50 @@ export function SettingsPage() {
     fetchUsers();
   }, [fetchUsers]);
 
+  // Debounce user search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setUserSearchDebounced(userSearchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userSearchQuery]);
+
+  const filteredUsers = users.filter((u) => {
+    if (!userSearchDebounced) return true;
+    const term = userSearchDebounced.toLowerCase();
+    return (
+      u.name?.toLowerCase().includes(term) ||
+      u.email?.toLowerCase().includes(term) ||
+      u.role?.toLowerCase().includes(term) ||
+      u.phone?.toLowerCase().includes(term)
+    );
+  });
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
     if (!formData.email.trim()) {
-      errors.email = 'Email is required';
+      errors.email = t(locale, 'Email is required', 'ኢሜይል ያስፈልጋል');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Invalid email format';
+      errors.email = t(locale, 'Invalid email format', 'የተሳሳተ የኢሜይል ቅርጸት');
     }
 
     if (!formData.name.trim()) {
-      errors.name = 'Name is required';
+      errors.name = t(locale, 'Name is required', 'ስም ያስፈልጋል');
     }
 
     if (!formData.password) {
-      errors.password = 'Password is required';
+      errors.password = t(locale, 'Password is required', 'የይለፍ ቃል ያስፈልጋል');
     } else if (formData.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
+      errors.password = t(locale, 'Password must be at least 6 characters', 'የይለፍ ቃል ቢያንስ 6 ቁምፊዎች መሆን አለበት');
     }
 
     if (!formData.role) {
-      errors.role = 'Role is required';
+      errors.role = t(locale, 'Role is required', 'ሚና ያስፈልጋል');
+    }
+
+    if (formData.phone.trim() && !/^\+251\d{9}$/.test(formData.phone.trim())) {
+      errors.phone = t(locale, 'Phone must be in format +251XXXXXXXXX', 'ስልክ ቁጥር በ+251 መቅረብ አለበት');
     }
 
     setFormErrors(errors);
@@ -165,14 +193,13 @@ export function SettingsPage() {
         role: formData.role,
         phone: formData.phone.trim() || null,
       });
-      toast.success(`User "${formData.name}" created successfully`);
+      toast.success(t(locale, `User "${formData.name}" created successfully`, `ተጠቃሚ "${formData.name}" በተሳካ ሁኔታ ተፈጥሯል`));
       setFormData({ email: '', name: '', password: '', role: 'manager', phone: '' });
       setFormErrors({});
       setCreateDialogOpen(false);
       fetchUsers();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create user';
-      toast.error(message);
+      toast.error(sanitizeError(error, locale, 'Failed to create user', 'ተጠቃሚ መፍጠር አልተሳካም'));
     } finally {
       setCreating(false);
     }
@@ -212,10 +239,12 @@ export function SettingsPage() {
 
   const validateEditForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!editFormData.email.trim()) errors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email)) errors.email = 'Invalid email format';
-    if (!editFormData.name.trim()) errors.name = 'Name is required';
-    if (editFormData.password && editFormData.password.length < 6) errors.password = 'Password must be at least 6 characters';
+    if (!editFormData.email.trim()) errors.email = t(locale, 'Email is required', 'ኢሜይል ያስፈልጋል');
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email)) errors.email = t(locale, 'Invalid email format', 'የተሳሳተ የኢሜይል ቅርጸት');
+    if (!editFormData.name.trim()) errors.name = t(locale, 'Name is required', 'ስም ያስፈልጋል');
+    if (!editFormData.role) errors.role = t(locale, 'Role is required', 'ሚና ያስፈልጋል');
+    if (editFormData.phone.trim() && !/^\+251\d{9}$/.test(editFormData.phone.trim())) errors.phone = t(locale, 'Phone must be in format +251XXXXXXXXX', 'ስልክ ቁጥር በ+251 መቅረብ አለበት');
+    if (editFormData.password && editFormData.password.length < 6) errors.password = t(locale, 'Password must be at least 6 characters', 'የይለፍ ቃል ቢያንስ 6 ቁምፊዎች መሆን አለበት');
     setEditFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -232,12 +261,12 @@ export function SettingsPage() {
       };
       if (editFormData.password) payload.password = editFormData.password;
       await usersApi.update(editingUser.id, payload);
-      toast.success('User updated successfully');
+      toast.success(t(locale, 'User updated successfully', 'ተጠቃሚ በተሳካ ሁኔታ ዘምኗል'));
       setEditDialogOpen(false);
       setEditingUser(null);
       fetchUsers();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update user');
+      toast.error(sanitizeError(error, locale, 'Failed to update user', 'ተጠቃሚ ማዘመን አልተሳካም'));
     } finally {
       setSaving(false);
     }
@@ -254,12 +283,12 @@ export function SettingsPage() {
     setToggling(true);
     try {
       await usersApi.deactivate(togglingUser.id);
-      toast.success(togglingUser.isActive ? 'User deactivated' : 'User reactivated');
+      toast.success(t(locale, togglingUser.isActive ? 'User deactivated' : 'User reactivated', togglingUser.isActive ? 'ተጠቃሚ ተከልክሏል' : 'ተጠቃሚ ነቅቷል'));
       setToggleDialogOpen(false);
       setTogglingUser(null);
       fetchUsers();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to toggle user status');
+      toast.error(sanitizeError(error, locale, 'Failed to toggle user status', 'የተጠቃሚ ሁኔታ መቀየር አልተሳካም'));
     } finally {
       setToggling(false);
     }
@@ -342,7 +371,14 @@ export function SettingsPage() {
                 </CardTitle>
                 <CardDescription>Manage system users and their roles</CardDescription>
               </div>
-              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Search users..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  className="w-44 sm:w-52"
+                />
+                <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <UserPlus className="mr-2 h-4 w-4" />
@@ -365,10 +401,10 @@ export function SettingsPage() {
                         placeholder="user@example.com"
                         value={formData.email}
                         onChange={(e) => handleFormChange('email', e.target.value)}
-                        className={formErrors.email ? 'border-red-500' : ''}
+                        className={formErrors.email ? 'border-destructive' : ''}
                       />
                       {formErrors.email && (
-                        <p className="text-xs text-red-500">{formErrors.email}</p>
+                        <p className="text-xs text-destructive">{formErrors.email}</p>
                       )}
                     </div>
 
@@ -379,10 +415,10 @@ export function SettingsPage() {
                         placeholder="Full name"
                         value={formData.name}
                         onChange={(e) => handleFormChange('name', e.target.value)}
-                        className={formErrors.name ? 'border-red-500' : ''}
+                        className={formErrors.name ? 'border-destructive' : ''}
                       />
                       {formErrors.name && (
-                        <p className="text-xs text-red-500">{formErrors.name}</p>
+                        <p className="text-xs text-destructive">{formErrors.name}</p>
                       )}
                     </div>
 
@@ -394,10 +430,10 @@ export function SettingsPage() {
                         placeholder="Minimum 6 characters"
                         value={formData.password}
                         onChange={(e) => handleFormChange('password', e.target.value)}
-                        className={formErrors.password ? 'border-red-500' : ''}
+                        className={formErrors.password ? 'border-destructive' : ''}
                       />
                       {formErrors.password && (
-                        <p className="text-xs text-red-500">{formErrors.password}</p>
+                        <p className="text-xs text-destructive">{formErrors.password}</p>
                       )}
                     </div>
 
@@ -407,7 +443,7 @@ export function SettingsPage() {
                         value={formData.role}
                         onValueChange={(value) => handleFormChange('role', value)}
                       >
-                        <SelectTrigger id="create-role" className={formErrors.role ? 'border-red-500' : ''}>
+                        <SelectTrigger id="create-role" className={formErrors.role ? 'border-destructive' : ''}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -416,7 +452,7 @@ export function SettingsPage() {
                         </SelectContent>
                       </Select>
                       {formErrors.role && (
-                        <p className="text-xs text-red-500">{formErrors.role}</p>
+                        <p className="text-xs text-destructive">{formErrors.role}</p>
                       )}
                     </div>
 
@@ -431,7 +467,9 @@ export function SettingsPage() {
                         placeholder="+251 9XX XXX XXX"
                         value={formData.phone}
                         onChange={(e) => handleFormChange('phone', e.target.value)}
+                        className={formErrors.phone ? 'border-destructive' : ''}
                       />
+                      {formErrors.phone && <p className="text-xs text-destructive">{formErrors.phone}</p>}
                     </div>
 
                     <div className="flex justify-end gap-3 pt-2">
@@ -457,6 +495,7 @@ export function SettingsPage() {
                 </DialogContent>
               </Dialog>
             </div>
+            </div>
           </CardHeader>
           <CardContent>
             {usersLoading ? (
@@ -465,7 +504,7 @@ export function SettingsPage() {
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
-            ) : users.length === 0 ? (
+            ) : filteredUsers.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Shield className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p>No users found</p>
@@ -485,7 +524,7 @@ export function SettingsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.map((user) => (
+                      {filteredUsers.map((user) => (
                         <TableRow key={user.id}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
@@ -547,7 +586,7 @@ export function SettingsPage() {
                 </div>
 
                 <div className="md:hidden space-y-3">
-                  {users.map((user) => (
+                  {filteredUsers.map((user) => (
                     <div key={user.id} className="rounded-lg border p-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
@@ -630,9 +669,9 @@ export function SettingsPage() {
                 type="email"
                 value={editFormData.email}
                 onChange={(e) => handleEditFormChange('email', e.target.value)}
-                className={editFormErrors.email ? 'border-red-500' : ''}
+                className={editFormErrors.email ? 'border-destructive' : ''}
               />
-              {editFormErrors.email && <p className="text-xs text-red-500">{editFormErrors.email}</p>}
+              {editFormErrors.email && <p className="text-xs text-destructive">{editFormErrors.email}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-name">Full Name *</Label>
@@ -640,9 +679,9 @@ export function SettingsPage() {
                 id="edit-name"
                 value={editFormData.name}
                 onChange={(e) => handleEditFormChange('name', e.target.value)}
-                className={editFormErrors.name ? 'border-red-500' : ''}
+                className={editFormErrors.name ? 'border-destructive' : ''}
               />
-              {editFormErrors.name && <p className="text-xs text-red-500">{editFormErrors.name}</p>}
+              {editFormErrors.name && <p className="text-xs text-destructive">{editFormErrors.name}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-role">Role *</Label>
@@ -655,6 +694,7 @@ export function SettingsPage() {
                   <SelectItem value="owner">Owner</SelectItem>
                 </SelectContent>
               </Select>
+              {editFormErrors.role && <p className="text-xs text-destructive">{editFormErrors.role}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-phone">
@@ -665,7 +705,9 @@ export function SettingsPage() {
                 type="tel"
                 value={editFormData.phone}
                 onChange={(e) => handleEditFormChange('phone', e.target.value)}
+                className={editFormErrors.phone ? 'border-destructive' : ''}
               />
+              {editFormErrors.phone && <p className="text-xs text-destructive">{editFormErrors.phone}</p>}
             </div>
             <Separator />
             <div className="space-y-2">
@@ -678,9 +720,9 @@ export function SettingsPage() {
                 placeholder="Minimum 6 characters"
                 value={editFormData.password}
                 onChange={(e) => handleEditFormChange('password', e.target.value)}
-                className={editFormErrors.password ? 'border-red-500' : ''}
+                className={editFormErrors.password ? 'border-destructive' : ''}
               />
-              {editFormErrors.password && <p className="text-xs text-red-500">{editFormErrors.password}</p>}
+              {editFormErrors.password && <p className="text-xs text-destructive">{editFormErrors.password}</p>}
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={saving}>Cancel</Button>

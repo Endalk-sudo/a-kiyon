@@ -1,10 +1,7 @@
 import 'dotenv/config';
 import { adminAuth, adminDb } from '../lib/firebase-admin';
 import { computeMemberStatus } from '@/lib/member-status';
-
-function generateReceiptNumber(): string {
-  return `RCPT-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-}
+import { generateReceiptNumber } from '@/services/payment.service';
 
 async function deleteAllDocs(collectionName: string) {
   const snap = await adminDb.collection(collectionName).get();

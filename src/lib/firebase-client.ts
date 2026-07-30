@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
@@ -69,6 +70,10 @@ export async function uploadFile(path: string, buffer: Uint8Array, contentType: 
 export async function deleteFile(path: string) {
   const storageRef = ref(clientStorage, path);
   await deleteObject(storageRef);
+}
+
+export async function resetPassword(email: string) {
+  await sendPasswordResetEmail(auth, email);
 }
 
 export { ref as storageRef, getDownloadURL, uploadBytes, deleteObject };

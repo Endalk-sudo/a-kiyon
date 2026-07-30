@@ -14,7 +14,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { authClient } from '@/lib/auth-client';
+import { resetPassword } from '@/lib/firebase-client';
 import { useAppStore } from '@/lib/store';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
 import { toast } from 'sonner';
 import {
   Dumbbell,
@@ -33,21 +36,46 @@ import {
 
 function LoginDialog({ children }: { children: React.ReactNode }) {
   const setSession = useAppStore((s) => s.setSession);
+  const locale = useAppStore((s) => s.locale);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const validate = (): boolean => {
+    let valid = true;
+    if (!email.trim()) {
+      setEmailError(t(locale, 'Email is required', 'ኢሜይል ያስፈልጋል'));
+      valid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setEmailError(t(locale, 'Invalid email format', 'የተሳሳተ የኢሜይል ቅርጸት'));
+      valid = false;
+    } else {
+      setEmailError('');
+    }
+    if (!password) {
+      setPasswordError(t(locale, 'Password is required', 'የይለፍ ቃል ያስፈልጋል'));
+      valid = false;
+    } else {
+      setPasswordError('');
+    }
+    return valid;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    if (!validate()) return;
+
     setLoading(true);
     try {
       const { data, error: authError } = await authClient.signIn.email({ email, password });
       if (authError) {
-        setError(authError.message || 'Invalid email or password');
+        setEmailError(sanitizeError({ message: authError.message } as Error, locale, 'Invalid email or password', 'የተሳሳተ ኢሜይል ወይም የይለፍ ቃል'));
         return;
       }
       if (data?.user) {
@@ -59,14 +87,39 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
           role: u.role || 'manager',
         });
         setOpen(false);
-        toast.success('Welcome back!');
+        toast.success(t(locale, 'Welcome back!', 'እንኳን ደህና መጡ!'));
       }
     } catch {
-      setError('Invalid email or password');
+      setEmailError(t(locale, 'Invalid email or password', 'የተሳሳተ ኢሜይል ወይም የይለፍ ቃል'));
     } finally {
       setLoading(false);
     }
   };
+
+  const handleForgotPassword = async () => {
+    setEmailError('');
+    if (!email.trim()) {
+      setEmailError(t(locale, 'Please enter your email address first', 'እባክዎ ኢሜይል ያስገቡ'));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setEmailError(t(locale, 'Please enter a valid email address', 'እባክዎ ትክክለኛ ኢሜይል ያስገቡ'));
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await resetPassword(email);
+      setResetSent(true);
+      toast.success(t(locale, 'Password reset email sent', 'የይለፍ ቃል ማስተካከያ ኢሜይል ተልኳል'));
+    } catch {
+      setEmailError(t(locale, 'Failed to send reset email. Check that the email is correct.', 'የዳግም ማስጀመሪያ ኢሜይል መላክ አልተሳካም። ኢሜይሉ ትክክል መሆኑን ያረጋግጡ'));
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const clearEmailError = () => setEmailError('');
+  const clearPasswordError = () => setPasswordError('');
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -92,11 +145,13 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
               id="login-email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); clearEmailError(); }}
               placeholder="owner@fcms.com"
               required
               autoComplete="email"
+              className={emailError ? 'border-destructive' : ''}
             />
+            {emailError && <p className="text-xs text-destructive">{emailError}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="login-password">Password</Label>
@@ -105,10 +160,11 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
                 id="login-password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); clearPasswordError(); }}
                 placeholder="Enter your password"
                 required
                 autoComplete="current-password"
+                className={passwordError ? 'border-destructive' : ''}
               />
               <button
                 type="button"
@@ -119,10 +175,18 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+            <div className="text-right -mt-2">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                {resetLoading ? 'Sending...' : resetSent ? 'Email sent! Check your inbox' : 'Forgot password?'}
+              </button>
+            </div>
           </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign In
@@ -419,8 +483,8 @@ export function LandingPage() {
                 <LoginDialog>
                   <span className="block text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">Sign In</span>
                 </LoginDialog>
-              </div>
             </div>
+          </div>
             <div>
               <h4 className="font-semibold text-sm mb-3">Contact</h4>
               <p className="text-sm text-muted-foreground">
