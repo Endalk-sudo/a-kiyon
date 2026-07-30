@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Camera, Upload, X, RotateCcw, SwitchCamera } from 'lucide-react';
+import { toast } from 'sonner';
+import { sanitizeError } from '@/lib/errors';
+import { t } from '@/lib/messages';
+import { useAppStore } from '@/lib/store';
 
 interface PhotoCaptureProps {
   value: string | null;
@@ -13,6 +17,7 @@ interface PhotoCaptureProps {
 }
 
 export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }: PhotoCaptureProps) {
+  const locale = useAppStore((s) => s.locale);
   const [mode, setMode] = useState<'none' | 'camera' | 'upload'>('none');
   const [streaming, setStreaming] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -80,13 +85,15 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || t(locale, 'Upload failed', 'መጫን አልተሳካም'));
       }
 
       const result = await response.json();
       onChange(result.url);
       setMode('none');
     } catch (err) {
+      toast.error(sanitizeError(err, locale, 'Failed to upload photo', 'ፎቶ መጫን አልተሳካም'));
       console.error('Upload error:', err);
     } finally {
       setUploading(false);
@@ -136,12 +143,14 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || t(locale, 'Upload failed', 'መጫን አልተሳካም'));
       }
 
       const result = await response.json();
       onChange(result.url);
     } catch (err) {
+      toast.error(sanitizeError(err, locale, 'Failed to upload photo', 'ፎቶ መጫን አልተሳካም'));
       console.error('Upload error:', err);
     } finally {
       setUploading(false);
