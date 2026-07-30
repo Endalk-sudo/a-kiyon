@@ -93,6 +93,8 @@ export async function updateDoc<T>(
   id: string,
   data: Record<string, unknown>,
 ): Promise<Doc<T> | null> {
+  const existing = await getDocById<T>(collection, id);
+  if (!existing) return null;
   await db.collection(collection).doc(id).update({
     ...data,
     updatedAt: new Date().toISOString(),
