@@ -15,6 +15,9 @@ export function apiHandler<T extends (...args: any[]) => Promise<Response>>(hand
           { status: 400 }
         );
       }
+      if (error instanceof SyntaxError && /JSON|Unexpected end|parse/i.test(error.message)) {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+      }
       const message = error instanceof Error ? error.message : 'Internal server error';
       if (message === 'Unauthorized') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -215,6 +215,12 @@ export function MembersPage() {
   const [memberDetail, setMemberDetail] = useState<MemberDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // Renew subscription (from member detail modal)
+  const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+  const [subscriptionToRenew, setSubscriptionToRenew] = useState<MemberDetail['subscriptions'][number] | null>(null);
+  const [renewPaymentMethod, setRenewPaymentMethod] = useState('cash');
+  const [renewing, setRenewing] = useState(false);
+
   // Form data
   const [formData, setFormData] = useState<MemberFormData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof MemberFormData, string>>>({});
@@ -285,6 +291,28 @@ export function MembersPage() {
       toast.error(t(locale, 'Failed to load member details', 'የአባል ዝርዝሮችን መጫን አልተሳካም'));
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  // ─── Renew Subscription ─────────────────────────────────────────────────
+
+  const handleRenewSubscription = async () => {
+    if (!subscriptionToRenew) return;
+    setRenewing(true);
+    try {
+      const result = await subscriptionsApi.renew(subscriptionToRenew.id, { paymentMethod: renewPaymentMethod });
+      toast.success(t(
+        locale,
+        `Subscription renewed! Payment of ${formatCurrency(result.subscription.priceSnapshot || subscriptionToRenew.priceSnapshot)} has been recorded. Receipt: ${result.payment?.receiptNumber || ''}`,
+        `ምዝገባ ታድሷል! ክፍያ ተመዝግቧል ደረሰኝ ቁጥር: ${result.payment?.receiptNumber || ''}`,
+      ));
+      setRenewDialogOpen(false);
+      setSubscriptionToRenew(null);
+      if (memberDetail) fetchMemberDetail(memberDetail.id);
+    } catch (err) {
+      toast.error(sanitizeError(err, locale, 'Failed to renew subscription', 'ምዝገባ ማደስ አልተሳካም'));
+    } finally {
+      setRenewing(false);
     }
   };
 
@@ -883,14 +911,10 @@ export function MembersPage() {
                               variant="outline"
                               size="sm"
                               className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
-                              onClick={async () => {
-                                try {
-                                  const result = await subscriptionsApi.renew(sub.id);
-                                  toast.success(t(locale, `Subscription renewed! Payment of ${formatCurrency(result.subscription.priceSnapshot || sub.priceSnapshot)} has been recorded.`, `ምዝገባ ታድሷል! ክፍያ ተመዝግቧል`));
-                                  fetchMemberDetail(memberDetail.id);
-                                } catch (err) {
-                                  toast.error(sanitizeError(err, locale, 'Failed to renew subscription', 'ምዝገባ ማደስ አልተሳካም'));
-                                }
+                              onClick={() => {
+                                setSubscriptionToRenew(sub);
+                                setRenewPaymentMethod('cash');
+                                setRenewDialogOpen(true);
                               }}
                             >
                               <RefreshCw className="h-3 w-3 mr-1" />
@@ -907,6 +931,70 @@ export function MembersPage() {
 
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Renew Subscription Confirmation Dialog ────────────────────── */}
+      <Dialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-emerald-600" />
+              Renew Subscription
+            </DialogTitle>
+            <DialogDescription>
+              Renew the subscription and record the payment in one step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {subscriptionToRenew && (
+              <>
+                <p className="text-sm">
+                  Renewing <strong>{subscriptionToRenew.service?.name ?? 'Unknown Service'}</strong> for{' '}
+                  <strong>{memberDetail ? formatMemberName(memberDetail) : ''}</strong>.
+                </p>
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Service:</span>
+                    <span className="font-medium">{subscriptionToRenew.service?.name ?? 'Unknown Service'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price:</span>
+                    <span className="font-bold text-emerald-600">{formatCurrency(subscriptionToRenew.priceSnapshot)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current Status:</span>
+                    <Badge variant={subscriptionToRenew.status === 'expired' ? 'secondary' : 'outline'} className="text-xs">{subscriptionToRenew.status}</Badge>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="member-renew-payment-method">Payment Method</Label>
+                  <Select value={renewPaymentMethod} onValueChange={setRenewPaymentMethod}>
+                    <SelectTrigger className="w-full" id="member-renew-payment-method">
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenewDialogOpen(false)} disabled={renewing}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRenewSubscription}
+              disabled={renewing}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {renewing ? 'Renewing...' : 'Confirm Renewal & Payment'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

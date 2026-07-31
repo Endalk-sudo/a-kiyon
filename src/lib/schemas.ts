@@ -83,7 +83,7 @@ export const createPaymentSchema = z.object({
 });
 
 export const createUserSchema = z.object({
-  email: z.string().email('Invalid email'),
+  email: z.email('Invalid email'),
   name: z.string().min(1, 'Name is required'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(userRoles),
@@ -91,7 +91,7 @@ export const createUserSchema = z.object({
 });
 
 export const updateUserSchema = z.object({
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   name: z.string().min(1).optional(),
   password: z.string().min(6).optional(),
   role: z.enum(userRoles).optional(),

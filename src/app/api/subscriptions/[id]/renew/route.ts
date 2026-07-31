@@ -14,7 +14,7 @@ export const POST = apiHandler(async (
   { params }: { params: Promise<{ id: string }> }
 ) => {
   const session = await getSessionOrThrow(['owner', 'manager'], request);
-  const body = await request.json();
+  const body = await request.json().catch(() => ({}));
   const data = renewSubscriptionSchema.parse(body);
 
   const { id } = await params;

@@ -27,11 +27,9 @@ function getAdminApp() {
     : initializeApp({ projectId: firebaseAdminConfig.projectId || 'demo-a-kiyon' });
 
   if (useEmulator) {
-    const host = process.env.FIRESTORE_EMULATOR_HOST || 'localhost';
-    const port = process.env.FIRESTORE_EMULATOR_PORT || '8080';
-    process.env.FIRESTORE_EMULATOR_HOST = `${host}:${port}`;
-    process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
-    process.env.FIREBASE_STORAGE_EMULATOR_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST || 'localhost:9199';
+    if (!process.env.FIRESTORE_EMULATOR_HOST) process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
+    if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
+    if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST) process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
   }
 
   return app;
