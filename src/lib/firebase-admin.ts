@@ -22,9 +22,14 @@ function getAdminApp() {
     );
   }
 
+  const options = {
+    projectId: firebaseAdminConfig.projectId || 'demo-a-kiyon',
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'demo-a-kiyon.firebasestorage.app',
+  };
+
   const app = hasConfig
-    ? initializeApp({ credential: cert(firebaseAdminConfig as Record<string, string>) })
-    : initializeApp({ projectId: firebaseAdminConfig.projectId || 'demo-a-kiyon' });
+    ? initializeApp({ credential: cert(firebaseAdminConfig as Record<string, string>), ...options })
+    : initializeApp(options);
 
   if (useEmulator) {
     if (!process.env.FIRESTORE_EMULATOR_HOST) process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';

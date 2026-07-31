@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { usersApi } from '@/lib/api-client';
+import { usersApi, storageApi } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
 import { sanitizeError } from '@/lib/errors';
 import { t } from '@/lib/messages';
@@ -103,11 +103,7 @@ export function SettingsPage() {
   const [storageData, setStorageData] = useState<{ firestore: { totalBytes: number; freeLimit: number; usedPercent: number }; storage: { bytes: number; freeLimit: number; usedPercent: number } } | null>(null);
   useEffect(() => {
     if (!isOwner) return;
-    fetch('/api/storage')
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
+    storageApi.get()
       .then((data) => {
         if (data?.firestore && data?.storage) setStorageData(data);
       })

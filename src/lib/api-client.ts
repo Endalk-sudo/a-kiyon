@@ -67,6 +67,41 @@ export async function apiFetch<T = unknown>(
   return response.json();
 }
 
+export async function apiUpload<T = unknown>(
+  path: string,
+  formData: FormData
+): Promise<T> {
+  const token = getCurrentToken();
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    body: formData,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (response.status === 401) throw new Error('Unauthorized');
+  if (response.status === 403) throw new Error('Forbidden');
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Uploads
+export const uploadApi = {
+  photo: (formData: FormData) =>
+    apiUpload<{ url: string; thumbnailUrl: string }>('/upload', formData),
+};
+
+// Storage
+export const storageApi = {
+  get: () =>
+    apiFetch<{ firestore: { totalBytes: number; freeLimit: number; usedPercent: number }; storage: { bytes: number; freeLimit: number; usedPercent: number } }>('/storage'),
+};
+
 // Members
 export const membersApi = {
   list: (params?: Record<string, string | number | boolean | undefined>) =>

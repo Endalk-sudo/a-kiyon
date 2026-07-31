@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Camera, Upload, X, RotateCcw, SwitchCamera } from 'lucide-react';
 import { toast } from 'sonner';
 import { sanitizeError } from '@/lib/errors';
+import { uploadApi } from '@/lib/api-client';
 import { t } from '@/lib/messages';
 import { useAppStore } from '@/lib/store';
 
@@ -79,17 +80,7 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
       const formData = new FormData();
       formData.append('photo', blob, filename);
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || t(locale, 'Upload failed', 'መጫን አልተሳካም'));
-      }
-
-      const result = await response.json();
+      const result = await uploadApi.photo(formData);
       onChange(result.url);
       setMode('none');
     } catch (err) {
@@ -137,17 +128,7 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
       const formData = new FormData();
       formData.append('photo', file);
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || t(locale, 'Upload failed', 'መጫን አልተሳካም'));
-      }
-
-      const result = await response.json();
+      const result = await uploadApi.photo(formData);
       onChange(result.url);
     } catch (err) {
       toast.error(sanitizeError(err, locale, 'Failed to upload photo', 'ፎቶ መጫን አልተሳካም'));

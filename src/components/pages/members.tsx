@@ -12,7 +12,6 @@ import { t } from '@/lib/messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 
-import { EthiopianDateInput } from '@/components/ethiopian-date-input';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
@@ -227,13 +226,10 @@ export function MembersPage() {
   const [subscriptionErrors, setSubscriptionErrors] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Optional subscription on create
-  const [addWithSubscription, setAddWithSubscription] = useState(false);
+  // Subscription on create (required)
   const [availableServices, setAvailableServices] = useState<Array<{ id: string; name: string; price: number; duration: number }>>([]);
   const [newServiceId, setNewServiceId] = useState('');
   const [newPaymentMethod, setNewPaymentMethod] = useState('cash');
-  const [newPaymentDate, setNewPaymentDate] = useState('');
-  const [newPaymentDateIso, setNewPaymentDateIso] = useState<string | null>(null);
   const [newSubscriptionNotes, setNewSubscriptionNotes] = useState('');
 
   // ─── Fetch Members ──────────────────────────────────────────────────────
@@ -355,11 +351,8 @@ export function MembersPage() {
   const handleAddMember = () => {
     setFormData(emptyFormData);
     setFormErrors({});
-    setAddWithSubscription(false);
     setNewServiceId('');
     setNewPaymentMethod('cash');
-    setNewPaymentDate('');
-    setNewPaymentDateIso(null);
     setNewSubscriptionNotes('');
     setSubscriptionErrors(null);
     setAddDialogOpen(true);
@@ -395,13 +388,13 @@ export function MembersPage() {
     if (data.bloodType && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(data.bloodType)) {
       errors.bloodType = t(locale, 'Select a valid blood type', 'ትክክለኛ የደም አይነት ይምረጡ');
     }
-    if (addWithSubscription && !newServiceId) {
+    if (!newServiceId) {
       setSubscriptionErrors(t(locale, 'Please select a service', 'እባክዎ አገልግሎት ይምረጡ'));
     } else {
       setSubscriptionErrors(null);
     }
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    return Object.keys(errors).length === 0 && !!newServiceId;
   };
 
   // ─── Submit Handlers ────────────────────────────────────────────────────
@@ -422,14 +415,13 @@ export function MembersPage() {
         emergencyContact: formData.emergencyContact.trim() || null,
         notes: formData.notes.trim() || null,
       };
-      if (addWithSubscription && newServiceId) {
+      if (newServiceId) {
         payload.serviceId = newServiceId;
         payload.paymentMethod = newPaymentMethod;
-        if (newPaymentDateIso) payload.paymentDate = newPaymentDateIso;
         if (newSubscriptionNotes) payload.subscriptionNotes = newSubscriptionNotes;
       }
       await membersApi.create(payload);
-      toast.success(addWithSubscription ? t(locale, 'Member created and subscribed successfully', 'አባል ተፈጥሯል እና ምዝገባ ተሰራ') : t(locale, 'Member created successfully', 'አባል በተሳካ ሁኔታ ተፈጥሯል'));
+      toast.success(t(locale, 'Member created and subscribed successfully', 'አባል ተፈጥሯል እና ምዝገባ ተሰራ'));
       setAddDialogOpen(false);
       setFormData(emptyFormData);
       fetchMembers();
@@ -700,83 +692,69 @@ export function MembersPage() {
           </DialogHeader>
           <MemberForm formData={formData} setFormData={setFormData} formErrors={formErrors} />
 
-          {/* Optional initial subscription */}
+          {/* Initial subscription (required) */}
           <Separator />
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <Switch
-                id="add-subscription"
-                checked={addWithSubscription}
-                onCheckedChange={setAddWithSubscription}
-              />
-              <Label htmlFor="add-subscription" className="text-sm font-medium cursor-pointer">
-                Add initial subscription
+              <Label htmlFor="sub-service" className="text-sm font-medium">
+                Initial Subscription *
               </Label>
             </div>
-            {addWithSubscription && (
-              <div className="space-y-3 pl-1 border-l-2 border-muted pl-4">
-                <div className="space-y-2">
-                  <Label htmlFor="sub-service">Service</Label>
-                  <Select value={newServiceId} onValueChange={setNewServiceId}>
-                    <SelectTrigger id="sub-service">
-                      <SelectValue placeholder="Select a service" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableServices.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name} — {formatCurrency(s.price)} ({s.duration} days)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {subscriptionErrors && <p className="text-xs text-destructive">{subscriptionErrors}</p>}
-                </div>
-                {newServiceId && (() => {
-                  const svc = availableServices.find((s) => s.id === newServiceId);
-                  return svc ? (
-                    <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Duration:</span>
-                        <span className="font-medium">{svc.duration} days</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Price:</span>
-                        <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
-                      </div>
-                    </div>
-                  ) : null;
-                })()}
-                <div className="space-y-2">
-                  <Label htmlFor="sub-payment-method">Payment Method</Label>
-                  <Select value={newPaymentMethod} onValueChange={setNewPaymentMethod}>
-                    <SelectTrigger id="sub-payment-method">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                      <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <EthiopianDateInput
-                  value={newPaymentDate}
-                  onChange={(val, iso) => { setNewPaymentDate(val); setNewPaymentDateIso(iso); }}
-                  label="Payment Date (EC)"
-                  required
-                />
-                <div className="space-y-2">
-                  <Label htmlFor="sub-notes">Notes (Optional)</Label>
-                  <Textarea
-                    id="sub-notes"
-                    value={newSubscriptionNotes}
-                    onChange={(e) => setNewSubscriptionNotes(e.target.value)}
-                    placeholder="Subscription notes..."
-                    rows={2}
-                  />
-                </div>
+            <div className="space-y-3 border-l-2 border-muted pl-4">
+              <div className="space-y-2">
+                <Select value={newServiceId} onValueChange={setNewServiceId}>
+                  <SelectTrigger id="sub-service">
+                    <SelectValue placeholder="Select a service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableServices.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} — {formatCurrency(s.price)} ({s.duration} days)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {subscriptionErrors && <p className="text-xs text-destructive">{subscriptionErrors}</p>}
               </div>
-            )}
+              {newServiceId && (() => {
+                const svc = availableServices.find((s) => s.id === newServiceId);
+                return svc ? (
+                  <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Duration:</span>
+                      <span className="font-medium">{svc.duration} days</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Price:</span>
+                      <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+              <div className="space-y-2">
+                <Label htmlFor="sub-payment-method">Payment Method</Label>
+                <Select value={newPaymentMethod} onValueChange={setNewPaymentMethod}>
+                  <SelectTrigger id="sub-payment-method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sub-notes">Notes (Optional)</Label>
+                <Textarea
+                  id="sub-notes"
+                  value={newSubscriptionNotes}
+                  onChange={(e) => setNewSubscriptionNotes(e.target.value)}
+                  placeholder="Subscription notes..."
+                  rows={2}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={submitting}>Cancel</Button>
@@ -1119,6 +1097,11 @@ function MemberForm({ formData, setFormData, formErrors }: {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handlePhoneInput = (value: string) => {
+    const digits = value.replace(/\D/g, '').replace(/^251/, '').replace(/^0/, '').slice(0, 9);
+    updateField('phone', digits ? `+251${digits}` : '');
+  };
+
   return (
     <div className="space-y-5">
       {/* Photo Section */}
@@ -1148,7 +1131,7 @@ function MemberForm({ formData, setFormData, formErrors }: {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="phone">Phone</Label>
-          <Input id="phone" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} placeholder="+251..." className={formErrors.phone ? 'border-destructive' : ''} />
+          <Input id="phone" value={formData.phone} onChange={(e) => handlePhoneInput(e.target.value)} placeholder="+251 9XX XXX XXX" className={formErrors.phone ? 'border-destructive' : ''} />
           {formErrors.phone && <p className="text-xs text-destructive">{formErrors.phone}</p>}
         </div>
         <div className="space-y-1.5">

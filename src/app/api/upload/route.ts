@@ -7,6 +7,17 @@ import sharp from 'sharp';
 import { createAuditLog } from '@/lib/audit';
 import { adminBucket } from '@/lib/firebase-admin';
 
+type Bucket = NonNullable<typeof adminBucket>;
+
+async function publicUrl(bucket: Bucket, filePath: string) {
+  const file = bucket.file(filePath);
+  if (process.env.FIREBASE_EMULATOR === 'true') {
+    return `http://127.0.0.1:9199/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media`;
+  }
+  const [url] = await file.getSignedUrl({ action: 'read', expires: '01-01-2050' });
+  return url;
+}
+
 export const POST = apiHandler(async (request: NextRequest) => {
   const session = await getSessionOrThrow(['owner', 'manager'], request);
 
@@ -47,14 +58,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
     contentType: 'image/webp',
   });
 
-  const [photoUrl] = await bucket.file(`uploads/${filename}`).getSignedUrl({
-    action: 'read',
-    expires: '01-01-2050',
-  });
-  const [thumbnailUrl] = await bucket.file(`uploads/thumbs/${thumbFilename}`).getSignedUrl({
-    action: 'read',
-    expires: '01-01-2050',
-  });
+  const photoUrl = await publicUrl(bucket, `uploads/${filename}`);
+  const thumbnailUrl = await publicUrl(bucket, `uploads/thumbs/${thumbFilename}`);
 
   await createAuditLog({
     userId: session.userId,
