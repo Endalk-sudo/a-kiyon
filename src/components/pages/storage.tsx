@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { apiFetch } from '@/lib/api-client';
+import { apiFetch, membersApi } from '@/lib/api-client';
+import { MemberAvatar } from '@/components/member-avatar';
+import { formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -38,6 +40,14 @@ interface CollectionStat {
   estimatedBytes: number;
 }
 
+interface StaleMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  photo: string | null;
+  lastPaymentDate: string | null;
+}
+
 interface StorageData {
   firestore: {
     collections: CollectionStat[];
@@ -52,6 +62,8 @@ interface StorageData {
     freeLimit: number;
     usedPercent: number;
   };
+  staleMonths: number;
+  staleMembers: StaleMember[];
   formatBytes: (bytes: number) => string;
 }
 
@@ -120,6 +132,30 @@ export function StoragePage() {
     } finally {
       setCleaning(null);
     }
+  };
+
+  const handleSoftDelete = async (memberId?: string) => {
+    const target = memberId ? [memberId] : data?.staleMembers.map((m) => m.id) ?? [];
+    if (target.length === 0) return;
+    try {
+      await Promise.all(target.map((id) => membersApi.delete(id)));
+      toast.success(
+        t(
+          locale,
+          `Soft-deleted ${target.length} member(s)`,
+          `${target.length} አባላት ተሰርዘዋል`,
+        ),
+      );
+      fetchData();
+    } catch {
+      toast.error(t(locale, 'Failed to soft-delete members', 'አባላትን መሰረዝ አልተሳካም'));
+    }
+  };
+
+  const monthsAgo = (iso: string | null): string => {
+    if (!iso) return t(locale, 'Never paid', 'ፈጽሞ አልከፈለም');
+    const months = Math.floor((Date.now() - new Date(iso).getTime()) / (30 * 24 * 60 * 60 * 1000));
+    return t(locale, `${months} months ago`, `ከ${months} ወር በፊት`);
   };
 
   if (loading) {
@@ -257,6 +293,75 @@ export function StoragePage() {
         </Card>
       )}
 
+      {/* Data Hygiene */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5 text-muted-foreground" />
+            Data Hygiene
+          </CardTitle>
+          <CardDescription>
+            Members with no payment in the last {data.staleMonths} months. Soft-delete is
+            reversible — they can be restored anytime from the Members page, and their payment
+            history is kept forever.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {data.staleMembers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No stale members found — everyone has paid within the last {data.staleMonths} months.
+            </p>
+          ) : (
+            <>
+              <div className="space-y-1">
+                {data.staleMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between p-3 rounded-lg border"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <MemberAvatar
+                        photo={member.photo}
+                        firstName={member.firstName}
+                        lastName={member.lastName}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {member.firstName} {member.lastName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Last payment:{' '}
+                          {member.lastPaymentDate
+                            ? `${formatDate(member.lastPaymentDate)} (${monthsAgo(member.lastPaymentDate)})`
+                            : monthsAgo(null)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSoftDelete(member.id)}
+                      disabled={cleaning !== null}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Soft delete
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <ConfirmButton
+                action="bulk-soft-delete"
+                label="Soft Delete All"
+                cleaning={cleaning}
+                onConfirm={() => handleSoftDelete()}
+                variant="outline"
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Cleanup Tools */}
       <Card>
         <CardHeader>
@@ -264,7 +369,7 @@ export function StoragePage() {
             <Trash2 className="h-5 w-5 text-red-500" />
             Cleanup Tools
           </CardTitle>
-          <CardDescription>Remove unnecessary data to free up space</CardDescription>
+          <CardDescription>Irreversible. Remove unnecessary data to free up space</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-3 rounded-lg border">
@@ -280,6 +385,24 @@ export function StoragePage() {
             <ConfirmButton
               action="purge-orphaned-files"
               label="Purge Orphans"
+              cleaning={cleaning}
+              onConfirm={handleCleanup}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border">
+            <div className="flex items-start gap-3">
+              <FileX className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">Soft-Deleted Member Photos</p>
+                <p className="text-xs text-muted-foreground">
+                  Delete photos of members you already soft-deleted
+                </p>
+              </div>
+            </div>
+            <ConfirmButton
+              action="purge-deleted-member-photos"
+              label="Purge Photos"
               cleaning={cleaning}
               onConfirm={handleCleanup}
             />
@@ -313,11 +436,13 @@ function ConfirmButton({
   label,
   cleaning,
   onConfirm,
+  variant = 'destructive',
 }: {
   action: string;
   label: string;
   cleaning: string | null;
   onConfirm: (action: string, label: string) => void;
+  variant?: 'destructive' | 'outline';
 }) {
   const [open, setOpen] = useState(false);
   const isCleaning = cleaning === action;
@@ -325,7 +450,7 @@ function ConfirmButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive" size="sm" disabled={isCleaning}>
+        <Button variant={variant} size="sm" disabled={isCleaning}>
           {isCleaning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
           {label}
         </Button>

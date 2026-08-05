@@ -2,8 +2,15 @@ import { NextRequest } from 'next/server';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
-import { db, countDocs, getDocs } from '@/lib/db';
+import { countDocs, getDocs } from '@/lib/db';
 import { adminBucket } from '@/lib/firebase-admin';
+import {
+  DEFAULT_STALE_MONTHS,
+  findStaleMembers,
+  purgeDeletedMembers,
+  purgeDeletedMemberPhotos,
+  purgeOrphanedFiles,
+} from '@/services/storage.service';
 
 const COLLECTIONS = ['members', 'subscriptions', 'payments', 'services', 'users'] as const;
 
@@ -64,10 +71,17 @@ const STORAGE_FREE_LIMIT = 5 * GB;
 export const GET = apiHandler(async (request: NextRequest) => {
   const session = await getSessionOrThrow(['owner'], request);
 
-  const collectionStats = await Promise.all(COLLECTIONS.map(estimateCollectionSize));
-  const totalDbBytes = collectionStats.reduce((s, c) => s + c.estimatedBytes, 0);
+  const staleMonthsParam = Number(request.nextUrl.searchParams.get('staleMonths'));
+  const staleMonths = Number.isInteger(staleMonthsParam) && staleMonthsParam >= 1
+    ? staleMonthsParam
+    : DEFAULT_STALE_MONTHS;
 
-  const storageUsage = await getStorageUsage();
+  const [collectionStats, storageUsage, staleMembers] = await Promise.all([
+    Promise.all(COLLECTIONS.map(estimateCollectionSize)),
+    getStorageUsage(),
+    findStaleMembers(staleMonths),
+  ]);
+  const totalDbBytes = collectionStats.reduce((s, c) => s + c.estimatedBytes, 0);
 
   return apiResponse({
     firestore: {
@@ -84,11 +98,13 @@ export const GET = apiHandler(async (request: NextRequest) => {
       freeLimit: STORAGE_FREE_LIMIT,
       usedPercent: Math.min(100, Math.round((storageUsage.bytes / STORAGE_FREE_LIMIT) * 100)),
     },
+    staleMonths,
+    staleMembers,
     formatBytes,
   });
 });
 
-// DELETE — cleanup actions
+// DELETE — cleanup actions (all irreversible)
 export const DELETE = apiHandler(async (request: NextRequest) => {
   const session = await getSessionOrThrow(['owner'], request);
   const { searchParams } = request.nextUrl;
@@ -96,28 +112,21 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
 
   if (action === 'purge-orphaned-files') {
     if (!adminBucket) return apiError('Storage not configured', 500);
-    const [files] = await adminBucket.getFiles({ autoPaginate: true });
-    let deleted = 0;
-    for (const file of files) {
-      const match = file.name.match(/uploads\/(?:thumbs\/)?([^/]+)-/);
-      if (match) {
-        const memberId = match[1];
-        const member = await db.collection('members').doc(memberId).get();
-        if (!member.exists) {
-          await file.delete();
-          deleted++;
-        }
-      }
-    }
+    const deleted = await purgeOrphanedFiles(adminBucket);
     return apiResponse({ message: `Deleted ${deleted} orphaned file(s)` });
   }
 
+  if (action === 'purge-deleted-member-photos') {
+    if (!adminBucket) return apiError('Storage not configured', 500);
+    const deleted = await purgeDeletedMemberPhotos(adminBucket);
+    return apiResponse({ message: `Deleted ${deleted} file(s) from soft-deleted members` });
+  }
+
   if (action === 'purge-deleted-members') {
-    const deletedMembers = await getDocs<Record<string, unknown>>('members', [['isDeleted', '==', true]]);
-    const batch = db.batch();
-    deletedMembers.forEach((m) => batch.delete(db.collection('members').doc(m.id)));
-    await batch.commit();
-    return apiResponse({ message: `Permanently deleted ${deletedMembers.length} member(s)` });
+    if (!adminBucket) return apiError('Storage not configured', 500);
+    const photosDeleted = await purgeDeletedMemberPhotos(adminBucket);
+    const count = await purgeDeletedMembers();
+    return apiResponse({ message: `Permanently deleted ${count} member(s) and ${photosDeleted} photo(s)` });
   }
 
   return apiError('Unknown cleanup action', 400);

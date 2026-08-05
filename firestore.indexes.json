@@ -39,6 +39,10 @@
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "memberId", "order": "ASCENDING" },
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
     ]},
@@ -47,17 +51,6 @@
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "memberId", "order": "ASCENDING" }
-    ]},
-    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "createdAt", "order": "DESCENDING" }
-    ]},
-    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "userId", "order": "ASCENDING" },
-      { "fieldPath": "createdAt", "order": "DESCENDING" }
-    ]},
-    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "entity", "order": "ASCENDING" },
-      { "fieldPath": "createdAt", "order": "DESCENDING" }
     ]}
   ]
 }

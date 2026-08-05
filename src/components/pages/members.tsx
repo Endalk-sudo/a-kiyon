@@ -184,7 +184,6 @@ export function MembersPage() {
   const locale = useAppStore((s) => s.locale);
   const isMobile = useIsMobile();
 
-  const isOwner = session?.role === 'owner';
   const isManagerOrAbove = session?.role === 'owner' || session?.role === 'manager';
 
   // ─── State ───────────────────────────────────────────────────────────────
@@ -608,7 +607,7 @@ export function MembersPage() {
                 {filter.label}
               </Button>
             ))}
-            {isOwner && (
+            {isManagerOrAbove && (
               <>
                 <Separator orientation="vertical" className="h-6 mx-1 hidden sm:block" />
                 <div className="flex items-center gap-2">
@@ -651,7 +650,7 @@ export function MembersPage() {
       ) : isMobile ? (
         <div className="space-y-3">
           {members.map((member) => (
-            <MemberCard key={member.id} member={member} isOwner={isOwner} isManagerOrAbove={isManagerOrAbove}
+            <MemberCard key={member.id} member={member} isManagerOrAbove={isManagerOrAbove}
               onView={handleViewMember} onEdit={handleEditMember} onDelete={handleDeleteMember} onRestore={handleRestoreMember} />
           ))}
         </div>
@@ -700,7 +699,7 @@ export function MembersPage() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(member.createdAt)}</TableCell>
                     <TableCell className="text-right">
-                      <MemberActions member={member} isOwner={isOwner} isManagerOrAbove={isManagerOrAbove}
+                      <MemberActions member={member} isManagerOrAbove={isManagerOrAbove}
                         onView={handleViewMember} onEdit={handleEditMember} onDelete={handleDeleteMember} onRestore={handleRestoreMember} />
                     </TableCell>
                   </TableRow>
@@ -1224,8 +1223,8 @@ export function MembersPage() {
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
 /** Member Card (mobile layout) */
-function MemberCard({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelete, onRestore }: {
-  member: Member; isOwner: boolean; isManagerOrAbove: boolean;
+function MemberCard({ member, isManagerOrAbove, onView, onEdit, onDelete, onRestore }: {
+  member: Member; isManagerOrAbove: boolean;
   onView: (m: Member) => void; onEdit: (m: Member) => void; onDelete: (m: Member) => void; onRestore: (m: Member) => void;
 }) {
   return (
@@ -1252,8 +1251,8 @@ function MemberCard({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelet
             <div className="flex items-center gap-1.5 mt-3">
               <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-3.5 w-3.5" /></Button>
               {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-3.5 w-3.5" /></Button>}
-              {isOwner && member.isDeleted && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-3.5 w-3.5" /></Button>}
-              {isOwner && !member.isDeleted && <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
+              {isManagerOrAbove && member.isDeleted && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-3.5 w-3.5" /></Button>}
+              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
             </div>
           </div>
         </div>
@@ -1263,16 +1262,16 @@ function MemberCard({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelet
 }
 
 /** Member Actions (desktop table) */
-function MemberActions({ member, isOwner, isManagerOrAbove, onView, onEdit, onDelete, onRestore }: {
-  member: Member; isOwner: boolean; isManagerOrAbove: boolean;
+function MemberActions({ member, isManagerOrAbove, onView, onEdit, onDelete, onRestore }: {
+  member: Member; isManagerOrAbove: boolean;
   onView: (m: Member) => void; onEdit: (m: Member) => void; onDelete: (m: Member) => void; onRestore: (m: Member) => void;
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
       <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-4 w-4" /></Button>
       {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-4 w-4" /></Button>}
-      {isOwner && member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-4 w-4" /></Button>}
-      {isOwner && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
+      {isManagerOrAbove && member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-4 w-4" /></Button>}
+      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
     </div>
   );
 }

@@ -157,6 +157,20 @@ export async function batchUpdate(
   return docs.length;
 }
 
+export async function batchDelete(collection: string, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  // A single Firestore batch is limited to 500 writes.
+  const BATCH_LIMIT = 400;
+  for (let i = 0; i < ids.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    for (const id of ids.slice(i, i + BATCH_LIMIT)) {
+      batch.delete(db.collection(collection).doc(id));
+    }
+    await batch.commit();
+  }
+  return ids.length;
+}
+
 export async function aggregateSum(
   collection: string,
   field: string,

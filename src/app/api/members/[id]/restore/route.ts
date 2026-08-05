@@ -9,7 +9,7 @@ export const POST = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  const session = await getSessionOrThrow(['owner', 'manager'], request);
 
   const { id } = await params;
 

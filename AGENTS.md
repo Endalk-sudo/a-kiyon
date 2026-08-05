@@ -31,7 +31,7 @@ pnpm run test           # vitest (needs Firebase emulators running)
 
 - **Server:** `getSessionOrThrow(['owner', 'manager', 'reader'], request)` — verifies Firebase ID token from `Authorization: Bearer` header. Throws `"Unauthorized"` / `"Forbidden"`.
 - **Client:** Firebase Auth via `src/lib/auth-client.ts`. Token auto-attached to all API calls via `src/lib/api-client.ts`.
-- **Roles:** `owner` (full), `manager` (no delete/void), `reader` (view-only). Stored as Firebase custom claims.
+- **Roles:** `owner` (full), `manager` (soft-delete/restore members; no permanent delete, no payment void, no storage cleanup), `reader` (view-only). Stored as Firebase custom claims.
 - **Firebase Auth** with email/password. Emulator on port 9099.
 
 ## DB
@@ -40,7 +40,7 @@ pnpm run test           # vitest (needs Firebase emulators running)
 - **Soft delete** on Members via `isDeleted` boolean field.
 - **Subscription expiry** is batch-updated on every list/get call. Standalone cron at `src/scripts/cron-expire.ts`.
 - **Renewal model** extends `endDate` on the existing subscription doc (no new rows).
-- **Firestore helpers** in `src/lib/db.ts`: `getDocById`, `getDocs`, `countDocs`, `createDoc`, `updateDoc`, `deleteDoc`, `batchUpdate` (chunked into 400-write batches — Firestore caps a batch at 500 writes), `aggregateSum` (uses Firestore `AggregateField.sum()`, no client-side fetch-all).
+- **Firestore helpers** in `src/lib/db.ts`: `getDocById`, `getDocs`, `countDocs`, `createDoc`, `updateDoc`, `deleteDoc`, `batchUpdate`, `batchDelete` (both chunked into 400-write batches — Firestore caps a batch at 500 writes), `aggregateSum` (uses Firestore `AggregateField.sum()`, no client-side fetch-all).
 - **Timestamps** are stored as ISO strings (`new Date().toISOString()`) via `createDoc`/`updateDoc`/`batchUpdate` — never `FieldValue.serverTimestamp()`. `FieldValue` is not exported from `db.ts`.
 
 ## Key conventions
@@ -48,7 +48,7 @@ pnpm run test           # vitest (needs Firebase emulators running)
 - `src/lib/api-client.ts` — typed fetch wrapper, auto-attaches Firebase token. Types from `src/lib/api-types.ts`.
 - **Photo uploads** → `POST /api/upload` with `sharp` (WebP q80 + 200×200 thumbnail). Uploads to Firebase Storage bucket.
 - **Dates** are stored as ISO strings, displayed in Ethiopian Calendar via `src/lib/ethiopian-calendar.ts`.
-- **Storage monitoring** at `/api/storage` — document counts, size estimates, file breakdown, cleanup actions (orphan purge, deleted member purge). UI at `Storage` page (owner only) + summary card in Settings.
+- **Storage monitoring** at `/api/storage` — document counts, size estimates, file breakdown, stale-member detection (`GET ?staleMonths=6` via `findStaleMembers` — non-deleted members whose latest non-voided payment predates the cutoff, or never paid), cleanup actions (`purge-orphaned-files` is **reference-based** — parses `member.photo` URLs via `photoPathFromUrl`, never filename-derived ids; `purge-deleted-member-photos`; `purge-deleted-members` deletes photos first and chunks doc deletion into 400-write batches). UI at `Storage` page (owner only) with Data Hygiene soft-delete list + summary card in Settings. Photos are never deleted automatically.
 - **Receipt printing** — generated client-side in the payments page (HTML via `window.open()`, hidden iframe fallback when popup blocked).
 - **Error boundary** — `page.tsx` wraps `<PageComponent>` in a class-based `ErrorBoundary` to catch render crashes gracefully.
 - **Mobile-responsive UI** — data tables use `hidden md:block` (desktop table) + `md:hidden` (card layout) pattern. Icon buttons minimum 36px (`h-9 w-9`) for touch targets. Form grids use responsive column counts (e.g. `grid-cols-1 sm:grid-cols-3`).
