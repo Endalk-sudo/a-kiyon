@@ -23,6 +23,11 @@ export interface MemberResponse extends MemberInfo {
   weight: number | null;
   height: number | null;
   bloodType: string | null;
+  sex: 'male' | 'female' | null;
+  neck: number | null;
+  waist: number | null;
+  hip: number | null;
+  bodyFatPercent: number | null;
   emergencyContact: string | null;
   notes: string | null;
   photo: string | null;

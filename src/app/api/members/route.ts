@@ -4,7 +4,7 @@ import { paginatedResponse, apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createMemberSchema } from '@/lib/schemas';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
-import { listMembers, createMember } from '@/services/member.service';
+import { listMembers, createMember, computeBodyFatPercent } from '@/services/member.service';
 import { autoExpireSubscriptions } from '@/services/subscription.service';
 import { generateReceiptNumber } from '@/services/payment.service';
 import { NextRequest } from 'next/server';
@@ -66,6 +66,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   const receiptNumber = generateReceiptNumber();
 
+  const bodyFatPercent = computeBodyFatPercent(data);
+
   // Member + subscription + payment created atomically in one transaction
   const { memberId, subscriptionId, paymentId } = await db.runTransaction(async (tx) => {
     const memberRef = db.collection('members').doc();
@@ -79,6 +81,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
       weight: data.weight ?? null,
       height: data.height ?? null,
       bloodType: data.bloodType || null,
+      sex: data.sex || null,
+      neck: data.neck ?? null,
+      waist: data.waist ?? null,
+      hip: data.hip ?? null,
+      bodyFatPercent,
       emergencyContact: data.emergencyContact || null,
       notes: data.notes || null,
       isDeleted: false,
@@ -133,6 +140,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
     weight: data.weight ?? null,
     height: data.height ?? null,
     bloodType: data.bloodType || null,
+    sex: data.sex || null,
+    neck: data.neck ?? null,
+    waist: data.waist ?? null,
+    hip: data.hip ?? null,
+    bodyFatPercent,
     emergencyContact: data.emergencyContact || null,
     notes: data.notes || null,
     isDeleted: false,

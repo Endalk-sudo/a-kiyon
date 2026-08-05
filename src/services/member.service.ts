@@ -1,5 +1,6 @@
 import { getDocById, getDocs, getDocsByIds, countDocs, createDoc, updateDoc, chunk, type Doc, type WhereClause } from '@/lib/db';
 import { computeMemberStatus, findNearestEndDate } from '@/lib/member-status';
+import { calculateNavyBodyFatPercent, type Sex } from '@/lib/body-fat';
 
 export type MemberListOptions = {
   page?: number;
@@ -18,6 +19,11 @@ interface MemberData {
   weight: number | null;
   height: number | null;
   bloodType: string | null;
+  sex: Sex | null;
+  neck: number | null;
+  waist: number | null;
+  hip: number | null;
+  bodyFatPercent: number | null;
   emergencyContact: string | null;
   notes: string | null;
   isDeleted: boolean;
@@ -169,9 +175,14 @@ export async function createMember(data: {
   weight?: number | null;
   height?: number | null;
   bloodType?: string | null;
+  sex?: Sex | null;
+  neck?: number | null;
+  waist?: number | null;
+  hip?: number | null;
   emergencyContact?: string | null;
   notes?: string | null;
 }) {
+  const bodyFatPercent = computeBodyFatPercent(data);
   return createDoc<MemberData>('members', {
     firstName: data.firstName,
     lastName: data.lastName,
@@ -181,10 +192,36 @@ export async function createMember(data: {
     weight: data.weight ?? null,
     height: data.height ?? null,
     bloodType: data.bloodType || null,
+    sex: data.sex || null,
+    neck: data.neck ?? null,
+    waist: data.waist ?? null,
+    hip: data.hip ?? null,
+    bodyFatPercent,
     emergencyContact: data.emergencyContact || null,
     notes: data.notes || null,
     isDeleted: false,
     deletedAt: null,
+  });
+}
+
+/**
+ * Derive the stored body-fat percentage from measurements (or null when the
+ * data is incomplete). Used by create/update paths so the persisted value
+ * always reflects the current measurements.
+ */
+export function computeBodyFatPercent(data: {
+  sex?: Sex | null;
+  height?: number | null;
+  neck?: number | null;
+  waist?: number | null;
+  hip?: number | null;
+}): number | null {
+  return calculateNavyBodyFatPercent({
+    sex: data.sex ?? null,
+    heightCm: data.height ?? null,
+    neckCm: data.neck ?? null,
+    waistCm: data.waist ?? null,
+    hipCm: data.hip ?? null,
   });
 }
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
+export const sexes = ['male', 'female'] as const;
 export const paymentMethods = ['cash', 'bank_transfer', 'mobile_money'] as const;
 export const userRoles = ['owner', 'manager', 'reader'] as const;
 
@@ -15,6 +16,10 @@ export const createMemberSchema = z.object({
   bloodType: z.enum(bloodTypes).optional().nullable(),
   emergencyContact: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  sex: z.enum(sexes).optional().nullable(),
+  neck: z.coerce.number().nonnegative().optional().nullable(),
+  waist: z.coerce.number().nonnegative().optional().nullable(),
+  hip: z.coerce.number().nonnegative().optional().nullable(),
   serviceId: z.string().optional(),
   paymentMethod: z.enum(paymentMethods).optional(),
   paymentDate: z.string().optional(),
@@ -40,6 +45,10 @@ export const updateMemberSchema = z.object({
   bloodType: z.enum(bloodTypes).optional().nullable(),
   emergencyContact: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  sex: z.enum(sexes).optional().nullable(),
+  neck: z.coerce.number().nonnegative().optional().nullable(),
+  waist: z.coerce.number().nonnegative().optional().nullable(),
+  hip: z.coerce.number().nonnegative().optional().nullable(),
 });
 
 export const createServiceSchema = z.object({

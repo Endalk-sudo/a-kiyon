@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { adminAuth, adminDb } from '../lib/firebase-admin';
 import { computeMemberStatus } from '@/lib/member-status';
 import { generateReceiptNumber } from '@/services/payment.service';
+import { calculateNavyBodyFatPercent } from '@/lib/body-fat';
 
 async function deleteAllDocs(collectionName: string) {
   const snap = await adminDb.collection(collectionName).get();
@@ -119,16 +120,16 @@ async function main() {
 
   // ── Create 10 members ──
   const memberData = [
-    { firstName: 'Abebe', lastName: 'Kebede', phone: '+251911001001', address: 'Bole, Addis Ababa', weight: 75, height: 175, bloodType: 'O+', emergencyContact: '+251911001002 (Wife)' },
-    { firstName: 'Tigist', lastName: 'Haile', phone: '+251922002002', address: 'Kazanchis, Addis Ababa', weight: 58, height: 163, bloodType: 'A+', emergencyContact: '+251922002003 (Husband)' },
-    { firstName: 'Dawit', lastName: 'Amare', phone: '+251933003003', address: 'CMC, Addis Ababa', weight: 80, height: 180, bloodType: 'B+', emergencyContact: '+251933003004 (Brother)' },
-    { firstName: 'Mekdes', lastName: 'Tadesse', phone: '+251944004004', address: 'Sarbet, Addis Ababa', weight: 55, height: 158, bloodType: 'AB+' },
-    { firstName: 'Yonas', lastName: 'Gebre', phone: '+251955005005', address: 'Megenagna, Addis Ababa', weight: 70, height: 172, bloodType: 'O-', emergencyContact: '+251955005006 (Father)' },
-    { firstName: 'Hiwot', lastName: 'Alemu', phone: '+251966006006', address: 'Piassa, Addis Ababa', weight: 62, height: 165, bloodType: 'A-' },
-    { firstName: 'Solomon', lastName: 'Bekele', phone: '+251977007007', address: 'Lideta, Addis Ababa', weight: 85, height: 178, bloodType: 'B-', emergencyContact: '+251977007008 (Wife)' },
-    { firstName: 'Frehiwot', lastName: 'Dinku', phone: '+251988008008', address: 'Kirkos, Addis Ababa', weight: 60, height: 160, bloodType: 'AB-' },
-    { firstName: 'Bereket', lastName: 'Fikadu', phone: '+251999009009', address: 'Gulele, Addis Ababa', weight: 72, height: 170, bloodType: 'O+', emergencyContact: '+251999009010 (Mother)' },
-    { firstName: 'Selamawit', lastName: 'Girma', phone: '+251910010010', address: 'Nifas Silk, Addis Ababa', weight: 57, height: 162, bloodType: 'A+', emergencyContact: '+251910010011 (Sister)' },
+    { firstName: 'Abebe', lastName: 'Kebede', phone: '+251911001001', address: 'Bole, Addis Ababa', weight: 75, height: 175, bloodType: 'O+', sex: 'male', neck: 38, waist: 90, hip: null, emergencyContact: '+251911001002 (Wife)' },
+    { firstName: 'Tigist', lastName: 'Haile', phone: '+251922002002', address: 'Kazanchis, Addis Ababa', weight: 58, height: 163, bloodType: 'A+', sex: 'female', neck: 32, waist: 72, hip: 96, emergencyContact: '+251922002003 (Husband)' },
+    { firstName: 'Dawit', lastName: 'Amare', phone: '+251933003003', address: 'CMC, Addis Ababa', weight: 80, height: 180, bloodType: 'B+', sex: 'male', neck: 40, waist: 94, hip: null, emergencyContact: '+251933003004 (Brother)' },
+    { firstName: 'Mekdes', lastName: 'Tadesse', phone: '+251944004004', address: 'Sarbet, Addis Ababa', weight: 55, height: 158, bloodType: 'AB+', sex: 'female', neck: 30, waist: 68, hip: 95 },
+    { firstName: 'Yonas', lastName: 'Gebre', phone: '+251955005005', address: 'Megenagna, Addis Ababa', weight: 70, height: 172, bloodType: 'O-', sex: 'male', neck: 39, waist: 86, hip: null, emergencyContact: '+251955005006 (Father)' },
+    { firstName: 'Hiwot', lastName: 'Alemu', phone: '+251966006006', address: 'Piassa, Addis Ababa', weight: 62, height: 165, bloodType: 'A-', sex: 'female', neck: 31, waist: 70, hip: 94 },
+    { firstName: 'Solomon', lastName: 'Bekele', phone: '+251977007007', address: 'Lideta, Addis Ababa', weight: 85, height: 178, bloodType: 'B-', sex: 'male', neck: 42, waist: 98, hip: null, emergencyContact: '+251977007008 (Wife)' },
+    { firstName: 'Frehiwot', lastName: 'Dinku', phone: '+251988008008', address: 'Kirkos, Addis Ababa', weight: 60, height: 160, bloodType: 'AB-', sex: 'female', neck: 30, waist: 72, hip: 97 },
+    { firstName: 'Bereket', lastName: 'Fikadu', phone: '+251999009009', address: 'Gulele, Addis Ababa', weight: 72, height: 170, bloodType: 'O+', sex: 'male', neck: 38, waist: 84, hip: null, emergencyContact: '+251999009010 (Mother)' },
+    { firstName: 'Selamawit', lastName: 'Girma', phone: '+251910010010', address: 'Nifas Silk, Addis Ababa', weight: 57, height: 162, bloodType: 'A+', sex: 'female', neck: 31, waist: 69, hip: 93, emergencyContact: '+251910010011 (Sister)' },
   ];
 
   const memberRefs = await Promise.all(
@@ -143,6 +144,17 @@ async function main() {
         weight: m.weight,
         height: m.height,
         bloodType: m.bloodType,
+        sex: m.sex,
+        neck: m.neck,
+        waist: m.waist,
+        hip: m.hip,
+        bodyFatPercent: calculateNavyBodyFatPercent({
+sex: m.sex as 'male' | 'female',
+          heightCm: m.height,
+          neckCm: m.neck,
+          waistCm: m.waist,
+          hipCm: m.hip,
+        }),
         emergencyContact: m.emergencyContact || null,
         notes: null,
         isDeleted: false,

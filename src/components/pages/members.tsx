@@ -11,6 +11,7 @@ import { sanitizeError } from '@/lib/errors';
 import { t } from '@/lib/messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
+import { calculateNavyBodyFatPercent, hasNavyBodyFatData, type Sex } from '@/lib/body-fat';
 
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -75,6 +76,8 @@ import {
   Heart,
   RefreshCw,
   X,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -89,6 +92,11 @@ interface Member {
   weight: number | null;
   height: number | null;
   bloodType: string | null;
+  sex: Sex | null;
+  neck: number | null;
+  waist: number | null;
+  hip: number | null;
+  bodyFatPercent: number | null;
   emergencyContact: string | null;
   notes: string | null;
   isDeleted: boolean;
@@ -147,6 +155,10 @@ interface MemberFormData {
   weight: string;
   height: string;
   bloodType: string;
+  sex: string;
+  neck: string;
+  waist: string;
+  hip: string;
   emergencyContact: string;
   notes: string;
   photo: string | null;
@@ -160,12 +172,21 @@ const emptyFormData: MemberFormData = {
   weight: '',
   height: '',
   bloodType: '',
+  sex: '',
+  neck: '',
+  waist: '',
+  hip: '',
   emergencyContact: '',
   notes: '',
   photo: null,
 };
 
 const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+const sexOptions: { value: Sex; label: string }[] = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+];
 
 const statusFilters: { value: StatusType | 'all'; label: string; color: string }[] = [
   { value: 'all', label: 'All', color: '' },
@@ -384,6 +405,10 @@ export function MembersPage() {
       weight: member.weight?.toString() || '',
       height: member.height?.toString() || '',
       bloodType: member.bloodType || '',
+      sex: member.sex || '',
+      neck: member.neck?.toString() || '',
+      waist: member.waist?.toString() || '',
+      hip: member.hip?.toString() || '',
       emergencyContact: member.emergencyContact || '',
       notes: member.notes || '',
       photo: member.photo || null,
@@ -439,6 +464,15 @@ export function MembersPage() {
     if (data.height && (isNaN(Number(data.height)) || Number(data.height) <= 0)) {
       errors.height = t(locale, 'Height must be a positive number', 'ቁመት አዎንታዊ ቁጥር መሆን አለበት');
     }
+    if (data.neck && (isNaN(Number(data.neck)) || Number(data.neck) <= 0)) {
+      errors.neck = t(locale, 'Neck must be a positive number', 'አንገት አዎንታዊ ቁጥር መሆን አለበት');
+    }
+    if (data.waist && (isNaN(Number(data.waist)) || Number(data.waist) <= 0)) {
+      errors.waist = t(locale, 'Waist must be a positive number', 'ወገብ አዎንታዊ ቁጥር መሆን አለበት');
+    }
+    if (data.hip && (isNaN(Number(data.hip)) || Number(data.hip) <= 0)) {
+      errors.hip = t(locale, 'Hip must be a positive number', 'ዳሌ አዎንታዊ ቁጥር መሆን አለበት');
+    }
     if (data.bloodType && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(data.bloodType)) {
       errors.bloodType = t(locale, 'Select a valid blood type', 'ትክክለኛ የደም አይነት ይምረጡ');
     }
@@ -466,6 +500,10 @@ export function MembersPage() {
         weight: formData.weight ? parseFloat(formData.weight) : null,
         height: formData.height ? parseFloat(formData.height) : null,
         bloodType: formData.bloodType || null,
+        sex: (formData.sex as Sex) || null,
+        neck: formData.neck ? parseFloat(formData.neck) : null,
+        waist: formData.waist ? parseFloat(formData.waist) : null,
+        hip: formData.hip ? parseFloat(formData.hip) : null,
         emergencyContact: formData.emergencyContact.trim() || null,
         notes: formData.notes.trim() || null,
       };
@@ -499,6 +537,10 @@ export function MembersPage() {
         weight: formData.weight ? parseFloat(formData.weight) : null,
         height: formData.height ? parseFloat(formData.height) : null,
         bloodType: formData.bloodType || null,
+        sex: (formData.sex as Sex) || null,
+        neck: formData.neck ? parseFloat(formData.neck) : null,
+        waist: formData.waist ? parseFloat(formData.waist) : null,
+        hip: formData.hip ? parseFloat(formData.hip) : null,
         emergencyContact: formData.emergencyContact.trim() || null,
         notes: formData.notes.trim() || null,
       });
@@ -914,12 +956,8 @@ export function MembersPage() {
 
               <Separator />
 
-              {/* BMI if both weight and height */}
-              {memberDetail.weight && memberDetail.height && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 text-emerald-700">
-                  <Heart className="h-4 w-4" />
-                  <span className="text-sm font-medium">BMI: {(memberDetail.weight / ((memberDetail.height / 100) ** 2)).toFixed(1)}</span>
-                </div>
+              {(memberDetail.sex === 'male' || memberDetail.sex === 'female') && (
+                <BodyFatCheck key={memberDetail.id} member={memberDetail} />
               )}
 
               {/* Subscriptions */}
@@ -1222,6 +1260,122 @@ export function MembersPage() {
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
+/** Body-fat check (U.S. Navy method): live re-measure + compare vs stored baseline. */
+function BodyFatCheck({ member }: { member: MemberDetail }) {
+  const sex = member.sex;
+  const [neck, setNeck] = useState(member.neck?.toString() || '');
+  const [waist, setWaist] = useState(member.waist?.toString() || '');
+  const [hip, setHip] = useState(member.hip?.toString() || '');
+
+  const num = (v: string) => (v.trim() === '' ? null : Number(v));
+
+  const current = calculateNavyBodyFatPercent({
+    sex,
+    heightCm: member.height,
+    neckCm: num(neck),
+    waistCm: num(waist),
+    hipCm: num(hip),
+  });
+
+  const hasInput = neck.trim() !== '' || waist.trim() !== '' || hip.trim() !== '';
+  const canCompute = hasNavyBodyFatData({
+    sex,
+    heightCm: member.height,
+    neckCm: num(neck),
+    waistCm: num(waist),
+    hipCm: num(hip),
+  });
+
+  const baseline = member.bodyFatPercent;
+  const baselineExists = baseline != null;
+
+  let delta: number | null = null;
+  if (current != null && baselineExists) delta = current - baseline;
+
+  const reset = () => {
+    setNeck(member.neck?.toString() || '');
+    setWaist(member.waist?.toString() || '');
+    setHip(member.hip?.toString() || '');
+  };
+
+  return (
+    <div className="p-3 rounded-lg border bg-muted/30 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <Heart className="h-4 w-4 text-emerald-600" />
+          Body Composition (U.S. Navy)
+        </h4>
+        <span className="text-xs text-muted-foreground capitalize">{sex} · {member.height != null ? `${member.height} cm` : 'height not set'}</span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <Label htmlFor="bf-neck" className="text-xs">Neck (cm)</Label>
+          <Input id="bf-neck" type="number" step="0.1" value={neck} onChange={(e) => setNeck(e.target.value)} placeholder="38" />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="bf-waist" className="text-xs">Waist (cm)</Label>
+          <Input id="bf-waist" type="number" step="0.1" value={waist} onChange={(e) => setWaist(e.target.value)} placeholder="84" />
+        </div>
+        {sex === 'female' && (
+          <div className="space-y-1">
+            <Label htmlFor="bf-hip" className="text-xs">Hip (cm)</Label>
+            <Input id="bf-hip" type="number" step="0.1" value={hip} onChange={(e) => setHip(e.target.value)} placeholder="98" />
+          </div>
+        )}
+      </div>
+
+      {hasInput && !canCompute ? (
+        <p className="text-xs text-amber-600">
+          {sex === 'female' && waist !== '' && hip.trim() === ''
+            ? 'Enter the hip measurement to compute body fat.'
+            : waist !== '' && neck !== '' && Number(waist) <= Number(neck)
+              ? 'Waist must be greater than neck to compute body fat.'
+              : 'Enter valid measurements — waist must be greater than neck.'}
+        </p>
+      ) : (
+        current != null && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Current:</span>
+              <span className="font-bold text-emerald-700">{current.toFixed(1)}%</span>
+            </div>
+            {baselineExists ? (
+              <div className="flex items-center gap-2 text-sm flex-wrap">
+                <span className="text-muted-foreground">Previous: {baseline!.toFixed(1)}%</span>
+                {Math.abs(delta!) < 0.05 ? (
+                  <span className="text-sm text-muted-foreground">· no change</span>
+                ) : delta! < 0 ? (
+                  <span className="flex items-center gap-0.5 text-emerald-700 font-medium">
+                    <TrendingDown className="h-4 w-4" />
+                    {delta!.toFixed(1)}%
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-0.5 text-amber-600 font-medium">
+                    <TrendingUp className="h-4 w-4" />
+                    +{delta!.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No previous measurement on record — add one via Edit Member to enable comparison.</p>
+            )}
+          </div>
+        )
+      )}
+
+      {hasInput && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={reset}>
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            Reset
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Member Card (mobile layout) */
 function MemberCard({ member, isManagerOrAbove, onView, onEdit, onDelete, onRestore }: {
   member: Member; isManagerOrAbove: boolean;
@@ -1359,13 +1513,69 @@ function MemberForm({ formData, setFormData, formErrors }: {
             {formErrors.bloodType && <p className="text-xs text-destructive">{formErrors.bloodType}</p>}
           </div>
         </div>
-        {/* BMI Preview */}
-        {formData.weight && formData.height && Number(formData.height) > 0 && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
-            <Heart className="h-4 w-4" />
-            <span>BMI: {(Number(formData.weight) / ((Number(formData.height) / 100) ** 2)).toFixed(1)}</span>
+
+        {/* Body composition (U.S. Navy method, all in cm) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="sex">Sex</Label>
+            <Select value={formData.sex} onValueChange={(v) => updateField('sex', v)}>
+              <SelectTrigger id="sex"><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                {sexOptions.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {formErrors.sex && <p className="text-xs text-destructive">{formErrors.sex}</p>}
           </div>
-        )}
+          <div className="space-y-1.5">
+            <Label htmlFor="neck">Neck (cm)</Label>
+            <Input id="neck" type="number" step="0.1" value={formData.neck} onChange={(e) => updateField('neck', e.target.value)} placeholder="38" className={formErrors.neck ? 'border-destructive' : ''} />
+            {formErrors.neck && <p className="text-xs text-destructive">{formErrors.neck}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="waist">Waist (cm)</Label>
+            <Input id="waist" type="number" step="0.1" value={formData.waist} onChange={(e) => updateField('waist', e.target.value)} placeholder="84" className={formErrors.waist ? 'border-destructive' : ''} />
+            {formErrors.waist && <p className="text-xs text-destructive">{formErrors.waist}</p>}
+          </div>
+          {formData.sex === 'female' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="hip">Hip (cm)</Label>
+              <Input id="hip" type="number" step="0.1" value={formData.hip} onChange={(e) => updateField('hip', e.target.value)} placeholder="98" className={formErrors.hip ? 'border-destructive' : ''} />
+              {formErrors.hip && <p className="text-xs text-destructive">{formErrors.hip}</p>}
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Waist: measured horizontally at the navel for men, or the narrowest point for women. Neck: just below the larynx. Measured with a flexible, non-stretch tape, not pulled tight.
+        </p>
+        {(() => {
+          const sex = formData.sex === 'male' || formData.sex === 'female' ? formData.sex : null;
+          const previewBodyFat = calculateNavyBodyFatPercent({
+            sex,
+            heightCm: formData.height ? Number(formData.height) : null,
+            neckCm: formData.neck ? Number(formData.neck) : null,
+            waistCm: formData.waist ? Number(formData.waist) : null,
+            hipCm: formData.hip ? Number(formData.hip) : null,
+          });
+          if (previewBodyFat == null && !hasNavyBodyFatData({
+            sex,
+            heightCm: formData.height ? Number(formData.height) : null,
+            neckCm: formData.neck ? Number(formData.neck) : null,
+            waistCm: formData.waist ? Number(formData.waist) : null,
+            hipCm: formData.hip ? Number(formData.hip) : null,
+          })) return null;
+          return (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+              <Heart className="h-4 w-4" />
+              {previewBodyFat != null ? (
+                <span>Body Fat (U.S. Navy): {previewBodyFat.toFixed(1)}%</span>
+              ) : (
+                <span>Waist must be greater than neck to calculate body fat</span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <Separator />
