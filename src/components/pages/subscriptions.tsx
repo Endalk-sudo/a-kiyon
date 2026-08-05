@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { subscriptionsApi } from '@/lib/api-client';
+import { subscriptionsApi, membersApi, servicesApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
 import { sanitizeError } from '@/lib/errors';
@@ -43,6 +43,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -58,6 +59,8 @@ import {
   Ban,
   RefreshCw,
   Search,
+  Plus,
+  TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -79,6 +82,8 @@ interface Subscription {
   endDate: string;
   status: string;
   priceSnapshot: number;
+  hasVoidedPayment?: boolean;
+  voidedPaymentNote?: string | null;
   notes?: string | null;
   member: Member;
   service: { id: string; name: string; nameAm: string | null; price: number; duration: number };
@@ -131,6 +136,16 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
   );
 }
 
+function VoidedPaymentNote({ sub }: { sub: Subscription }) {
+  if (!sub.hasVoidedPayment && !sub.voidedPaymentNote) return null;
+  return (
+    <p className="text-[11px] text-amber-600 flex items-start gap-1 mt-0.5" title={sub.voidedPaymentNote || ''}>
+      <TriangleAlert className="h-3 w-3 shrink-0 mt-px" />
+      <span>{sub.voidedPaymentNote || 'A payment was voided on this subscription'}</span>
+    </p>
+  );
+}
+
 export function SubscriptionsPage() {
   const session = useAppStore((s) => s.session);
   const locale = useAppStore((s) => s.locale);
@@ -162,6 +177,18 @@ export function SubscriptionsPage() {
   const [renewDialogOpen, setRenewDialogOpen] = useState(false);
   const [subscriptionToRenew, setSubscriptionToRenew] = useState<Subscription | null>(null);
   const [renewing, setRenewing] = useState(false);
+
+  // New subscription dialog state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createMembers, setCreateMembers] = useState<Array<{ id: string; firstName: string; lastName: string; phone: string | null }>>([]);
+  const [createMemberSearch, setCreateMemberSearch] = useState('');
+  const [createMemberId, setCreateMemberId] = useState('');
+  const [createServices, setCreateServices] = useState<Array<{ id: string; name: string; price: number; duration: number }>>([]);
+  const [createServiceId, setCreateServiceId] = useState('');
+  const [createPaymentMethod, setCreatePaymentMethod] = useState('cash');
+  const [createNotes, setCreateNotes] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   // Fetch subscriptions
   const fetchSubscriptions = useCallback(async (page = 1) => {
@@ -236,6 +263,55 @@ export function SubscriptionsPage() {
     fetchSubscriptions(page);
   };
 
+  // Handle new subscription (existing member)
+  const handleOpenCreate = async () => {
+    setCreateMemberId('');
+    setCreateServiceId('');
+    setCreateNotes('');
+    setCreateError(null);
+    setCreateMemberSearch('');
+    setCreateDialogOpen(true);
+    if (createMembers.length === 0 || createServices.length === 0) {
+      try {
+        const [membersRes, servicesRes] = await Promise.all([
+          membersApi.list({ limit: 100 }),
+          servicesApi.list({ includeInactive: false }),
+        ]);
+        setCreateMembers((membersRes as { data: Array<{ id: string; firstName: string; lastName: string; phone: string | null }> }).data || []);
+        setCreateServices((servicesRes as { data: Array<{ id: string; name: string; price: number; duration: number }> }).data || []);
+      } catch {
+        toast.error(t(locale, 'Failed to load members and services', 'አባላትን እና አገልግሎቶችን መጫን አልተሳካም'));
+      }
+    }
+  };
+
+  const handleCreateSubscription = async () => {
+    if (!createMemberId) {
+      setCreateError(t(locale, 'Please select a member', 'እባክዎ አባል ይምረጡ'));
+      return;
+    }
+    if (!createServiceId) {
+      setCreateError(t(locale, 'Please select a service', 'እባክዎ አገልግሎት ይምረጡ'));
+      return;
+    }
+    setCreating(true);
+    try {
+      const result = await subscriptionsApi.create({
+        memberId: createMemberId,
+        serviceId: createServiceId,
+        paymentMethod: createPaymentMethod,
+        notes: createNotes || undefined,
+      });
+      toast.success(t(locale, `Subscription created! Receipt: ${result.payment?.receiptNumber || ''}`, `ምዝገባ ተፈጥሯል! ደረሰኝ ቁጥር: ${result.payment?.receiptNumber || ''}`));
+      setCreateDialogOpen(false);
+      fetchSubscriptions(pagination.page);
+    } catch (error) {
+      toast.error(sanitizeError(error, locale, 'Failed to create subscription', 'ምዝገባ መፍጠር አልተሳካም'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   // Check if user can manage subscriptions
   const canManage = session?.role === 'owner' || session?.role === 'manager';
 
@@ -247,6 +323,12 @@ export function SubscriptionsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Subscriptions</h1>
           <p className="text-muted-foreground">Manage member subscriptions and renewals</p>
         </div>
+        {canManage && (
+          <Button onClick={handleOpenCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Subscription
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -348,6 +430,7 @@ export function SubscriptionsPage() {
                   </TableCell>
                   <TableCell>
                     <SubscriptionStatusBadge status={sub.status} />
+                    <VoidedPaymentNote sub={sub} />
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm font-medium">
                     {formatCurrency(sub.priceSnapshot)}
@@ -433,6 +516,7 @@ export function SubscriptionsPage() {
                 </div>
                 <SubscriptionStatusBadge status={sub.status} />
               </div>
+              <VoidedPaymentNote sub={sub} />
               <p className="text-sm text-muted-foreground">{sub.service.name}</p>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
@@ -638,6 +722,125 @@ export function SubscriptionsPage() {
               className="bg-emerald-600 hover:bg-emerald-700"
             >
               {renewing ? 'Renewing...' : 'Confirm Renewal & Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── New Subscription Dialog (existing member) ─────────────────── */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-emerald-600" />
+              New Subscription
+            </DialogTitle>
+            <DialogDescription>
+              Subscribe an existing member to a service and record the payment in one step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="create-member-search">Member *</Label>
+              <Input
+                id="create-member-search"
+                placeholder="Search member by name or phone..."
+                value={createMemberSearch}
+                onChange={(e) => {
+                  setCreateMemberSearch(e.target.value);
+                  setCreateError(null);
+                }}
+              />
+              <Select
+                value={createMemberId}
+                onValueChange={(v) => { setCreateMemberId(v); setCreateError(null); }}
+              >
+                <SelectTrigger className="w-full" id="create-member">
+                  <SelectValue placeholder="Select a member" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {createMembers
+                    .filter((m) =>
+                      !createMemberSearch ||
+                      `${m.firstName} ${m.lastName}`.toLowerCase().includes(createMemberSearch.toLowerCase()) ||
+                      (m.phone || '').includes(createMemberSearch)
+                    )
+                    .map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.firstName} {m.lastName}{m.phone ? ` — ${m.phone}` : ''}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-service">Service *</Label>
+              <Select
+                value={createServiceId}
+                onValueChange={(v) => { setCreateServiceId(v); setCreateError(null); }}
+              >
+                <SelectTrigger className="w-full" id="create-service">
+                  <SelectValue placeholder="Select a service" />
+                </SelectTrigger>
+                <SelectContent>
+                  {createServices.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} — {formatCurrency(s.price)} ({s.duration} days)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {createServiceId && (() => {
+              const svc = createServices.find((s) => s.id === createServiceId);
+              return svc ? (
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="font-medium">{svc.duration} days</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price:</span>
+                    <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            <div className="space-y-2">
+              <Label htmlFor="create-payment-method">Payment Method</Label>
+              <Select value={createPaymentMethod} onValueChange={setCreatePaymentMethod}>
+                <SelectTrigger className="w-full" id="create-payment-method">
+                  <SelectValue placeholder="Select payment method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-notes">Notes (Optional)</Label>
+              <Textarea
+                id="create-notes"
+                value={createNotes}
+                onChange={(e) => setCreateNotes(e.target.value)}
+                placeholder="Subscription notes..."
+                rows={2}
+              />
+            </div>
+            {createError && <p className="text-xs text-destructive">{createError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={creating}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateSubscription}
+              disabled={creating}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {creating ? 'Subscribing...' : 'Subscribe & Record Payment'}
             </Button>
           </DialogFooter>
         </DialogContent>

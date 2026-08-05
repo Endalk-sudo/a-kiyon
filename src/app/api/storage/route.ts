@@ -5,7 +5,7 @@ import { apiHandler } from '@/lib/api-handler';
 import { db, countDocs, getDocs } from '@/lib/db';
 import { adminBucket } from '@/lib/firebase-admin';
 
-const COLLECTIONS = ['members', 'subscriptions', 'payments', 'services', 'users', 'auditLogs'] as const;
+const COLLECTIONS = ['members', 'subscriptions', 'payments', 'services', 'users'] as const;
 
 async function estimateCollectionSize(name: string): Promise<{ count: number; estimatedBytes: number }> {
   const count = await countDocs(name);
@@ -110,18 +110,6 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
       }
     }
     return apiResponse({ message: `Deleted ${deleted} orphaned file(s)` });
-  }
-
-  if (action === 'purge-old-audit-logs') {
-    const daysStr = searchParams.get('days') || '90';
-    const days = parseInt(daysStr, 10);
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-
-    const oldLogs = await getDocs<Record<string, unknown>>('auditLogs', [['createdAt', '<', cutoff]]);
-    const batch = db.batch();
-    oldLogs.forEach((log) => batch.delete(db.collection('auditLogs').doc(log.id)));
-    await batch.commit();
-    return apiResponse({ message: `Deleted ${oldLogs.length} audit log(s) older than ${days} days` });
   }
 
   if (action === 'purge-deleted-members') {

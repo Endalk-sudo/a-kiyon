@@ -16,6 +16,7 @@ pnpm run dev            # http://localhost:3000
 npx tsc --noEmit       # typecheck (separate from build)
 pnpm run lint           # ESLint
 pnpm run build          # production build
+pnpm run test           # vitest (needs Firebase emulators running)
 ```
 
 ## Architecture
@@ -35,24 +36,24 @@ pnpm run build          # production build
 
 ## DB
 
-- **Firestore** (via `firebase-admin`). 6 collections: `members`, `subscriptions`, `payments`, `services`, `users`, `auditLogs`.
+- **Firestore** (via `firebase-admin`). 5 collections: `members`, `subscriptions`, `payments`, `services`, `users`.
 - **Soft delete** on Members via `isDeleted` boolean field.
 - **Subscription expiry** is batch-updated on every list/get call. Standalone cron at `src/scripts/cron-expire.ts`.
 - **Renewal model** extends `endDate` on the existing subscription doc (no new rows).
-- **Firestore helpers** in `src/lib/db.ts`: `getDocById`, `getDocs`, `countDocs`, `createDoc`, `updateDoc`, `deleteDoc`, `batchUpdate`, `aggregateSum` (uses Firestore `AggregateField.sum()`, no client-side fetch-all).
+- **Firestore helpers** in `src/lib/db.ts`: `getDocById`, `getDocs`, `countDocs`, `createDoc`, `updateDoc`, `deleteDoc`, `batchUpdate` (chunked into 400-write batches — Firestore caps a batch at 500 writes), `aggregateSum` (uses Firestore `AggregateField.sum()`, no client-side fetch-all).
 - **Timestamps** are stored as ISO strings (`new Date().toISOString()`) via `createDoc`/`updateDoc`/`batchUpdate` — never `FieldValue.serverTimestamp()`. `FieldValue` is not exported from `db.ts`.
 
 ## Key conventions
 
 - `src/lib/api-client.ts` — typed fetch wrapper, auto-attaches Firebase token. Types from `src/lib/api-types.ts`.
 - **Photo uploads** → `POST /api/upload` with `sharp` (WebP q80 + 200×200 thumbnail). Uploads to Firebase Storage bucket.
-- **Audit logs** (`src/lib/audit.ts`) — silent on failure; never crashes the main operation.
 - **Dates** are stored as ISO strings, displayed in Ethiopian Calendar via `src/lib/ethiopian-calendar.ts`.
-- **Storage monitoring** at `/api/storage` — document counts, size estimates, file breakdown, cleanup actions (orphan purge, old audit log purge, deleted member purge). UI at `Storage` page (owner only) + summary card in Settings.
-- **Receipt printing** — `POST /api/payments/[id]/print` generates HTML receipt. Client uses `window.open()` with hidden iframe fallback when popup blocked.
+- **Storage monitoring** at `/api/storage` — document counts, size estimates, file breakdown, cleanup actions (orphan purge, deleted member purge). UI at `Storage` page (owner only) + summary card in Settings.
+- **Receipt printing** — generated client-side in the payments page (HTML via `window.open()`, hidden iframe fallback when popup blocked).
 - **Error boundary** — `page.tsx` wraps `<PageComponent>` in a class-based `ErrorBoundary` to catch render crashes gracefully.
 - **Mobile-responsive UI** — data tables use `hidden md:block` (desktop table) + `md:hidden` (card layout) pattern. Icon buttons minimum 36px (`h-9 w-9`) for touch targets. Form grids use responsive column counts (e.g. `grid-cols-1 sm:grid-cols-3`).
-- **No tests exist** yet.
+- **Payment-validity rule** — validity is provably derived from non-voided payments. Every payment stores `extendedTo` + `previousExtendedTo`; `recordAndExtendPayment` is the single "money in = days added" path (new payments and renewals). Voiding rolls the subscription back to the previous payment's `extendedTo` and flags `hasVoidedPayment`/`voidedPaymentNote`.
+- **Subscription status is derived** — only `cancelled` can be written manually (PUT). `active`/`expired` come from payments + time (renew/reactivate via payment; auto-expire batch).
 
 ## Commands
 
@@ -63,6 +64,7 @@ pnpm run build          # production build
 | `pnpm run build` | Production build (typecheck + compile) |
 | `pnpm run seed` | Seed Firestore + Firebase Auth with demo data |
 | `pnpm run cron-expire` | Manual subscription expiry batch update |
+| `pnpm run test` | Vitest (run `pnpm run firebase:emulators` first) |
 | `pnpm run firebase:emulators` | Start Firebase emulators (Firestore 8080, Auth 9099, Storage 9199, UI 4000) |
 | `pnpm run firebase:emulators:export` | Export emulator data to `./firebase-data` |
 | `pnpm run firebase:emulators:import` | Start emulators with previous data |

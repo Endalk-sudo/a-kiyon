@@ -23,7 +23,7 @@ describe('Member Status', () => {
       expect(computeMemberStatus(subs)).toBe('expired');
     });
 
-    it('returns expiring_soon when subscription ends within 7 days', () => {
+    it('returns expiring_soon when all active subscriptions end within 7 days', () => {
       const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
       const subs = [
         { endDate: threeDaysFromNow.toISOString(), status: 'active' },
@@ -31,14 +31,14 @@ describe('Member Status', () => {
       expect(computeMemberStatus(subs)).toBe('expiring_soon');
     });
 
-    it('returns expiring_soon when the nearest end date is within 7 days', () => {
+    it('returns active when any subscription extends beyond 7 days', () => {
       const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
       const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       const subs = [
         { endDate: thirtyDaysFromNow.toISOString(), status: 'active' },
         { endDate: threeDaysFromNow.toISOString(), status: 'active' },
       ];
-      expect(computeMemberStatus(subs)).toBe('expiring_soon');
+      expect(computeMemberStatus(subs)).toBe('active');
     });
 
     it('returns expired when all subscriptions are cancelled', () => {
@@ -57,14 +57,14 @@ describe('Member Status', () => {
       expect(computeMemberStatus(subs)).toBe('active');
     });
 
-    it('prioritizes expiring_soon over active', () => {
+    it('returns active when any subscription extends beyond 7 days', () => {
       const near = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
       const far = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
       const subs = [
         { endDate: far.toISOString(), status: 'active' },
         { endDate: near.toISOString(), status: 'active' },
       ];
-      expect(computeMemberStatus(subs)).toBe('expiring_soon');
+      expect(computeMemberStatus(subs)).toBe('active');
     });
   });
 

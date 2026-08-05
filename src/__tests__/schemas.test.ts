@@ -176,20 +176,25 @@ describe('Schemas', () => {
   });
 
   describe('updateSubscriptionSchema', () => {
-    it('accepts status update', () => {
-      const result = updateSubscriptionSchema.parse({ status: 'expired' });
-      expect(result.status).toBe('expired');
+    it('accepts manual cancellation', () => {
+      const result = updateSubscriptionSchema.parse({ status: 'cancelled' });
+      expect(result.status).toBe('cancelled');
     });
 
     it('rejects invalid status', () => {
       expect(() => updateSubscriptionSchema.parse({ status: 'nonexistent' })).toThrow();
     });
 
-    it('accepts all valid statuses', () => {
-      const statuses = ['active', 'expired', 'cancelled'];
-      for (const status of statuses) {
-        expect(updateSubscriptionSchema.parse({ status }).status).toBe(status);
-      }
+    it('rejects manually setting active or expired status', () => {
+      // Validity must be derived from payments (money in = days added), not
+      // from raw status writes.
+      expect(() => updateSubscriptionSchema.parse({ status: 'active' })).toThrow();
+      expect(() => updateSubscriptionSchema.parse({ status: 'expired' })).toThrow();
+    });
+
+    it('accepts notes-only updates', () => {
+      const result = updateSubscriptionSchema.parse({ notes: 'flagged' });
+      expect(result.notes).toBe('flagged');
     });
   });
 

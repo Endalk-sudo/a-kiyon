@@ -4,7 +4,6 @@ import type {
   ServiceRecord,
   SubscriptionRecord,
   PaymentRecord,
-  AuditLogRecord,
   UserRecord,
   CreateUserBody,
   DashboardData,
@@ -136,8 +135,8 @@ export const subscriptionsApi = {
     apiFetch<PaginatedResponse<SubscriptionRecord>>('/subscriptions', { params }),
   get: (id: string) =>
     apiFetch<SubscriptionRecord>(`/subscriptions/${id}`),
-  create: (data: Partial<SubscriptionRecord>) =>
-    apiFetch<SubscriptionRecord>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
+  create: (data: { memberId: string; serviceId: string; paymentMethod: string; startDate?: string; paymentDate?: string; notes?: string }) =>
+    apiFetch<{ subscription: SubscriptionRecord; payment: { id: string; amount: number; receiptNumber: string } }>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<SubscriptionRecord>) =>
     apiFetch<SubscriptionRecord>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   renew: (id: string, data?: { paymentMethod: string }) =>
@@ -160,12 +159,6 @@ export const paymentsApi = {
 export const dashboardApi = {
   get: () =>
     apiFetch<DashboardData>('/dashboard'),
-};
-
-// Audit Logs
-export const auditLogsApi = {
-  list: (params?: Record<string, string | number | boolean | undefined>) =>
-    apiFetch<PaginatedResponse<AuditLogRecord>>('/audit-logs', { params }),
 };
 
 // Users

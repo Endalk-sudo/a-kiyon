@@ -67,6 +67,7 @@ import {
   AlertTriangle,
   Users,
   UserPlus,
+  Plus,
   MapPin,
   Scale,
   Ruler,
@@ -104,6 +105,8 @@ interface MemberDetail extends Member {
     endDate: string;
     status: string;
     priceSnapshot: number;
+    hasVoidedPayment?: boolean;
+    voidedPaymentNote?: string | null;
     notes: string | null;
     service: { id: string; name: string; nameAm: string | null };
     payments: Array<{
@@ -220,6 +223,15 @@ export function MembersPage() {
   const [renewPaymentMethod, setRenewPaymentMethod] = useState('cash');
   const [renewing, setRenewing] = useState(false);
 
+  // Subscribe existing member (from member detail modal)
+  const [subscribeDialogOpen, setSubscribeDialogOpen] = useState(false);
+  const [subscribeServices, setSubscribeServices] = useState<Array<{ id: string; name: string; price: number; duration: number }>>([]);
+  const [subscribeServiceId, setSubscribeServiceId] = useState('');
+  const [subscribePaymentMethod, setSubscribePaymentMethod] = useState('cash');
+  const [subscribeNotes, setSubscribeNotes] = useState('');
+  const [subscribeError, setSubscribeError] = useState<string | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
+
   // Form data
   const [formData, setFormData] = useState<MemberFormData>(emptyFormData);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof MemberFormData, string>>>({});
@@ -313,6 +325,49 @@ export function MembersPage() {
   };
 
   // ─── Handlers ───────────────────────────────────────────────────────────
+
+  const handleOpenSubscribe = () => {
+    setSubscribeServiceId('');
+    setSubscribeNotes('');
+    setSubscribeError(null);
+    setSubscribeDialogOpen(true);
+    if (subscribeServices.length === 0) {
+      servicesApi.list({ includeInactive: false }).then((res) => {
+        setSubscribeServices((res as { data: Array<{ id: string; name: string; price: number; duration: number }> }).data || []);
+      }).catch(() => toast.error(t(locale, 'Failed to load services', 'አገልግሎቶችን መጫን አልተሳካም')));
+    }
+  };
+
+  const handleSubscribeMember = async () => {
+    if (!memberDetail) return;
+    if (!subscribeServiceId) {
+      setSubscribeError(t(locale, 'Please select a service', 'እባክዎ አገልግሎት ይምረጡ'));
+      return;
+    }
+    setSubscribing(true);
+    try {
+      const result = await subscriptionsApi.create({
+        memberId: memberDetail.id,
+        serviceId: subscribeServiceId,
+        paymentMethod: subscribePaymentMethod,
+        notes: subscribeNotes || undefined,
+      });
+      toast.success(t(
+        locale,
+        `Subscription created! Payment of ${formatCurrency(result.subscription.priceSnapshot)} recorded. Receipt: ${result.payment?.receiptNumber || ''}`,
+        `ምዝገባ ተፈጥሯል! ክፍያ ተመዝግቧል ደረሰኝ ቁጥር: ${result.payment?.receiptNumber || ''}`,
+      ));
+      setSubscribeDialogOpen(false);
+      setSubscribeServiceId('');
+      setSubscribeNotes('');
+      fetchMemberDetail(memberDetail.id);
+      fetchMembers();
+    } catch (err) {
+      toast.error(sanitizeError(err, locale, 'Failed to create subscription', 'ምዝገባ መፍጠር አልተሳካም'));
+    } finally {
+      setSubscribing(false);
+    }
+  };
 
   const handleViewMember = (member: Member) => {
     setSelectedMember(member);
@@ -870,7 +925,20 @@ export function MembersPage() {
 
               {/* Subscriptions */}
               <div>
-                <h4 className="font-semibold mb-3">Subscriptions ({memberDetail.subscriptions?.length || 0})</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">Subscriptions ({memberDetail.subscriptions?.length || 0})</h4>
+                  {isManagerOrAbove && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+                      onClick={handleOpenSubscribe}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Subscribe
+                    </Button>
+                  )}
+                </div>
                 {!memberDetail.subscriptions?.length ? (
                   <p className="text-sm text-muted-foreground">No subscriptions yet</p>
                 ) : (
@@ -880,6 +948,12 @@ export function MembersPage() {
                         <div>
                           <div className="font-medium text-sm">{sub.service?.name ?? 'Unknown Service'}</div>
                           <div className="text-xs text-muted-foreground">{formatDate(sub.startDate)} — {formatDate(sub.endDate)}</div>
+                          {(sub.hasVoidedPayment || sub.voidedPaymentNote) && (
+                            <div className="text-[11px] text-amber-600 flex items-start gap-1 mt-0.5" title={sub.voidedPaymentNote || ''}>
+                              <AlertTriangle className="h-3 w-3 shrink-0 mt-px" />
+                              <span>{sub.voidedPaymentNote || 'A payment was voided on this subscription'}</span>
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{formatCurrency(sub.priceSnapshot)}</span>
@@ -905,6 +979,36 @@ export function MembersPage() {
                   </div>
                 )}
               </div>
+
+              {/* Payments */}
+              {isManagerOrAbove && (
+                <div>
+                  <h4 className="font-semibold mb-3">Payments ({memberDetail.payments?.length || 0})</h4>
+                  {!memberDetail.payments?.length ? (
+                    <p className="text-sm text-muted-foreground">No payments yet</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {memberDetail.payments.map((p) => (
+                        <div key={p.id} className={`flex items-center justify-between p-3 rounded-lg border bg-muted/30 ${p.isVoided ? 'opacity-50' : ''}`}>
+                          <div>
+                            <div className="font-medium text-sm">{p.receiptNumber}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDate(p.paymentDate)}
+                              {p.subscription?.service?.name ? ` — ${p.subscription.service.name}` : ''}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{formatCurrency(p.amount)}</span>
+                            <Badge variant={p.isVoided ? 'outline' : 'secondary'} className="text-xs">
+                              {p.isVoided ? 'VOIDED' : p.method.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
 
             </div>
@@ -971,6 +1075,92 @@ export function MembersPage() {
               className="bg-emerald-600 hover:bg-emerald-700"
             >
               {renewing ? 'Renewing...' : 'Confirm Renewal & Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── New Subscription Dialog (existing member) ─────────────────── */}
+      <Dialog open={subscribeDialogOpen} onOpenChange={setSubscribeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-emerald-600" />
+              New Subscription
+            </DialogTitle>
+            <DialogDescription>
+              Subscribe {memberDetail ? formatMemberName(memberDetail) : ''} to a service and record the payment in one step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="member-sub-service">Service *</Label>
+              <Select
+                value={subscribeServiceId}
+                onValueChange={(v) => { setSubscribeServiceId(v); setSubscribeError(null); }}
+              >
+                <SelectTrigger id="member-sub-service">
+                  <SelectValue placeholder="Select a service" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subscribeServices.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} — {formatCurrency(s.price)} ({s.duration} days)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {subscribeError && <p className="text-xs text-destructive">{subscribeError}</p>}
+            </div>
+            {subscribeServiceId && (() => {
+              const svc = subscribeServices.find((s) => s.id === subscribeServiceId);
+              return svc ? (
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="font-medium">{svc.duration} days</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price:</span>
+                    <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            <div className="space-y-2">
+              <Label htmlFor="member-sub-payment-method">Payment Method</Label>
+              <Select value={subscribePaymentMethod} onValueChange={setSubscribePaymentMethod}>
+                <SelectTrigger className="w-full" id="member-sub-payment-method">
+                  <SelectValue placeholder="Select payment method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-sub-notes">Notes (Optional)</Label>
+              <Textarea
+                id="member-sub-notes"
+                value={subscribeNotes}
+                onChange={(e) => setSubscribeNotes(e.target.value)}
+                placeholder="Subscription notes..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubscribeDialogOpen(false)} disabled={subscribing}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubscribeMember}
+              disabled={subscribing}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {subscribing ? 'Subscribing...' : 'Subscribe & Record Payment'}
             </Button>
           </DialogFooter>
         </DialogContent>

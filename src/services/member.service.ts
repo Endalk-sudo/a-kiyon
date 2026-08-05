@@ -1,4 +1,4 @@
-import { db, getDocById, getDocs, countDocs, createDoc, updateDoc, deleteDoc, batchUpdate, type Doc, type WhereClause } from '@/lib/db';
+import { getDocById, getDocs, getDocsByIds, countDocs, createDoc, updateDoc, chunk, type Doc, type WhereClause } from '@/lib/db';
 import { computeMemberStatus, findNearestEndDate } from '@/lib/member-status';
 
 export type MemberListOptions = {
@@ -46,28 +46,23 @@ export async function listMembers(options: MemberListOptions = {}) {
     where.push(['isDeleted', '==', false]);
   }
 
-  const [members, total] = await Promise.all([
-    getDocs<MemberData>('members', where, ['createdAt', 'desc'], limit, (page - 1) * limit),
-    countDocs('members', where),
-  ]);
+  // Fast path — no search/status filter: Firestore-paginated query
+  if (!search && !statusFilter) {
+    const [members, total] = await Promise.all([
+      getDocs<MemberData>('members', where, ['createdAt', 'desc'], limit, (page - 1) * limit),
+      countDocs('members', where),
+    ]);
 
-  const memberIds = members.map((m) => m.id);
-  const allSubs = memberIds.length > 0
-    ? await getDocs<SubscriptionSummary>('subscriptions', [['memberId', 'in', memberIds]])
-    : [];
-  const subsByMember = new Map<string, SubscriptionSummary[]>();
-  for (const sub of allSubs) {
-    const list = subsByMember.get(sub.memberId) || [];
-    list.push(sub);
-    subsByMember.set(sub.memberId, list);
+    const withSubs = await attachSubscriptionStatuses(members);
+    return {
+      data: withSubs,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
-  const withSubs = members.map((member) => {
-    const subs = subsByMember.get(member.id) || [];
-    const status = computeMemberStatus(subs);
-    const subscriptionEndDate = findNearestEndDate(subs);
-    return { ...member, status, subscriptionEndDate };
-  });
+  // Filtered path — fetch all candidates, compute statuses, then filter + paginate in memory
+  const members = await getDocs<MemberData>('members', where, ['createdAt', 'desc']);
+  const withSubs = await attachSubscriptionStatuses(members);
 
   let filtered = withSubs;
   if (search) {
@@ -84,10 +79,36 @@ export async function listMembers(options: MemberListOptions = {}) {
     filtered = filtered.filter((m) => m.status === statusFilter);
   }
 
+  const total = filtered.length;
+  const start = (page - 1) * limit;
   return {
-    data: filtered,
+    data: filtered.slice(start, start + limit),
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
+}
+
+async function attachSubscriptionStatuses(members: Doc<MemberData>[]) {
+  const memberIds = members.map((m) => m.id);
+  const allSubs: SubscriptionSummary[] = [];
+  for (const idChunk of chunk(memberIds)) {
+    allSubs.push(
+      ...(await getDocs<SubscriptionSummary>('subscriptions', [['memberId', 'in', idChunk]])),
+    );
+  }
+
+  const subsByMember = new Map<string, SubscriptionSummary[]>();
+  for (const sub of allSubs) {
+    const list = subsByMember.get(sub.memberId) || [];
+    list.push(sub);
+    subsByMember.set(sub.memberId, list);
+  }
+
+  return members.map((member) => {
+    const subs = subsByMember.get(member.id) || [];
+    const status = computeMemberStatus(subs);
+    const subscriptionEndDate = findNearestEndDate(subs);
+    return { ...member, status, subscriptionEndDate };
+  });
 }
 
 export async function getMember(id: string) {
@@ -95,21 +116,45 @@ export async function getMember(id: string) {
   if (!member) return null;
 
   const subs = await getDocs<any>('subscriptions', [['memberId', '==', member.id]], ['createdAt', 'desc']);
+
+  const subsServiceIds = [...new Set(subs.map((sub) => sub.serviceId))];
+  const subsServiceDocs = await getDocsByIds<any>('services', subsServiceIds);
+  const servicesMap = new Map(subsServiceDocs.map((s) => [s.id, s]));
+
   const subsWithService = await Promise.all(
     subs.map(async (sub) => {
-      const service = await getDocById<any>('services', sub.serviceId);
-      const payments = await getDocs<any>('payments', [['subscriptionId', '==', sub.id], ['isVoided', '==', false]], ['paymentDate', 'desc']);
-      return { ...sub, service: service ? { id: service.id, name: service.name, nameAm: service.nameAm, price: service.price } : null, payments };
+      const payments = await getDocs<any>(
+        'payments',
+        [['subscriptionId', '==', sub.id], ['isVoided', '==', false]],
+        ['paymentDate', 'desc'],
+      );
+      const service = servicesMap.get(sub.serviceId);
+      return {
+        ...sub,
+        service: service ? { id: service.id, name: service.name, nameAm: service.nameAm, price: service.price } : null,
+        payments,
+      };
     }),
   );
 
   const payments = await getDocs<any>('payments', [['memberId', '==', member.id]], ['paymentDate', 'desc']);
-  const paymentsWithService = await Promise.all(
-    payments.map(async (p) => {
-      const sub = p.subscriptionId ? await getDocById<any>('subscriptions', p.subscriptionId) : null;
-      return { ...p, subscription: sub ? { service: sub.serviceId ? await getDocById<any>('services', sub.serviceId).then(s => s ? { name: s.name } : null) : null } : null };
-    }),
-  );
+
+  const paymentSubIds = [...new Set(payments.map((p) => p.subscriptionId).filter(Boolean))];
+  const paymentSubs = await getDocsByIds<any>('subscriptions', paymentSubIds);
+  const paymentSubsMap = new Map(paymentSubs.map((s) => [s.id, s]));
+
+  const paymentServiceIds = [...new Set(paymentSubs.map((s) => s.serviceId).filter(Boolean))];
+  const paymentServiceDocs = await getDocsByIds<any>('services', paymentServiceIds);
+  const paymentServicesMap = new Map(paymentServiceDocs.map((s) => [s.id, s]));
+
+  const paymentsWithService = payments.map((p) => {
+    const sub = p.subscriptionId ? paymentSubsMap.get(p.subscriptionId) : null;
+    const service = sub?.serviceId ? paymentServicesMap.get(sub.serviceId) : null;
+    return {
+      ...p,
+      subscription: sub ? { service: service ? { name: service.name } : null } : null,
+    };
+  });
 
   const status = computeMemberStatus(subs);
   return { ...member, subscriptions: subsWithService, payments: paymentsWithService, status };

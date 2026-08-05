@@ -19,7 +19,6 @@ async function main() {
   await Promise.all([
     deleteAllDocs('payments'),
     deleteAllDocs('subscriptions'),
-    deleteAllDocs('auditLogs'),
     deleteAllDocs('members'),
     deleteAllDocs('services'),
   ]);
@@ -205,6 +204,8 @@ async function main() {
         voidedAt: null,
         voidedBy: null,
         notes: null,
+        extendedTo: end.toISOString(),
+        previousExtendedTo: null,
         createdAt: ts,
         updatedAt: ts,
       });
@@ -257,30 +258,6 @@ async function main() {
     await adminDb.collection('members').doc(members[i]).update({ status, updatedAt: ts });
   }
 
-  // ── Create 5 audit logs ──
-  const auditLogs = [
-    { userId: ownerId, action: 'user.create', entity: 'user', entityId: managerId, details: JSON.stringify({ email: 'manager@fcms.com', role: 'manager' }) },
-    { userId: ownerId, action: 'service.create', entity: 'service', details: JSON.stringify({ services: ['Gym', 'Karate', 'Aerobics'] }) },
-    { userId: managerId, action: 'member.create', entity: 'member', details: JSON.stringify({ count: members.length }) },
-    { userId: ownerId, action: 'subscription.create', entity: 'subscription', details: JSON.stringify({ info: 'Initial seed data' }) },
-    { userId: managerId, action: 'payment.create', entity: 'payment', details: JSON.stringify({ info: 'Initial seed data - payments recorded' }) },
-  ];
-
-  const auditBatch = adminDb.batch();
-  auditLogs.forEach((log) => {
-    const ref = adminDb.collection('auditLogs').doc();
-    auditBatch.set(ref, {
-      userId: log.userId || null,
-      action: log.action,
-      details: log.details || null,
-      entity: log.entity || null,
-      entityId: log.entityId || null,
-      createdAt: ts,
-    });
-  });
-  await auditBatch.commit();
-
-  console.log('Created 5 audit logs');
   console.log('Seeding complete!');
 }
 

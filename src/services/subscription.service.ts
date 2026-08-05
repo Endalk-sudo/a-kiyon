@@ -1,7 +1,17 @@
 import {
-  getDocById, getDocs, countDocs, updateDoc, batchUpdate,
+  getDocById, getDocs, getDocsByIds, countDocs, updateDoc, batchUpdate, chunk,
 } from '@/lib/db';
-import type { WhereClause } from '@/lib/db';
+import type { WhereClause, Doc } from '@/lib/db';
+
+interface SubscriptionDoc {
+  memberId: string;
+  serviceId: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  priceSnapshot: number;
+  notes?: string | null;
+}
 
 export async function autoExpireSubscriptions() {
   const now = new Date();
@@ -25,55 +35,77 @@ export async function listSubscriptions(options: SubscriptionListOptions = {}) {
 
   await autoExpireSubscriptions();
 
+  // Search path — name match against non-deleted members, then filter + paginate in memory
+  if (search) {
+    const allMembers = await getDocs<{ firstName: string; lastName: string; isDeleted?: boolean }>('members');
+    const term = search.toLowerCase();
+    const matchingIds = allMembers
+      .filter((m) => !m.isDeleted)
+      .filter(m => m.firstName.toLowerCase().includes(term) || m.lastName.toLowerCase().includes(term))
+      .map(m => m.id);
+
+    if (matchingIds.length === 0) {
+      return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } };
+    }
+
+    const allSubs: Doc<SubscriptionDoc>[] = [];
+    for (const idChunk of chunk(matchingIds)) {
+      allSubs.push(
+        ...(await getDocs<SubscriptionDoc>('subscriptions', [['memberId', 'in', idChunk]], ['createdAt', 'desc'])),
+      );
+    }
+
+    let filtered = allSubs;
+    if (memberId) filtered = filtered.filter((s) => s.memberId === memberId);
+    if (serviceId) filtered = filtered.filter((s) => s.serviceId === serviceId);
+    if (status) filtered = filtered.filter((s) => s.status === status);
+
+    const total = filtered.length;
+    const pageData = filtered.slice((page - 1) * limit, (page - 1) * limit + limit);
+    const data = await enrichSubscriptions(pageData);
+
+    return {
+      data,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
   const where: WhereClause[] = [];
 
   if (memberId) where.push(['memberId', '==', memberId]);
   if (serviceId) where.push(['serviceId', '==', serviceId]);
   if (status) where.push(['status', '==', status]);
 
-  if (search) {
-    const allMembers = await getDocs<{ firstName: string; lastName: string }>('members');
-    const term = search.toLowerCase();
-    const matchingIds = allMembers
-      .filter(m => m.firstName.toLowerCase().includes(term) || m.lastName.toLowerCase().includes(term))
-      .map(m => m.id);
-    if (matchingIds.length === 0) {
-      return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } };
-    }
-    where.push(['memberId', 'in', matchingIds.slice(0, 10)]);
-  }
-
   const [subscriptions, total] = await Promise.all([
-    getDocs<{
-      memberId: string;
-      serviceId: string;
-      startDate: string;
-      endDate: string;
-      status: string;
-      priceSnapshot: number;
-      notes?: string | null;
-    }>('subscriptions', where, ['createdAt', 'desc'], limit, (page - 1) * limit),
+    getDocs<SubscriptionDoc>('subscriptions', where, ['createdAt', 'desc'], limit, (page - 1) * limit),
     countDocs('subscriptions', where),
   ]);
 
-  const data = await Promise.all(
-    subscriptions.map(async (sub) => {
-      const [member, service] = await Promise.all([
-        getDocById<{ firstName: string; lastName: string; photo: string | null }>('members', sub.memberId),
-        getDocById<{ name: string; nameAm: string | null; price: number; duration: number }>('services', sub.serviceId),
-      ]);
-      return {
-        ...sub,
-        member: member || { id: sub.memberId, firstName: '', lastName: '', photo: null },
-        service: service || { id: sub.serviceId, name: '', nameAm: null, price: 0, duration: 0 },
-      };
-    }),
-  );
+  const data = await enrichSubscriptions(subscriptions);
 
   return {
     data,
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
+}
+
+async function enrichSubscriptions(subscriptions: Doc<SubscriptionDoc>[]) {
+  const memberIds = [...new Set(subscriptions.map((sub) => sub.memberId))];
+  const serviceIds = [...new Set(subscriptions.map((sub) => sub.serviceId))];
+
+  const [memberDocs, serviceDocs] = await Promise.all([
+    getDocsByIds<{ firstName: string; lastName: string; photo: string | null }>('members', memberIds),
+    getDocsByIds<{ name: string; nameAm: string | null; price: number; duration: number }>('services', serviceIds),
+  ]);
+
+  const membersMap = new Map(memberDocs.map((m) => [m.id, m]));
+  const servicesMap = new Map(serviceDocs.map((s) => [s.id, s]));
+
+  return subscriptions.map((sub) => ({
+    ...sub,
+    member: membersMap.get(sub.memberId) || { id: sub.memberId, firstName: '', lastName: '', photo: null },
+    service: servicesMap.get(sub.serviceId) || { id: sub.serviceId, name: '', nameAm: null, price: 0, duration: 0 },
+  }));
 }
 
 export async function getSubscription(id: string) {

@@ -1,5 +1,4 @@
 import { getSessionOrThrow } from '@/lib/auth';
-import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { updateSubscriptionSchema } from '@/lib/schemas';
@@ -12,8 +11,8 @@ export const GET = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(undefined, request);
-  if (!['owner', 'manager'].includes(session.role)) throw new Error('Forbidden');
+  // View-only — aligns with the list endpoint (readers may view).
+  await getSessionOrThrow(undefined, request);
 
   const { id } = await params;
   const subscription = await getSubscription(id);
@@ -42,19 +41,6 @@ export const PUT = apiHandler(async (
   });
 
   if (!subscription) return apiError('Subscription not found', 404);
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'subscription.update',
-    details: {
-      subscriptionId: id,
-      previousStatus: existing.status,
-      newStatus: data.status,
-      notesUpdated: data.notes !== undefined,
-    },
-    entity: 'subscription',
-    entityId: id,
-  });
 
   return apiResponse(subscription);
 });

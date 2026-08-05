@@ -5,12 +5,11 @@ A complete management system for fitness centers built with Next.js. Track membe
 ## Features
 
 - **Member Management** — Register members with photos, health stats, blood type, emergency contacts, and address
-- **Subscriptions & Renewals** — Track subscription periods with auto-calculated end dates and Ethiopian calendar support
-- **Payments & Receipts** — Record payments in cash, bank transfer, or mobile money; print thermal-style receipts; void with audit trail
+- **Subscriptions & Renewals** — Track subscription periods with auto-calculated end dates and Ethiopian calendar support; validity is provably derived from non-voided payments
+- **Payments & Receipts** — Record payments in cash, bank transfer, or mobile money; print receipts; void with automatic subscription rollback
 - **Reporting & Analytics** — Revenue charts, monthly trends, expiring member alerts, CSV exports
 - **Role-Based Access** — Owner (full access), Manager (operational CRUD, no voiding), Reader (view-only)
 - **User Management** — Create/update/deactivate users with role assignment (owner only)
-- **Audit Logging** — Every mutation action is logged with user, timestamp, and details
 - **Photo Uploads** — Member photos with camera capture, processed via sharp (WebP + thumbnail)
 - **Ethiopian Calendar** — Full date input, display, and formatting in EC
 - **Dark Mode** — Theme toggle with system preference detection
@@ -99,7 +98,6 @@ Self-hosted with Caddy reverse proxy on `:81` → `localhost:3000` (see `Caddyfi
 | Reports & Exports | ✅ | ✅ |
 | Services (manage) | ✅ | ❌ |
 | Users (manage) | ✅ | ❌ |
-| Audit Logs | ✅ | ❌ |
 | Settings & Storage | ✅ | ❌ |
 
 ## Project Structure
@@ -110,7 +108,7 @@ src/
 │   ├── api/          # API routes (RESTful, each wrapped with apiHandler)
 │   └── page.tsx      # Root page (auth gate + client-side routing)
 ├── components/
-│   ├── pages/        # Page components (dashboard, members, subscriptions, payments, services, audit-logs, settings, storage)
+│   ├── pages/        # Page components (dashboard, members, subscriptions, payments, services, reports, settings, storage)
 │   └── ui/           # shadcn/ui components
 ├── lib/
 │   ├── auth.ts       # Server-side session helpers (getSession / getSessionOrThrow)
@@ -118,7 +116,6 @@ src/
 │   ├── api.ts        # Response utilities (apiResponse, paginatedResponse, apiError)
 │   ├── api-client.ts # Client-side fetch wrapper (auto-attaches Bearer token)
 │   ├── api-types.ts  # Shared API response types
-│   ├── audit.ts      # Audit log helper (silent on failure)
 │   ├── db.ts         # Firestore helper functions (getDocById, getDocs, createDoc, updateDoc, deleteDoc, batchUpdate, aggregateSum)
 │   ├── firebase-admin.ts  # Firebase Admin SDK (adminDb, adminAuth, adminBucket)
 │   ├── firebase-client.ts # Firebase client SDK with emulator auto-connect
@@ -126,7 +123,7 @@ src/
 │   ├── format.ts     # Formatting utilities
 │   ├── schemas.ts    # Zod v4 schemas for all entities
 │   ├── ethiopian-calendar.ts  # Ethiopian calendar conversion
-│   └── member-status.ts  # Member status computation (active/expired/grace)
+│   └── member-status.ts  # Member status computation (active/expiring_soon/expired)
 ├── services/         # Service layer (member, subscription, payment, user)
 ├── hooks/            # Custom React hooks
 └── scripts/
@@ -144,6 +141,7 @@ src/
 | `pnpm run lint` | Run ESLint |
 | `npx tsc --noEmit` | TypeScript type check |
 | `pnpm run seed` | Seed Firestore + Auth with demo data |
+| `pnpm run test` | Run Vitest suite (start emulators first) |
 | `pnpm run firebase:emulators` | Start Firebase emulators (Firestore 8080, Auth 9099, Storage 9199, UI 4000) |
 | `pnpm run firebase:emulators:export` | Export emulator data to `./firebase-data` |
 | `pnpm run firebase:emulators:import` | Start emulators with previous data |
@@ -152,9 +150,9 @@ src/
 
 - **API routes** under `src/app/api/*/route.ts` are each wrapped with `apiHandler` which catches `ZodError` → 400, `"Unauthorized"` → 401, `"Forbidden"` → 403.
 - **Subscriptions** use an extendable `endDate` model — renewals extend the existing subscription rather than creating new rows.
+- **Payment-validity rule** — every payment stores `extendedTo` + `previousExtendedTo`; recording a payment extends the end date (`recordAndExtendPayment`), voiding rolls it back to the previous payment's `extendedTo` and flags `hasVoidedPayment`. Subscription status is derived from non-voided payments + time — only `cancelled` can be set manually.
 - **Auto-expiry** runs on read (GET endpoints) — active subscriptions past their `endDate` are batch-updated to `expired` before results are returned. A standalone cron script at `src/scripts/cron-expire.ts` also exists.
 - **All dates** are stored as ISO strings in Firestore and displayed in Ethiopian Calendar (EC) format in the UI.
 - **Photo uploads** are uploaded to Firebase Storage (not local disk). Sharp converts to WebP (quality 80) with a 200×200 thumbnail.
 - **Soft delete** is used for Members (`isDeleted` boolean field).
-- **Audit logs** are written silently — failures never crash the main operation.
-- **Storage monitoring** is available at `/api/storage` and the Storage page shows Firestore doc counts, Storage file breakdown, free-tier percentages, and cleanup actions (orphan purge, old audit log purge, deleted member purge).
+- **Storage monitoring** is available at `/api/storage` and the Storage page shows Firestore doc counts, Storage file breakdown, free-tier percentages, and cleanup actions (orphan purge, deleted member purge).

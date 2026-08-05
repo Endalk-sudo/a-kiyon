@@ -20,6 +20,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Download, DollarSign, TrendingUp } from 'lucide-react';
+import { EthiopianDateInput } from '@/components/ethiopian-date-input';
 
 interface DashboardData {
   totalRevenue: number;
@@ -32,6 +33,12 @@ export function ReportsPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<'members' | 'payments' | null>(null);
+
+  // Export date range (Ethiopian calendar)
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateFromIso, setDateFromIso] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState('');
+  const [dateToIso, setDateToIso] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -50,7 +57,11 @@ export function ReportsPage() {
   const downloadCSV = useCallback(async (type: 'members' | 'payments') => {
     setExporting(type);
     try {
-      const result = await exportApi[type]({});
+      const params = {
+        ...(dateFromIso ? { startDate: dateFromIso } : {}),
+        ...(dateToIso ? { endDate: dateToIso } : {}),
+      };
+      const result = await exportApi[type](params);
       const blob = new Blob([result], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -64,7 +75,7 @@ export function ReportsPage() {
     } finally {
       setExporting(null);
     }
-  }, []);
+  }, [dateFromIso, dateToIso]);
 
   if (loading) {
     return (
@@ -187,6 +198,20 @@ export function ReportsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Date Range Filter */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <EthiopianDateInput
+              value={dateFrom}
+              onChange={(val, iso) => { setDateFrom(val); setDateFromIso(iso); }}
+              label="From (EC)"
+            />
+            <EthiopianDateInput
+              value={dateTo}
+              onChange={(val, iso) => { setDateTo(val); setDateToIso(iso); }}
+              label="To (EC)"
+            />
+          </div>
+
           {/* Export Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
@@ -227,7 +252,8 @@ export function ReportsPage() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            All data is exported without date filtering.
+            The date range filters members by created date and payments by payment date.
+            Leave both fields empty to export all data.
           </p>
         </CardContent>
       </Card>

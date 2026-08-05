@@ -4,7 +4,6 @@ import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
-import { createAuditLog } from '@/lib/audit';
 import { adminBucket } from '@/lib/firebase-admin';
 
 type Bucket = NonNullable<typeof adminBucket>;
@@ -60,13 +59,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   const photoUrl = await publicUrl(bucket, `uploads/${filename}`);
   const thumbnailUrl = await publicUrl(bucket, `uploads/thumbs/${thumbFilename}`);
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'upload.photo',
-    details: { filename, originalName: file.name, size: file.size },
-    entity: 'upload',
-  });
 
   return apiResponse({ url: photoUrl, thumbnailUrl });
 });

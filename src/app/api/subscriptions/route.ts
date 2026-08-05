@@ -1,6 +1,5 @@
 import { db, getDocById, getDocs } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
-import { createAuditLog } from '@/lib/audit';
 import { apiResponse, paginatedResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createSubscriptionSchema } from '@/lib/schemas';
@@ -63,6 +62,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
     if (isNaN(parsedStartDate.getTime())) return apiError('Invalid start date format');
   }
 
+  const now = Date.now();
+  if (parsedStartDate.getTime() > now + 60 * 60 * 1000) {
+    return apiError('Start date cannot be in the future');
+  }
+
   let paymentDateValue = parsedStartDate;
   if (data.paymentDate) {
     const paymentStr = String(data.paymentDate).trim();
@@ -72,6 +76,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
     } else {
       const d = new Date(paymentStr);
       if (!isNaN(d.getTime())) paymentDateValue = d;
+    }
+    if (paymentDateValue.getTime() > now + 60 * 60 * 1000) {
+      return apiError('Payment date cannot be in the future');
     }
   }
 
@@ -104,6 +111,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
       receiptNumber,
       createdBy: session.userId,
       isVoided: false,
+      extendedTo: parsedEndDate.toISOString(),
+      previousExtendedTo: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -134,23 +143,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
     receiptNumber,
     createdBy: session.userId,
   };
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'subscription.create',
-    details: {
-      subscriptionId,
-      memberId: data.memberId,
-      serviceId: data.serviceId,
-      priceSnapshot: service.price,
-      startDate: parsedStartDate.toISOString(),
-      endDate: parsedEndDate.toISOString(),
-      paymentId,
-      receiptNumber,
-    },
-    entity: 'subscription',
-    entityId: subscriptionId,
-  });
 
   return apiResponse({ subscription, payment }, 201);
 });

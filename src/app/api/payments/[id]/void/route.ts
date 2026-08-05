@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { getSessionOrThrow } from '@/lib/auth';
-import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { getDocById } from '@/lib/db';
@@ -20,20 +19,6 @@ export const POST = apiHandler(async (
 
   const updatedPayment = await voidPayment(id, session.userId);
   if (!updatedPayment) return apiError('Payment not found', 404);
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'payment.void',
-    details: {
-      paymentId: id,
-      receiptNumber: payment.receiptNumber,
-      subscriptionId: payment.subscriptionId,
-      amount: payment.amount,
-      voidedBy: session.userId,
-    },
-    entity: 'payment',
-    entityId: id,
-  });
 
   return apiResponse(updatedPayment);
 });

@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server';
 import { adminAuth } from '@/lib/auth';
 import { getSessionOrThrow } from '@/lib/auth';
 import { getDocById, updateDoc } from '@/lib/db';
-import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { updateUserSchema } from '@/lib/schemas';
@@ -82,13 +81,6 @@ export const PUT = apiHandler(async (
 
   const changedFields = Object.keys(data);
   if (changedFields.length > 0) {
-    await createAuditLog({
-      userId: session.userId,
-      action: 'user.update',
-      details: { userId: id, changedFields },
-      entity: 'user',
-      entityId: id,
-    });
   }
 
   return apiResponse({
@@ -121,14 +113,6 @@ export const DELETE = apiHandler(async (
   if (userRecord.disabled) return apiError('User is already deactivated');
 
   await adminAuth.updateUser(id, { disabled: true });
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'user.deactivate',
-    details: { userId: id },
-    entity: 'user',
-    entityId: id,
-  });
 
   const updatedUser = await adminAuth.getUser(id);
   const suppData = await getDocById<{ phone?: string }>('users', id);

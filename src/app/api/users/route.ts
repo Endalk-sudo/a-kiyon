@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server';
 import { adminAuth } from '@/lib/auth';
 import { getSessionOrThrow } from '@/lib/auth';
 import { createDocWithId } from '@/lib/db';
-import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createUserSchema } from '@/lib/schemas';
@@ -62,14 +61,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (data.phone) {
     await createDocWithId('users', userRecord.uid, { phone: data.phone });
   }
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'user.create',
-    details: { email: data.email, name: data.name, role: data.role },
-    entity: 'user',
-    entityId: userRecord.uid,
-  });
 
   return apiResponse({
     id: userRecord.uid,

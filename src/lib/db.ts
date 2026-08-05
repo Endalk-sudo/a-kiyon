@@ -15,6 +15,15 @@ export type Doc<T> = T & { id: string };
 export type WhereClause = [string, WhereFilterOp, unknown];
 export type OrderClause = [string, OrderByDirection];
 
+// Firestore `in` queries support at most 30 values per clause.
+export function chunk<T>(arr: T[], size = 30): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
 function docToData<T>(snap: DocumentSnapshot): Doc<T> | null {
   if (!snap.exists) return null;
   return { id: snap.id, ...snap.data() } as Doc<T>;
@@ -60,6 +69,21 @@ export async function countDocs(collection: string, where?: WhereClause[]): Prom
   }
   const snapshot = await query.count().get();
   return snapshot.data().count;
+}
+
+/**
+ * Fetch many documents by id in chunked `in` queries on the document id.
+ * Ordering is not preserved — build a Map from the results when order matters.
+ */
+export async function getDocsByIds<T>(collection: string, ids: string[]): Promise<Doc<T>[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
+  const results = await Promise.all(
+    chunk(unique).map((idChunk) =>
+      getDocs<T>(collection, [['__name__', 'in', idChunk]]),
+    ),
+  );
+  return results.flat();
 }
 
 export async function createDoc<T>(collection: string, data: Record<string, unknown>): Promise<Doc<T>> {
@@ -117,15 +141,19 @@ export async function batchUpdate(
 ): Promise<number> {
   const docs = await getDocs<Record<string, unknown>>(collection, where);
   if (docs.length === 0) return 0;
-  const batch = db.batch();
   const now = new Date().toISOString();
-  for (const doc of docs) {
-    batch.update(db.collection(collection).doc(doc.id), {
-      ...data,
-      updatedAt: now,
-    });
+  // A single Firestore batch is limited to 500 writes.
+  const BATCH_LIMIT = 400;
+  for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    for (const doc of docs.slice(i, i + BATCH_LIMIT)) {
+      batch.update(db.collection(collection).doc(doc.id), {
+        ...data,
+        updatedAt: now,
+      });
+    }
+    await batch.commit();
   }
-  await batch.commit();
   return docs.length;
 }
 

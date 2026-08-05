@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 export const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 export const paymentMethods = ['cash', 'bank_transfer', 'mobile_money'] as const;
-export const subscriptionStatuses = ['active', 'expired', 'cancelled'] as const;
 export const userRoles = ['owner', 'manager', 'reader'] as const;
 
 export const createMemberSchema = z.object({
@@ -20,6 +19,14 @@ export const createMemberSchema = z.object({
   paymentMethod: z.enum(paymentMethods).optional(),
   paymentDate: z.string().optional(),
   subscriptionNotes: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.serviceId && !data.paymentMethod) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['paymentMethod'],
+      message: 'Payment method is required when a subscription is created',
+    });
+  }
 });
 
 export const updateMemberSchema = z.object({
@@ -69,15 +76,16 @@ export const renewSubscriptionSchema = z.object({
 });
 
 export const updateSubscriptionSchema = z.object({
-  status: z.enum(subscriptionStatuses).optional(),
+  // Status can only be manually set to `cancelled`. `active`/`expired` are
+  // derived from payments and time — reactivation requires a payment (renew),
+  // never a raw status write.
+  status: z.literal('cancelled').optional(),
   notes: z.string().optional().nullable(),
 });
 
 export const createPaymentSchema = z.object({
   subscriptionId: z.string().min(1, 'subscriptionId is required'),
-  memberId: z.string().min(1, 'memberId is required'),
   amount: z.coerce.number().positive('Amount must be greater than 0'),
-  paymentDate: z.string().min(1, 'paymentDate is required'),
   method: z.enum(paymentMethods),
   notes: z.string().optional().nullable(),
 });

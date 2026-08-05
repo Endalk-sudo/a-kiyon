@@ -10,21 +10,22 @@ function toDate(v: Date | string): Date {
 }
 
 export function computeMemberStatus(subscriptions: SubscriptionInfo[]): MemberStatus {
-  if (subscriptions.length === 0) return 'no_subscription';
-
   const now = new Date();
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  const hasActive = subscriptions.some(
-    (s) => toDate(s.endDate) >= now && s.status !== 'cancelled'
-  );
-  const hasExpiringSoon = subscriptions.some(
-    (s) => toDate(s.endDate) >= now && toDate(s.endDate) <= sevenDaysFromNow && s.status !== 'cancelled'
-  );
+  const activeEndDates = subscriptions
+    .filter((s) => s.status !== 'cancelled')
+    .map((s) => toDate(s.endDate))
+    .filter((endDate) => endDate >= now);
 
-  if (hasExpiringSoon) return 'expiring_soon';
-  if (hasActive) return 'active';
-  return 'expired';
+  if (activeEndDates.length === 0) {
+    return subscriptions.length === 0 ? 'no_subscription' : 'expired';
+  }
+
+  // A subscription extending beyond the next 7 days means the member has
+  // guaranteed access — a shorter concurrent subscription must not shadow it.
+  const hasLongTermAccess = activeEndDates.some((endDate) => endDate > sevenDaysFromNow);
+  return hasLongTermAccess ? 'active' : 'expiring_soon';
 }
 
 export function findNearestEndDate(subscriptions: SubscriptionInfo[]): Date | null {

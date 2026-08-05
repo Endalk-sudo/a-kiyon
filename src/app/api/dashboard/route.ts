@@ -3,9 +3,12 @@ import { countDocs, getDocs, getDocById, aggregateSum } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
+import { autoExpireSubscriptions } from '@/services/subscription.service';
 
 export const GET = apiHandler(async (request: NextRequest) => {
   const session = await getSessionOrThrow(undefined, request);
+
+  await autoExpireSubscriptions();
 
   const now = new Date();
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -29,7 +32,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
     ['status', '==', 'active'],
     ['endDate', '<=', sevenDaysFromNow.toISOString()],
     ['endDate', '>=', now.toISOString()],
-  ], ['endDate', 'asc']);
+  ], ['endDate', 'asc'], 20);
 
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const recentlyExpiredSubscriptions = await getDocs<any>('subscriptions', [
@@ -105,22 +108,28 @@ export const GET = apiHandler(async (request: NextRequest) => {
     };
   });
 
-  const monthlyRevenue: { month: string; revenue: number }[] = [];
+  const monthStarts: Date[] = [];
   for (let i = 5; i >= 0; i--) {
-    const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
-
-    const revenue = (await aggregateSum('payments', 'amount', [
-      ['isVoided', '==', false],
-      ['paymentDate', '>=', monthStart.toISOString()],
-      ['paymentDate', '<=', monthEnd.toISOString()],
-    ])) || 0;
-
-    monthlyRevenue.push({
-      month: monthStart.toLocaleString('default', { month: 'short', year: 'numeric' }),
-      revenue,
-    });
+    monthStarts.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
   }
+
+  const monthRevenues = await Promise.all(
+    monthStarts.map(async (monthStart) => {
+      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59, 999);
+      const revenue = (await aggregateSum('payments', 'amount', [
+        ['isVoided', '==', false],
+        ['paymentDate', '>=', monthStart.toISOString()],
+        ['paymentDate', '<=', monthEnd.toISOString()],
+      ])) || 0;
+
+      return {
+        month: monthStart.toLocaleString('default', { month: 'short', year: 'numeric' }),
+        revenue,
+      };
+    }),
+  );
+
+  const monthlyRevenue = monthRevenues;
 
   return apiResponse({
     totalMembers,

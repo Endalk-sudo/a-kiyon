@@ -94,6 +94,56 @@ describe('Subscription Service (integration)', () => {
     });
   });
 
+  describe('listSubscriptions search (more than 10 matching members)', () => {
+    let searchMemberIds: string[] = [];
+    let searchSubIds: string[] = [];
+
+    beforeAll(async () => {
+      const batch = db.batch();
+      for (let i = 0; i < 12; i++) {
+        const ref = db.collection('members').doc();
+        batch.set(ref, {
+          firstName: `${PREFIX}SearchName${i}`,
+          lastName: 'Test',
+          phone: `+2519110004${String(i).padStart(2, '0')}`,
+          isDeleted: false,
+          deletedAt: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        searchMemberIds.push(ref.id);
+      }
+      await batch.commit();
+
+      for (const memberId of searchMemberIds) {
+        const { createDoc } = await import('@/lib/db');
+        const sub = await createDoc('subscriptions', {
+          memberId,
+          serviceId,
+          startDate: new Date().toISOString(),
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'active',
+          priceSnapshot: 500,
+        });
+        searchSubIds.push(sub.id);
+      }
+    });
+
+    afterAll(async () => {
+      const batch = db.batch();
+      searchMemberIds.forEach((id) => batch.delete(db.collection('members').doc(id)));
+      searchSubIds.forEach((id) => batch.delete(db.collection('subscriptions').doc(id)));
+      await batch.commit();
+    });
+
+    it('returns all subscriptions for matches beyond 10, with correct totals', async () => {
+      const { listSubscriptions } = await import('@/services/subscription.service');
+      const result = await listSubscriptions({ search: 'SearchName', page: 1, limit: 20 });
+      expect(result.pagination.total).toBe(12);
+      expect(result.data.length).toBe(12);
+    });
+  });
+
   describe('getSubscription', () => {
     it('returns a subscription by id', async () => {
       const { createDoc } = await import('@/lib/db');

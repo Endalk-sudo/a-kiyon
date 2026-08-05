@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server';
 import { getDocs, countDocs, createDoc } from '@/lib/db';
 import type { WhereClause } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
-import { createAuditLog } from '@/lib/audit';
 import { apiResponse } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createServiceSchema } from '@/lib/schemas';
@@ -67,14 +66,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
     price: data.price,
     duration: data.duration,
     isActive: data.isActive !== undefined ? data.isActive : true,
-  });
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'service.create',
-    details: { name: data.name, price: data.price, duration: data.duration },
-    entity: 'service',
-    entityId: service.id,
   });
 
   return apiResponse(service, 201);

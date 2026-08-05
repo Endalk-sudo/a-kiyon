@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getDocById, updateDoc } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
-import { createAuditLog } from '@/lib/audit';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { updateServiceSchema } from '@/lib/schemas';
@@ -38,14 +37,6 @@ export const PUT = apiHandler(async (
     isActive: boolean;
   }>('services', id, updateData);
 
-  await createAuditLog({
-    userId: session.userId,
-    action: 'service.update',
-    details: { name: data.name, price: data.price, duration: data.duration, isActive: data.isActive },
-    entity: 'service',
-    entityId: service?.id || id,
-  });
-
   return apiResponse(service);
 });
 
@@ -62,14 +53,6 @@ export const DELETE = apiHandler(async (
   if (!existing.isActive) return apiError('Service is already inactive');
 
   const service = await updateDoc<{ name: string; isActive: boolean }>('services', id, { isActive: false });
-
-  await createAuditLog({
-    userId: session.userId,
-    action: 'service.deactivate',
-    details: { name: existing.name },
-    entity: 'service',
-    entityId: service?.id || id,
-  });
 
   return apiResponse({ message: 'Service deactivated successfully' });
 });

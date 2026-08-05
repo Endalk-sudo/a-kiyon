@@ -11,7 +11,8 @@
     "cron-expire": "tsx src/scripts/cron-expire.ts",
     "firebase:emulators": "firebase emulators:start",
     "firebase:emulators:export": "firebase emulators:export ./firebase-data",
-    "firebase:emulators:import": "firebase emulators:start --import ./firebase-data"
+    "firebase:emulators:import": "firebase emulators:start --import ./firebase-data",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

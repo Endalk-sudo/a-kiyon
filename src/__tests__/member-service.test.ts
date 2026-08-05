@@ -108,6 +108,62 @@ describe('Member Service (integration)', () => {
     });
   });
 
+  describe('listMembers search (across all pages)', () => {
+    let searchMemberIds: string[] = [];
+    let searchSubIds: string[] = [];
+
+    beforeAll(async () => {
+      const batch = db.batch();
+      for (let i = 0; i < 5; i++) {
+        const ref = db.collection('members').doc();
+        batch.set(ref, {
+          firstName: `${TEST_PREFIX}DeepSearch${i}`,
+          lastName: 'Test',
+          phone: `+25191100030${i}`,
+          isDeleted: false,
+          deletedAt: null,
+          createdAt: new Date(Date.now() + i * 60_000).toISOString(),
+          updatedAt: new Date(Date.now() + i * 60_000).toISOString(),
+        });
+        searchMemberIds.push(ref.id);
+      }
+      await batch.commit();
+    });
+
+    afterAll(async () => {
+      const batch = db.batch();
+      searchMemberIds.forEach((id) => batch.delete(db.collection('members').doc(id)));
+      searchSubIds.forEach((id) => batch.delete(db.collection('subscriptions').doc(id)));
+      await batch.commit();
+    });
+
+    it('finds members beyond the first page with correct totals', async () => {
+      const { listMembers } = await import('@/services/member.service');
+      const result = await listMembers({ search: 'DeepSearch', page: 3, limit: 2 });
+      expect(result.pagination.total).toBe(5);
+      expect(result.data.length).toBe(1);
+      expect(result.data[0].firstName).toBe(`${TEST_PREFIX}DeepSearch0`);
+    });
+
+    it('combines search with status filter deterministically', async () => {
+      const { createDoc } = await import('@/lib/db');
+      const sub = await createDoc('subscriptions', {
+        memberId: searchMemberIds[2],
+        serviceId: 'test_svc_int',
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        status: 'active',
+        priceSnapshot: 500,
+      });
+      searchSubIds.push(sub.id);
+
+      const { listMembers } = await import('@/services/member.service');
+      const result = await listMembers({ search: 'DeepSearch', statusFilter: 'active', page: 1, limit: 10 });
+      expect(result.pagination.total).toBe(1);
+      expect(result.data[0].id).toBe(searchMemberIds[2]);
+    });
+  });
+
   describe('getMember', () => {
     let memberId: string;
 

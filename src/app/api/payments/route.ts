@@ -1,13 +1,10 @@
 import { NextRequest } from 'next/server';
 import { getSessionOrThrow } from '@/lib/auth';
-import { createAuditLog } from '@/lib/audit';
 import { paginatedResponse, apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createPaymentSchema } from '@/lib/schemas';
-import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
-import { listPayments, createPayment } from '@/services/payment.service';
+import { listPayments, recordAndExtendPayment } from '@/services/payment.service';
 import { autoExpireSubscriptions } from '@/services/subscription.service';
-import { getDocById } from '@/lib/db';
 
 export const GET = apiHandler(async (request: NextRequest) => {
   const session = await getSessionOrThrow(undefined, request);
@@ -35,47 +32,32 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const body = await request.json();
   const data = createPaymentSchema.parse(body);
 
-  const subscription = await getDocById<{ memberId: string; serviceId: string; status: string }>('subscriptions', data.subscriptionId);
-  if (!subscription) return apiError('Subscription not found', 404);
-
-  let paymentDate: Date;
-  if (typeof data.paymentDate === 'string') {
-    const ethParsed = parseEthiopianDate(data.paymentDate);
-    if (ethParsed.success && ethParsed.date) {
-      paymentDate = ethParsed.date;
-    } else {
-      const isoDate = new Date(data.paymentDate);
-      if (isNaN(isoDate.getTime())) return apiError('Invalid payment date format');
-      paymentDate = isoDate;
-    }
-  } else {
-    return apiError('Invalid payment date format');
-  }
-
-  const payment = await createPayment({
+  // Money in = days added: recording a payment extends the subscription
+  // end date by the service duration (same rule as renewing).
+  const result = await recordAndExtendPayment({
     subscriptionId: data.subscriptionId,
-    memberId: data.memberId,
     amount: data.amount,
-    paymentDate,
     method: data.method,
     notes: data.notes || null,
     createdBy: session.userId,
   });
 
-  await createAuditLog({
-    userId: session.userId,
-    action: 'payment.create',
-    details: {
-      paymentId: payment.id,
-      receiptNumber: payment.receiptNumber,
-      subscriptionId: data.subscriptionId,
-      memberId: data.memberId,
-      amount: payment.amount,
-      method: data.method,
-    },
-    entity: 'payment',
-    entityId: payment.id,
-  });
+  if (!result.ok) {
+    switch (result.reason) {
+      case 'subscription_not_found':
+        return apiError('Subscription not found', 404);
+      case 'member_not_found':
+        return apiError('Member not found', 404);
+      case 'subscription_inactive':
+        return apiError('Cannot record a payment for an inactive subscription');
+      case 'service_not_found':
+        return apiError('Service not found', 404);
+      case 'service_inactive':
+        return apiError('Service is not active');
+      case 'amount_mismatch':
+        return apiError('Payment amount must equal the current service price');
+    }
+  }
 
-  return apiResponse(payment, 201);
+  return apiResponse(result.payment, 201);
 });

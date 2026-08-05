@@ -29,7 +29,6 @@ import {
   RefreshCw,
   Loader2,
   FileX,
-  Clock,
   Users,
 } from 'lucide-react';
 
@@ -281,24 +280,6 @@ export function StoragePage() {
             <ConfirmButton
               action="purge-orphaned-files"
               label="Purge Orphans"
-              cleaning={cleaning}
-              onConfirm={handleCleanup}
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-lg border">
-            <div className="flex items-start gap-3">
-              <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium text-sm">Old Audit Logs</p>
-                <p className="text-xs text-muted-foreground">
-                  Delete audit logs older than 90 days
-                </p>
-              </div>
-            </div>
-            <ConfirmButton
-              action="purge-old-audit-logs"
-              label="Purge Old Logs"
               cleaning={cleaning}
               onConfirm={handleCleanup}
             />
