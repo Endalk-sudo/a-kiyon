@@ -9,7 +9,6 @@ export type PageId =
   | 'subscriptions' 
   | 'payments' 
   | 'reports' 
-  | 'audit-logs' 
   | 'settings'
   | 'storage';
 

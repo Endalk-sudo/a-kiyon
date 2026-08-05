@@ -97,17 +97,6 @@ export interface ServiceRecord {
   isActive: boolean;
 }
 
-export interface AuditLogRecord {
-  id: string;
-  userId: string | null;
-  action: string;
-  details: string | null;
-  entity: string | null;
-  entityId: string | null;
-  createdAt: string;
-  user: { name: string; email: string } | null;
-}
-
 export interface UserRecord {
   id: string;
   email: string;

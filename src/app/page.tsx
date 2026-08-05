@@ -12,7 +12,6 @@ import { ServicesPage } from '@/components/pages/services';
 import { SubscriptionsPage } from '@/components/pages/subscriptions';
 import { PaymentsPage } from '@/components/pages/payments';
 import { ReportsPage } from '@/components/pages/reports';
-import { AuditLogsPage } from '@/components/pages/audit-logs';
 import { SettingsPage } from '@/components/pages/settings';
 import { StoragePage } from '@/components/pages/storage';
 import { Loader2 } from 'lucide-react';
@@ -24,7 +23,6 @@ const pageComponents: Record<string, React.ComponentType> = {
   subscriptions: SubscriptionsPage,
   payments: PaymentsPage,
   reports: ReportsPage,
-  'audit-logs': AuditLogsPage,
   settings: SettingsPage,
   storage: StoragePage,
 };
