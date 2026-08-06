@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { authClient } from '@/lib/auth-client';
 import { resetPassword } from '@/lib/firebase-client';
+import { getEthiopianYear } from '@/lib/ethiopian-calendar';
 import { useAppStore } from '@/lib/store';
 import { sanitizeError } from '@/lib/errors';
 import { t } from '@/lib/messages';
@@ -494,7 +495,7 @@ export function LandingPage() {
           </div>
           <div className="border-t pt-6 text-center">
             <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} A-kiyon Fitness Center Management System. All rights reserved.
+              &copy; {getEthiopianYear(new Date())} EC A-kiyon Fitness Center Management System. All rights reserved.
             </p>
           </div>
         </div>

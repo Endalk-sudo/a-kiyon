@@ -73,7 +73,9 @@ interface RecentPayment {
 }
 
 interface MonthlyRevenue {
-  month: string;
+  monthNameEN: string;
+  monthNameAM: string;
+  ecYear: number;
   revenue: number;
 }
 
@@ -250,6 +252,13 @@ export function DashboardPage() {
       </div>
     );
   }
+
+  const revenueChartData = (data?.monthlyRevenue || []).map((item) => ({
+    ...item,
+    label: locale === 'am'
+      ? `${item.monthNameAM} ${item.ecYear}`
+      : `${item.monthNameEN} ${item.ecYear}`,
+  }));
 
   return (
     <div className="space-y-6">
@@ -544,7 +553,7 @@ export function DashboardPage() {
                 <div>
                   <CardTitle className="text-base">Monthly Revenue</CardTitle>
                   <CardDescription className="text-xs">
-                    Last 6 months revenue trend
+                    Last 6 Ethiopian months revenue trend
                   </CardDescription>
                 </div>
               </div>
@@ -562,7 +571,7 @@ export function DashboardPage() {
                 <div className="h-64 flex items-center justify-center">
                   <Skeleton className="h-full w-full" />
                 </div>
-              ) : !data?.monthlyRevenue?.length ? (
+              ) : !revenueChartData.length ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <TrendingUp className="h-8 w-8 text-muted-foreground/40 mb-2" />
                   <p className="text-sm text-muted-foreground">
@@ -573,7 +582,7 @@ export function DashboardPage() {
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={data?.monthlyRevenue || []}
+                      data={revenueChartData}
                       margin={{ top: 5, right: 5, left: -15, bottom: 5 }}
                     >
                       <CartesianGrid
@@ -583,7 +592,7 @@ export function DashboardPage() {
                         opacity={0.5}
                       />
                       <XAxis
-                        dataKey="month"
+                        dataKey="label"
                         tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                         axisLine={false}
                         tickLine={false}

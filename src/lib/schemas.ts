@@ -5,6 +5,18 @@ export const sexes = ['male', 'female'] as const;
 export const paymentMethods = ['cash', 'bank_transfer', 'mobile_money'] as const;
 export const userRoles = ['owner', 'manager', 'reader'] as const;
 
+/**
+ * User-supplied dates are accepted either as Ethiopian calendar strings
+ * ("15/08/2017" or "15-08-2017", optional "EC" suffix) or as Gregorian ISO
+ * strings ("2024-01-15" or a full ISO timestamp — what the UI sends after
+ * converting an Ethiopian date input). Anything else is rejected up front
+ * instead of silently producing an Invalid Date downstream.
+ */
+export const ethiopianOrIsoDatePattern =
+  /^(\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*(EC)?|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?)?)$/i;
+
+const userDate = (message: string) => z.string().regex(ethiopianOrIsoDatePattern, message);
+
 // Optional body measurements (cm/kg) — finite with physiological sanity
 // bounds so typo'd or extreme values (e.g. 1e999 → Infinity) never persist.
 const measurement = (min: number, max: number) =>
@@ -28,7 +40,7 @@ export const createMemberSchema = z.object({
   hip: measurement(20, 300),
   serviceId: z.string().optional(),
   paymentMethod: z.enum(paymentMethods).optional(),
-  paymentDate: z.string().optional(),
+  paymentDate: userDate('Invalid Ethiopian date format').optional(),
   subscriptionNotes: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.serviceId && !data.paymentMethod) {
@@ -81,9 +93,9 @@ export const updateServiceSchema = z.object({
 export const createSubscriptionSchema = z.object({
   memberId: z.string().min(1, 'memberId is required'),
   serviceId: z.string().min(1, 'serviceId is required'),
-  startDate: z.string().optional(),
+  startDate: userDate('Invalid start date format').optional(),
   paymentMethod: z.enum(paymentMethods),
-  paymentDate: z.string().optional(),
+  paymentDate: userDate('Invalid Ethiopian date format').optional(),
   notes: z.string().optional(),
 });
 

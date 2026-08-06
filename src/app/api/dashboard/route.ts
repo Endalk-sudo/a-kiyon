@@ -4,6 +4,12 @@ import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { autoExpireSubscriptions } from '@/services/subscription.service';
+import {
+  gregorianToEthiopian,
+  ethiopianToGregorian,
+  daysInEthiopianMonth,
+  getEthiopianMonthName,
+} from '@/lib/ethiopian-calendar';
 
 export const GET = apiHandler(async (request: NextRequest) => {
   await getSessionOrThrow(undefined, request);
@@ -123,14 +129,25 @@ export const GET = apiHandler(async (request: NextRequest) => {
     };
   });
 
-  const monthStarts: Date[] = [];
+  // Revenue grouped by Ethiopian calendar month — the last 6 EC months
+  // (Meskerem..Pagume boundaries), labelled with both locale month names.
+  const todayEth = gregorianToEthiopian(now);
+  const ecMonths: { year: number; month: number }[] = [];
   for (let i = 5; i >= 0; i--) {
-    monthStarts.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+    let month = todayEth.month - i;
+    let year = todayEth.year;
+    while (month < 1) {
+      month += 13;
+      year -= 1;
+    }
+    ecMonths.push({ year, month });
   }
 
   const monthRevenues = await Promise.all(
-    monthStarts.map(async (monthStart) => {
-      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59, 999);
+    ecMonths.map(async ({ year, month }) => {
+      const monthStart = ethiopianToGregorian(year, month, 1);
+      const lastDay = ethiopianToGregorian(year, month, daysInEthiopianMonth(month, year));
+      const monthEnd = new Date(lastDay.getTime() + 24 * 60 * 60 * 1000 - 1);
       const revenue = (await aggregateSum('payments', 'amount', [
         ['isVoided', '==', false],
         ['paymentDate', '>=', monthStart.toISOString()],
@@ -138,7 +155,9 @@ export const GET = apiHandler(async (request: NextRequest) => {
       ])) || 0;
 
       return {
-        month: monthStart.toLocaleString('default', { month: 'short', year: 'numeric' }),
+        monthNameEN: getEthiopianMonthName(month, 'en'),
+        monthNameAM: getEthiopianMonthName(month, 'am'),
+        ecYear: year,
         revenue,
       };
     }),

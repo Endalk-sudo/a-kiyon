@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { exportApi, dashboardApi } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/format';
+import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,7 +25,7 @@ import { EthiopianDateInput } from '@/components/ethiopian-date-input';
 interface DashboardData {
   totalRevenue: number;
   revenueThisMonth: number;
-  monthlyRevenue: { month: string; revenue: number }[];
+  monthlyRevenue: { monthNameEN: string; monthNameAM: string; ecYear: number; revenue: number }[];
 }
 
 export function ReportsPage() {
@@ -65,7 +66,7 @@ export function ReportsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${type}_export_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `${type}_export_${formatEthiopianDate(new Date(), { separator: '-', includeEC: false })}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success(t(locale, `${type === 'members' ? 'Members' : 'Payments'} CSV exported successfully`, `${type === 'members' ? 'የአባላት' : 'የክፍያ'} ሪፖርት በተሳካ ሁኔታ ወርዷል`));
@@ -102,6 +103,9 @@ export function ReportsPage() {
 
   const revenueChartData = (dashboardData?.monthlyRevenue || []).map((item) => ({
     ...item,
+    label: locale === 'am'
+      ? `${item.monthNameAM} ${item.ecYear}`
+      : `${item.monthNameEN} ${item.ecYear}`,
     revenue: Number(item.revenue),
   }));
 
@@ -154,7 +158,7 @@ export function ReportsPage() {
                 <BarChart data={revenueChartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis
-                    dataKey="month"
+                    dataKey="label"
                     tick={{ fontSize: 12 }}
                     className="text-muted-foreground"
                   />

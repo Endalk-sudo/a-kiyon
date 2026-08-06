@@ -167,7 +167,9 @@ export interface DashboardData {
     memberId: string;
   }>;
   monthlyRevenue: Array<{
-    month: string;
+    monthNameEN: string;
+    monthNameAM: string;
+    ecYear: number;
     revenue: number;
   }>;
 }
