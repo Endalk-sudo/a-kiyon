@@ -5,6 +5,9 @@ export const sexes = ['male', 'female'] as const;
 export const paymentMethods = ['cash', 'bank_transfer', 'mobile_money'] as const;
 export const userRoles = ['owner', 'manager', 'reader'] as const;
 
+/** Staff phone numbers are the login identifiers — always +251XXXXXXXXX. */
+export const phonePattern = /^\+251\d{9}$/;
+
 /**
  * User-supplied dates are accepted either as Ethiopian calendar strings
  * ("15/08/2017" or "15-08-2017", optional "EC" suffix) or as Gregorian ISO
@@ -119,18 +122,16 @@ export const createPaymentSchema = z.object({
 });
 
 export const createUserSchema = z.object({
-  email: z.email('Invalid email'),
+  phone: z.string().regex(phonePattern, 'Phone must be in format +251XXXXXXXXX'),
   name: z.string().min(1, 'Name is required'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(userRoles),
-  phone: z.string().optional().nullable(),
 });
 
 export const updateUserSchema = z.object({
-  email: z.email().optional(),
   name: z.string().min(1).optional(),
   password: z.string().min(6).optional(),
   role: z.enum(userRoles).optional(),
-  phone: z.string().optional().nullable(),
+  phone: z.string().regex(phonePattern, 'Phone must be in format +251XXXXXXXXX').optional().nullable(),
   isActive: z.boolean().optional(),
 });

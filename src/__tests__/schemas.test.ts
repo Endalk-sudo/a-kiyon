@@ -243,9 +243,9 @@ describe('Schemas', () => {
 
   describe('createUserSchema', () => {
     it('accepts valid user data', () => {
-      const data = { email: 'test@test.com', name: 'Test', password: 'password123', role: 'manager' };
+      const data = { phone: '+251911000000', name: 'Test', password: 'password123', role: 'manager' };
       const result = createUserSchema.parse(data);
-      expect(result.email).toBe('test@test.com');
+      expect(result.phone).toBe('+251911000000');
       expect(result.role).toBe('manager');
     });
 
@@ -253,7 +253,7 @@ describe('Schemas', () => {
       const roles = ['owner', 'manager', 'reader'];
       for (const role of roles) {
         const result = createUserSchema.parse({
-          email: 'test@test.com',
+          phone: '+251911000000',
           name: 'Test',
           password: 'password123',
           role,
@@ -262,10 +262,20 @@ describe('Schemas', () => {
       }
     });
 
-    it('rejects invalid email', () => {
+    it('rejects missing phone', () => {
       expect(() =>
         createUserSchema.parse({
-          email: 'not-an-email',
+          name: 'Test',
+          password: 'password123',
+          role: 'manager',
+        })
+      ).toThrow();
+    });
+
+    it('rejects invalid phone format', () => {
+      expect(() =>
+        createUserSchema.parse({
+          phone: '0911000000',
           name: 'Test',
           password: 'password123',
           role: 'manager',
@@ -276,7 +286,7 @@ describe('Schemas', () => {
     it('rejects short password', () => {
       expect(() =>
         createUserSchema.parse({
-          email: 'test@test.com',
+          phone: '+251911000000',
           name: 'Test',
           password: '12345',
           role: 'manager',
@@ -287,7 +297,7 @@ describe('Schemas', () => {
     it('rejects invalid role', () => {
       expect(() =>
         createUserSchema.parse({
-          email: 'test@test.com',
+          phone: '+251911000000',
           name: 'Test',
           password: 'password123',
           role: 'superadmin',
@@ -308,6 +318,15 @@ describe('Schemas', () => {
 
     it('rejects invalid role', () => {
       expect(() => updateUserSchema.parse({ role: 'invalid' })).toThrow();
+    });
+
+    it('rejects invalid phone format', () => {
+      expect(() => updateUserSchema.parse({ phone: '0999999999' })).toThrow();
+    });
+
+    it('accepts phone null', () => {
+      const result = updateUserSchema.parse({ phone: null });
+      expect(result.phone).toBeNull();
     });
   });
 });

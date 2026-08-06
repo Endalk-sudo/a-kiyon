@@ -5,6 +5,7 @@ import { getDocById, updateDoc } from '@/lib/db';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { updateUserSchema } from '@/lib/schemas';
+import { normalizePhone, phoneToEmail } from '@/lib/phone-auth';
 
 // Counts active (non-disabled) owners across all Auth pages. Used to guard
 // against deactivating/demoting the final active owner.
@@ -77,14 +78,15 @@ export const PUT = apiHandler(async (
   if (selfDeactivating) return apiError('You cannot deactivate yourself');
 
   const authUpdateData: Record<string, unknown> = {};
-  if (data.email !== undefined) {
+  if (data.phone) {
+    const email = phoneToEmail(normalizePhone(data.phone));
     try {
-      const existingByEmail = await adminAuth.getUserByEmail(data.email);
-      if (existingByEmail.uid !== id) return apiError('A user with this email already exists', 409);
+      const existingByEmail = await adminAuth.getUserByEmail(email);
+      if (existingByEmail.uid !== id) return apiError('A user with this phone number already exists', 409);
     } catch {
       // not found — ok
     }
-    authUpdateData.email = data.email;
+    authUpdateData.email = email;
   }
   if (data.name !== undefined) authUpdateData.displayName = data.name;
   if (data.password !== undefined) authUpdateData.password = data.password;
@@ -105,8 +107,14 @@ export const PUT = apiHandler(async (
     await adminAuth.updateUser(id, authUpdateData);
   }
 
-  if (data.role !== undefined && data.role !== userRecord.customClaims?.role) {
-    await adminAuth.setCustomUserClaims(id, { role: data.role });
+  const claimsChanged = data.role !== undefined && data.role !== userRecord.customClaims?.role;
+  const phoneChanged = data.phone !== undefined;
+  if (claimsChanged || phoneChanged) {
+    await adminAuth.setCustomUserClaims(id, {
+      ...(userRecord.customClaims || {}),
+      ...(data.role !== undefined ? { role: data.role } : {}),
+      ...(phoneChanged ? { phone: data.phone ? normalizePhone(data.phone) : null } : {}),
+    });
   }
 
   // Invalidate existing tokens when the user is deactivated or demoted, so

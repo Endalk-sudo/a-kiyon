@@ -1,6 +1,7 @@
 import {
   auth,
   loginWithEmail,
+  loginWithPhone,
   signOut as fbSignOut,
   onAuthChange,
 } from './firebase-client';
@@ -53,12 +54,6 @@ export function initAuth() {
   }, 10 * 60 * 1000);
 }
 
-export async function login(email: string, password: string) {
-  const user = await loginWithEmail(email, password);
-  currentToken = await user.getIdToken();
-  return user;
-}
-
 export async function logout() {
   await fbSignOut();
   currentToken = null;
@@ -86,9 +81,29 @@ function roleFromToken(token: string): string | null {
 
 export const authClient = {
   signIn: {
+    phone: async ({ phone, password }: { phone: string; password: string }) => {
+      try {
+        const user = await loginWithPhone(phone, password);
+        const token = currentToken;
+        let role = 'reader';
+        let name = user.displayName || '';
+        if (token) {
+          role = roleFromToken(token) || 'reader';
+          name = user.displayName || '';
+        }
+        return {
+          data: {
+            user: { id: user.uid, email: user.email, phone, name, role },
+          },
+          error: null,
+        };
+      } catch (err) {
+        return { data: null, error: err instanceof Error ? err : new Error('Login failed') };
+      }
+    },
     email: async ({ email, password }: { email: string; password: string }) => {
       try {
-        const user = await login(email, password);
+        const user = await loginWithEmail(email, password);
         const token = currentToken;
         let role = 'reader';
         let name = user.displayName || '';

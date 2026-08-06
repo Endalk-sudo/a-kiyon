@@ -5,7 +5,6 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   onAuthStateChanged,
-  sendPasswordResetEmail,
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
@@ -20,6 +19,7 @@ import {
   getFirestore,
   connectFirestoreEmulator,
 } from 'firebase/firestore';
+import { normalizePhone, phoneToEmail } from './phone-auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'demo-api-key',
@@ -52,6 +52,11 @@ export async function loginWithEmail(email: string, password: string) {
   return result.user;
 }
 
+/** Phone login — maps the phone to its internal synthetic email. */
+export async function loginWithPhone(phone: string, password: string) {
+  return loginWithEmail(phoneToEmail(normalizePhone(phone)), password);
+}
+
 export async function signOut() {
   await fbSignOut(auth);
 }
@@ -70,10 +75,6 @@ export async function uploadFile(path: string, buffer: Uint8Array, contentType: 
 export async function deleteFile(path: string) {
   const storageRef = ref(clientStorage, path);
   await deleteObject(storageRef);
-}
-
-export async function resetPassword(email: string) {
-  await sendPasswordResetEmail(auth, email);
 }
 
 export { ref as storageRef, getDownloadURL, uploadBytes, deleteObject };

@@ -115,17 +115,17 @@ export interface UserRecord {
 }
 
 export interface CreateUserBody {
-  email: string;
+  phone: string;
   name: string;
   password: string;
   role: string;
-  phone?: string | null;
 }
 
 export interface UpdateUserBody {
   name?: string;
   role?: string;
   phone?: string | null;
+  password?: string;
   isActive?: boolean;
 }
 

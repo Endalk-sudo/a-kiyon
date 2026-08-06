@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { authClient } from '@/lib/auth-client';
-import { resetPassword } from '@/lib/firebase-client';
+import { normalizePhone, isValidPhone } from '@/lib/phone-auth';
 import { getEthiopianYear } from '@/lib/ethiopian-calendar';
 import { useAppStore } from '@/lib/store';
 import { sanitizeError } from '@/lib/errors';
@@ -38,26 +38,24 @@ import {
 function LoginDialog({ children }: { children: React.ReactNode }) {
   const setSession = useAppStore((s) => s.setSession);
   const locale = useAppStore((s) => s.locale);
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [resetSent, setResetSent] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
 
   const validate = (): boolean => {
     let valid = true;
-    if (!email.trim()) {
-      setEmailError(t(locale, 'Email is required', 'ኢሜይል ያስፈልጋል'));
+    if (!phone.trim()) {
+      setPhoneError(t(locale, 'Phone number is required', 'ስልክ ቁጥር ያስፈልጋል'));
       valid = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setEmailError(t(locale, 'Invalid email format', 'የተሳሳተ የኢሜይል ቅርጸት'));
+    } else if (!isValidPhone(normalizePhone(phone))) {
+      setPhoneError(t(locale, 'Invalid phone number format', 'የተሳሳተ የስልክ ቁጥር ቅርጸት'));
       valid = false;
     } else {
-      setEmailError('');
+      setPhoneError('');
     }
     if (!password) {
       setPasswordError(t(locale, 'Password is required', 'የይለፍ ቃል ያስፈልጋል'));
@@ -74,9 +72,12 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
-      const { data, error: authError } = await authClient.signIn.email({ email, password });
+      const { data, error: authError } = await authClient.signIn.phone({
+        phone: normalizePhone(phone),
+        password,
+      });
       if (authError) {
-        setEmailError(sanitizeError({ message: authError.message } as Error, locale, 'Invalid email or password', 'የተሳሳተ ኢሜይል ወይም የይለፍ ቃል'));
+        setPhoneError(sanitizeError({ message: authError.message } as Error, locale, 'Invalid phone number or password', 'የተሳሳተ የስልክ ቁጥር ወይም የይለፍ ቃል'));
         return;
       }
       if (data?.user) {
@@ -91,35 +92,13 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
         toast.success(t(locale, 'Welcome back!', 'እንኳን ደህና መጡ!'));
       }
     } catch {
-      setEmailError(t(locale, 'Invalid email or password', 'የተሳሳተ ኢሜይል ወይም የይለፍ ቃል'));
+      setPhoneError(t(locale, 'Invalid phone number or password', 'የተሳሳተ የስልክ ቁጥር ወይም የይለፍ ቃል'));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPassword = async () => {
-    setEmailError('');
-    if (!email.trim()) {
-      setEmailError(t(locale, 'Please enter your email address first', 'እባክዎ ኢሜይል ያስገቡ'));
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setEmailError(t(locale, 'Please enter a valid email address', 'እባክዎ ትክክለኛ ኢሜይል ያስገቡ'));
-      return;
-    }
-    setResetLoading(true);
-    try {
-      await resetPassword(email);
-      setResetSent(true);
-      toast.success(t(locale, 'Password reset email sent', 'የይለፍ ቃል ማስተካከያ ኢሜይል ተልኳል'));
-    } catch {
-      setEmailError(t(locale, 'Failed to send reset email. Check that the email is correct.', 'የዳግም ማስጀመሪያ ኢሜይል መላክ አልተሳካም። ኢሜይሉ ትክክል መሆኑን ያረጋግጡ'));
-    } finally {
-      setResetLoading(false);
-    }
-  };
-
-  const clearEmailError = () => setEmailError('');
+  const clearPhoneError = () => setPhoneError('');
   const clearPasswordError = () => setPasswordError('');
 
   return (
@@ -134,25 +113,26 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
             <div>
               <DialogTitle className="text-xl">Sign In</DialogTitle>
               <DialogDescription>
-                Enter your credentials to access the system
+                Enter your phone number and password to access the system
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="login-email">Email</Label>
+            <Label htmlFor="login-phone">Phone Number</Label>
             <Input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); clearEmailError(); }}
-              placeholder="owner@fcms.com"
+              id="login-phone"
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => { setPhone(e.target.value); clearPhoneError(); }}
+              placeholder="+251 9XX XXX XXX"
               required
-              autoComplete="email"
-              className={emailError ? 'border-destructive' : ''}
+              autoComplete="tel"
+              className={phoneError ? 'border-destructive' : ''}
             />
-            {emailError && <p className="text-xs text-destructive">{emailError}</p>}
+            {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="login-password">Password</Label>
@@ -177,16 +157,9 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
-            <div className="text-right -mt-2">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                disabled={resetLoading}
-                className="text-xs text-muted-foreground hover:text-primary transition-colors"
-              >
-                {resetLoading ? 'Sending...' : resetSent ? 'Email sent! Check your inbox' : 'Forgot password?'}
-              </button>
-            </div>
+            <p className="text-right -mt-2 text-xs text-muted-foreground">
+              Forgot your password? Contact your administrator.
+            </p>
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -194,8 +167,8 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
           </Button>
           <div className="pt-2 border-t text-xs text-muted-foreground space-y-1">
             <p className="font-medium">Demo credentials:</p>
-            <p>Owner: owner@fcms.com / owner123</p>
-            <p>Manager: manager@fcms.com / manager123</p>
+            <p>Owner: +251911000000 / owner123</p>
+            <p>Manager: +251922000000 / manager123</p>
           </div>
         </form>
       </DialogContent>

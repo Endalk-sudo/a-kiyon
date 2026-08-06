@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { adminAuth, adminDb } from '../lib/firebase-admin';
+import { phoneToEmail } from '../lib/phone-auth';
 import { generateReceiptNumber } from '@/services/payment.service';
 import { calculateNavyBodyFatPercent } from '@/lib/body-fat';
 
@@ -40,27 +41,31 @@ async function main() {
     token = listResult.pageToken || undefined;
   } while (token);
 
-  // ── Create users via Firebase Auth ──
+  // ── Create users via Firebase Auth (phone is the login identifier, mapped
+  //    to an internal synthetic email — see src/lib/phone-auth.ts) ──
+  const ownerPhone = '+251911000000';
   const ownerUser = await adminAuth.createUser({
-    email: 'owner@fcms.com',
+    email: phoneToEmail(ownerPhone),
     password: 'owner123',
     displayName: 'Owner',
   });
-  await adminAuth.setCustomUserClaims(ownerUser.uid, { role: 'owner' });
+  await adminAuth.setCustomUserClaims(ownerUser.uid, { role: 'owner', phone: ownerPhone });
 
+  const managerPhone = '+251922000000';
   const managerUser = await adminAuth.createUser({
-    email: 'manager@fcms.com',
+    email: phoneToEmail(managerPhone),
     password: 'manager123',
     displayName: 'Manager',
   });
-  await adminAuth.setCustomUserClaims(managerUser.uid, { role: 'manager' });
+  await adminAuth.setCustomUserClaims(managerUser.uid, { role: 'manager', phone: managerPhone });
 
+  const readerPhone = '+251933000000';
   const readerUser = await adminAuth.createUser({
-    email: 'reader@fcms.com',
+    email: phoneToEmail(readerPhone),
     password: 'reader123',
     displayName: 'Reader',
   });
-  await adminAuth.setCustomUserClaims(readerUser.uid, { role: 'reader' });
+  await adminAuth.setCustomUserClaims(readerUser.uid, { role: 'reader', phone: readerPhone });
 
   // Store supplementary user profiles in Firestore ({ id, phone } shape)
   const ownerId = ownerUser.uid;
@@ -69,17 +74,17 @@ async function main() {
 
   await adminDb.collection('users').doc(ownerId).set({
     id: ownerId,
-    phone: '+251911000000',
+    phone: ownerPhone,
   });
 
   await adminDb.collection('users').doc(managerId).set({
     id: managerId,
-    phone: '+251922000000',
+    phone: managerPhone,
   });
 
   await adminDb.collection('users').doc(readerId).set({
     id: readerId,
-    phone: '+251933000000',
+    phone: readerPhone,
   });
 
   console.log('Created users:', 'owner@fcms.com', 'manager@fcms.com', 'reader@fcms.com');

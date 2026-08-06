@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { usersApi, storageApi } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
 import { sanitizeError } from '@/lib/errors';
+import { normalizePhone, emailToPhone } from '@/lib/phone-auth';
 import { t } from '@/lib/messages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,6 @@ import {
   UserPlus,
   Shield,
   User,
-  Mail,
   Phone,
   Loader2,
   Pencil,
@@ -79,18 +79,17 @@ export function SettingsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formData, setFormData] = useState({
-    email: '',
+    phone: '',
     name: '',
     password: '',
     role: 'manager' as 'owner' | 'manager',
-    phone: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Edit user dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
-  const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'manager' as 'owner' | 'manager', phone: '', password: '' });
+  const [editFormData, setEditFormData] = useState({ name: '', role: 'manager' as 'owner' | 'manager', phone: '', password: '' });
   const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -149,10 +148,10 @@ export function SettingsPage() {
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
-    if (!formData.email.trim()) {
-      errors.email = t(locale, 'Email is required', 'ኢሜይል ያስፈልጋል');
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = t(locale, 'Invalid email format', 'የተሳሳተ የኢሜይል ቅርጸት');
+    if (!formData.phone.trim()) {
+      errors.phone = t(locale, 'Phone number is required', 'ስልክ ቁጥር ያስፈልጋል');
+    } else if (!/^\+251\d{9}$/.test(formData.phone.trim())) {
+      errors.phone = t(locale, 'Phone must be in format +251XXXXXXXXX', 'ስልክ ቁጥር በ+251 መቅረብ አለበት');
     }
 
     if (!formData.name.trim()) {
@@ -169,10 +168,6 @@ export function SettingsPage() {
       errors.role = t(locale, 'Role is required', 'ሚና ያስፈልጋል');
     }
 
-    if (formData.phone.trim() && !/^\+251\d{9}$/.test(formData.phone.trim())) {
-      errors.phone = t(locale, 'Phone must be in format +251XXXXXXXXX', 'ስልክ ቁጥር በ+251 መቅረብ አለበት');
-    }
-
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -183,14 +178,13 @@ export function SettingsPage() {
     setCreating(true);
     try {
       await usersApi.create({
-        email: formData.email.trim(),
+        phone: normalizePhone(formData.phone),
         name: formData.name.trim(),
         password: formData.password,
         role: formData.role,
-        phone: formData.phone.trim() || null,
       });
       toast.success(t(locale, `User "${formData.name}" created successfully`, `ተጠቃሚ "${formData.name}" በተሳካ ሁኔታ ተፈጥሯል`));
-      setFormData({ email: '', name: '', password: '', role: 'manager', phone: '' });
+      setFormData({ phone: '', name: '', password: '', role: 'manager' });
       setFormErrors({});
       setCreateDialogOpen(false);
       fetchUsers();
@@ -217,7 +211,6 @@ export function SettingsPage() {
     setEditingUser(user);
     setEditFormData({
       name: user.name,
-      email: user.email,
       role: user.role as 'owner' | 'manager',
       phone: user.phone || '',
       password: '',
@@ -235,8 +228,6 @@ export function SettingsPage() {
 
   const validateEditForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!editFormData.email.trim()) errors.email = t(locale, 'Email is required', 'ኢሜይል ያስፈልጋል');
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editFormData.email)) errors.email = t(locale, 'Invalid email format', 'የተሳሳተ የኢሜይል ቅርጸት');
     if (!editFormData.name.trim()) errors.name = t(locale, 'Name is required', 'ስም ያስፈልጋል');
     if (!editFormData.role) errors.role = t(locale, 'Role is required', 'ሚና ያስፈልጋል');
     if (editFormData.phone.trim() && !/^\+251\d{9}$/.test(editFormData.phone.trim())) errors.phone = t(locale, 'Phone must be in format +251XXXXXXXXX', 'ስልክ ቁጥር በ+251 መቅረብ አለበት');
@@ -251,7 +242,6 @@ export function SettingsPage() {
     try {
       const payload: Record<string, unknown> = {
         name: editFormData.name.trim(),
-        email: editFormData.email.trim(),
         role: editFormData.role,
         phone: editFormData.phone.trim() || null,
       };
@@ -343,8 +333,8 @@ export function SettingsPage() {
               </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <Mail className="h-3.5 w-3.5" />
-                  {session?.email}
+                  <Phone className="h-3.5 w-3.5" />
+                  {emailToPhone(session?.email || '') || session?.email}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -390,18 +380,22 @@ export function SettingsPage() {
                   </DialogHeader>
                   <div className="space-y-4 mt-2">
                     <div className="space-y-2">
-                      <Label htmlFor="create-email">Email *</Label>
+                      <Label htmlFor="create-phone">Phone Number *</Label>
                       <Input
-                        id="create-email"
-                        type="email"
-                        placeholder="user@example.com"
-                        value={formData.email}
-                        onChange={(e) => handleFormChange('email', e.target.value)}
-                        className={formErrors.email ? 'border-destructive' : ''}
+                        id="create-phone"
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="+251 9XX XXX XXX"
+                        value={formData.phone}
+                        onChange={(e) => handleFormChange('phone', e.target.value)}
+                        className={formErrors.phone ? 'border-destructive' : ''}
                       />
-                      {formErrors.email && (
-                        <p className="text-xs text-destructive">{formErrors.email}</p>
+                      {formErrors.phone && (
+                        <p className="text-xs text-destructive">{formErrors.phone}</p>
                       )}
+                      <p className="text-xs text-muted-foreground">
+                        Used to log in
+                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -452,22 +446,6 @@ export function SettingsPage() {
                       )}
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="create-phone">
-                        Phone
-                        <span className="text-muted-foreground text-xs ml-1">(optional)</span>
-                      </Label>
-                      <Input
-                        id="create-phone"
-                        type="tel"
-                        placeholder="+251 9XX XXX XXX"
-                        value={formData.phone}
-                        onChange={(e) => handleFormChange('phone', e.target.value)}
-                        className={formErrors.phone ? 'border-destructive' : ''}
-                      />
-                      {formErrors.phone && <p className="text-xs text-destructive">{formErrors.phone}</p>}
-                    </div>
-
                     <div className="flex justify-end gap-3 pt-2">
                       <Button
                         variant="outline"
@@ -512,9 +490,8 @@ export function SettingsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead className="hidden sm:table-cell">Phone</TableHead>
                         <TableHead className="hidden md:table-cell">Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -531,14 +508,6 @@ export function SettingsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {user.email}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={user.role === 'owner' ? 'default' : 'secondary'}>
-                              {user.role === 'owner' ? 'Owner' : 'Manager'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                             {user.phone ? (
                               <span className="flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
@@ -547,6 +516,11 @@ export function SettingsPage() {
                             ) : (
                               '-'
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={user.role === 'owner' ? 'default' : 'secondary'}>
+                              {user.role === 'owner' ? 'Owner' : 'Manager'}
+                            </Badge>
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
                             <Badge variant={user.isActive ? 'default' : 'destructive'} className="text-xs">
@@ -593,7 +567,7 @@ export function SettingsPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm truncate">{user.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                            <p className="text-xs text-muted-foreground truncate">{user.phone || 'No phone'}</p>
                           </div>
                         </div>
                         <Badge variant={user.role === 'owner' ? 'default' : 'secondary'}>
@@ -661,15 +635,19 @@ export function SettingsPage() {
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label htmlFor="edit-email">Email *</Label>
+              <Label htmlFor="edit-phone">Phone Number</Label>
               <Input
-                id="edit-email"
-                type="email"
-                value={editFormData.email}
-                onChange={(e) => handleEditFormChange('email', e.target.value)}
-                className={editFormErrors.email ? 'border-destructive' : ''}
+                id="edit-phone"
+                type="tel"
+                inputMode="tel"
+                value={editFormData.phone}
+                onChange={(e) => handleEditFormChange('phone', e.target.value)}
+                className={editFormErrors.phone ? 'border-destructive' : ''}
               />
-              {editFormErrors.email && <p className="text-xs text-destructive">{editFormErrors.email}</p>}
+              {editFormErrors.phone && <p className="text-xs text-destructive">{editFormErrors.phone}</p>}
+              <p className="text-xs text-muted-foreground">
+                Used to log in
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-name">Full Name *</Label>
@@ -693,19 +671,6 @@ export function SettingsPage() {
                 </SelectContent>
               </Select>
               {editFormErrors.role && <p className="text-xs text-destructive">{editFormErrors.role}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-phone">
-                Phone <span className="text-muted-foreground text-xs ml-1">(optional)</span>
-              </Label>
-              <Input
-                id="edit-phone"
-                type="tel"
-                value={editFormData.phone}
-                onChange={(e) => handleEditFormChange('phone', e.target.value)}
-                className={editFormErrors.phone ? 'border-destructive' : ''}
-              />
-              {editFormErrors.phone && <p className="text-xs text-destructive">{editFormErrors.phone}</p>}
             </div>
             <Separator />
             <div className="space-y-2">

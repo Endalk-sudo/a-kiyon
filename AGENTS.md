@@ -32,7 +32,9 @@ pnpm run test           # vitest (needs Firebase emulators running)
 - **Server:** `getSessionOrThrow(['owner', 'manager', 'reader'], request)` — verifies Firebase ID token from `Authorization: Bearer` header. Throws `"Unauthorized"` / `"Forbidden"`.
 - **Client:** Firebase Auth via `src/lib/auth-client.ts`. Token auto-attached to all API calls via `src/lib/api-client.ts`.
 - **Roles:** `owner` (full), `manager` (soft-delete/restore members; no permanent delete, no payment void, no storage cleanup), `reader` (view-only). Stored as Firebase custom claims.
-- **Firebase Auth** with email/password. Emulator on port 9099.
+- **Phone login (not email):** Firebase SMS auth is not available in Ethiopia, so login is **phone + password** backed by Firebase Auth's email/password. Each phone is mapped to a synthetic email via `src/lib/phone-auth.ts` (`normalizePhone` → `+251XXXXXXXXX`, `phoneToEmail` → `251XXXXXXXXX@a-kiyon.app`, `emailToPhone`, `isSyntheticEmail`). `authClient.signIn.phone` in `auth-client.ts`; legacy email login kept for accounts without a phone.
+- **Password resets** are owner-only, in Settings (no self-service forgot-password).
+- **One-time migration:** `pnpm exec tsx src/scripts/migrate-phone-login.ts` renames auth emails for users with a phone on record (custom claim or `users` doc); users without a phone keep email login. Emulator on port 9099.
 
 ## DB
 
