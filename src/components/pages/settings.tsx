@@ -108,7 +108,7 @@ export function SettingsPage() {
         if (data?.firestore && data?.storage) setStorageData(data);
       })
       .catch(() => toast.error(t(locale, 'Failed to load storage data', 'የማከማቻ መረጃዎችን መጫን አልተሳካም')));
-  }, [isOwner]);
+  }, [isOwner, locale]);
 
   const fetchUsers = useCallback(async () => {
     if (!isOwner) return;
@@ -121,7 +121,7 @@ export function SettingsPage() {
     } finally {
       setUsersLoading(false);
     }
-  }, [isOwner]);
+  }, [isOwner, locale]);
 
   useEffect(() => {
     fetchUsers();

@@ -90,16 +90,6 @@ interface Subscription {
   service: { id: string; name: string; nameAm: string | null; price: number; duration: number };
 }
 
-interface SubscriptionsResponse {
-  data: Subscription[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}
-
 type SubscriptionStatus = 'all' | 'active' | 'expired' | 'cancelled';
 
 const statusFilters: { value: SubscriptionStatus; label: string }[] = [

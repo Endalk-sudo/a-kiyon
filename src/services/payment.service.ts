@@ -1,5 +1,5 @@
 import { db, getDocById, getDocs, getDocsByIds, countDocs, updateDoc } from '@/lib/db';
-import type { WhereClause } from '@/lib/db';
+import type { Doc, WhereClause } from '@/lib/db';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
 
 export function generateReceiptNumber(): string {
@@ -244,6 +244,22 @@ export async function voidPayment(id: string, voidedBy: string) {
       : null;
     const serviceName = serviceSnap?.exists ? (serviceSnap.data() as { name: string }).name : undefined;
 
+    // Latest non-voided payment on this subscription (excluding the one being
+    // voided). Its extendedTo is the correct rollback target — never
+    // `payment.previousExtendedTo` by itself, which can point to a payment
+    // that was itself voided earlier (validity backed by refunded money).
+    const remainingPayments = (
+      await tx.get(
+        db
+          .collection('payments')
+          .where('subscriptionId', '==', payment.subscriptionId)
+          .where('isVoided', '==', false)
+          .orderBy('createdAt', 'desc'),
+      )
+    ).docs
+      .map((d) => ({ id: d.id, ...d.data() }) as { id: string; extendedTo?: string | null })
+      .filter((p) => p.id !== id);
+
     const now = new Date();
     const voidedAt = now.toISOString();
 
@@ -254,40 +270,68 @@ export async function voidPayment(id: string, voidedBy: string) {
     });
 
     if (subscription) {
-      const targetsCurrentValidity = subscription.endDate === payment.extendedTo;
+      let rolledBackEndDate: Date | null = remainingPayments[0]?.extendedTo
+        ? new Date(remainingPayments[0].extendedTo)
+        : null;
 
-      if (targetsCurrentValidity) {
-        // This payment is what the current end date is based on.
-        if (payment.previousExtendedTo) {
-          // Roll back to the end date that existed before this payment.
-          const rolledBackEndDate = new Date(payment.previousExtendedTo);
-          const status = rolledBackEndDate >= now ? 'active' : 'expired';
+      // The remaining payment lacks rollback metadata (legacy row) — fall back
+      // to the voided payment's own previous state.
+      if (!rolledBackEndDate && payment.previousExtendedTo) {
+        rolledBackEndDate = new Date(payment.previousExtendedTo);
+      }
 
-          tx.update(subRef, {
-            endDate: rolledBackEndDate.toISOString(),
-            status,
-            hasVoidedPayment: true,
-            voidedPaymentNote: `End date rolled back — payment ${payment.receiptNumber} voided`,
-          });
-        } else {
-          // Initial purchase payment — no validity remains.
-          if (subscription.status === 'active') {
-            tx.update(subRef, {
-              status: 'cancelled',
-              hasVoidedPayment: true,
-              voidedPaymentNote: `Cancelled — sole payment ${payment.receiptNumber} voided`,
-            });
-          } else {
-            tx.update(subRef, {
-              hasVoidedPayment: true,
-            });
+      // Reconstruct from the start date when no metadata exists at all
+      // (mirrors the legacy-void reconstruction).
+      if (
+        remainingPayments.length > 0 &&
+        (!rolledBackEndDate || isNaN(rolledBackEndDate.getTime()))
+      ) {
+        if (serviceSnap?.exists && subscription.startDate) {
+          const base = new Date(subscription.startDate);
+          if (!isNaN(base.getTime())) {
+            rolledBackEndDate = new Date(base);
+            rolledBackEndDate.setDate(
+              rolledBackEndDate.getDate() +
+                (serviceSnap.data() as { duration: number }).duration * remainingPayments.length,
+            );
           }
         }
-      } else {
-        // A newer payment covers the remaining validity — flag only.
+      }
+
+      const rolledBackValid = rolledBackEndDate !== null && !isNaN(rolledBackEndDate.getTime());
+
+      if (rolledBackValid && rolledBackEndDate) {
+        const status =
+          subscription.status === 'cancelled'
+            ? 'cancelled'
+            : rolledBackEndDate >= now
+              ? 'active'
+              : 'expired';
+
+        tx.update(subRef, {
+          endDate: rolledBackEndDate.toISOString(),
+          status,
+          hasVoidedPayment: true,
+          voidedPaymentNote: `End date rolled back — payment ${payment.receiptNumber} voided`,
+        });
+      } else if (remainingPayments.length > 0) {
+        // Payments remain but no rollback target could be derived — flag only.
         tx.update(subRef, {
           hasVoidedPayment: true,
         });
+      } else {
+        // No non-voided payments remain — no validity remains.
+        if (subscription.status === 'active') {
+          tx.update(subRef, {
+            status: 'cancelled',
+            hasVoidedPayment: true,
+            voidedPaymentNote: `Cancelled — sole payment ${payment.receiptNumber} voided`,
+          });
+        } else {
+          tx.update(subRef, {
+            hasVoidedPayment: true,
+          });
+        }
       }
     }
 
@@ -344,7 +388,8 @@ export async function voidPayment(id: string, voidedBy: string) {
  * Legacy fallback for payments created before rollback metadata existed.
  * Reconstructs the previous validity from the remaining non-voided payments.
  * Best-effort — kept non-transactional because the reconstruction needs a
- * query, which Firestore transactions cannot run.
+ * query, and this path predates the transactional query support in
+ * `voidPayment` (which runs the same query inside the transaction).
  */
 async function voidLegacyPayment(id: string, voidedBy: string) {
   const payment = await updateDoc<{
@@ -465,10 +510,11 @@ export type PaymentListOptions = {
   isVoided?: boolean;
   startDate?: string;
   endDate?: string;
+  search?: string;
 };
 
 export async function listPayments(options: PaymentListOptions = {}) {
-  const { page = 1, limit = 20, memberId, method, isVoided, startDate, endDate } = options;
+  const { page = 1, limit = 20, memberId, method, isVoided, startDate, endDate, search } = options;
 
   const where: WhereClause[] = [];
   if (memberId) where.push(['memberId', '==', memberId]);
@@ -488,23 +534,60 @@ export async function listPayments(options: PaymentListOptions = {}) {
     }
   }
 
+  // Search path — matches receipt number or member name; filter + paginate in
+  // memory so the result is consistent across pages (client-side filtering of
+  // one page is broken once pagination kicks in).
+  if (search) {
+    const term = search.toLowerCase();
+    const allMembers = await getDocs<{ firstName: string; lastName: string }>('members');
+    const matchingMemberIds = new Set(
+      allMembers
+        .filter((m) => m.firstName.toLowerCase().includes(term) || m.lastName.toLowerCase().includes(term))
+        .map((m) => m.id),
+    );
+
+    const allPayments = await getDocs<PaymentDoc>('payments', where, ['paymentDate', 'desc']);
+    const filtered = allPayments.filter(
+      (p) =>
+        p.receiptNumber.toLowerCase().includes(term) ||
+        matchingMemberIds.has(p.memberId),
+    );
+
+    const total = filtered.length;
+    const pageData = filtered.slice((page - 1) * limit, (page - 1) * limit + limit);
+
+    return {
+      data: await enrichPayments(pageData),
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
   const [payments, total] = await Promise.all([
-    getDocs<{
-      subscriptionId: string;
-      memberId: string;
-      amount: number;
-      paymentDate: string;
-      method: string;
-      receiptNumber: string;
-      isVoided: boolean;
-      voidedAt: string | null;
-      voidedBy: string | null;
-      notes: string | null;
-      createdBy: string;
-    }>('payments', where, ['paymentDate', 'desc'], limit, (page - 1) * limit),
+    getDocs<PaymentDoc>('payments', where, ['paymentDate', 'desc'], limit, (page - 1) * limit),
     countDocs('payments', where),
   ]);
 
+  return {
+    data: await enrichPayments(payments),
+    pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+  };
+}
+
+type PaymentDoc = {
+  subscriptionId: string;
+  memberId: string;
+  amount: number;
+  paymentDate: string;
+  method: string;
+  receiptNumber: string;
+  isVoided: boolean;
+  voidedAt: string | null;
+  voidedBy: string | null;
+  notes: string | null;
+  createdBy: string;
+};
+
+async function enrichPayments(payments: Doc<PaymentDoc>[]) {
   const memberIds = [...new Set(payments.map((p) => p.memberId))];
   const subscriptionIds = [...new Set(payments.map((p) => p.subscriptionId))];
   const [memberDocs, subscriptionDocs] = await Promise.all([
@@ -525,7 +608,7 @@ export async function listPayments(options: PaymentListOptions = {}) {
   const subscriptionsMap = new Map(subscriptionDocs.map((s) => [s.id, s]));
   const servicesMap = new Map(serviceDocs.map((s) => [s.id, s]));
 
-  const data = payments.map((p) => {
+  return payments.map((p) => {
     const member = membersMap.get(p.memberId);
     const subscription = subscriptionsMap.get(p.subscriptionId);
     const serviceName = subscription ? servicesMap.get(subscription.serviceId)?.name : undefined;
@@ -552,6 +635,4 @@ export async function listPayments(options: PaymentListOptions = {}) {
           },
     };
   });
-
-  return { data, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } };
 }

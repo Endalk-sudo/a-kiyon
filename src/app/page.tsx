@@ -2,8 +2,7 @@
 
 import { Component, useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
-import { authClient, initAuth, onAuthChange } from '@/lib/auth-client';
-import { auth } from '@/lib/firebase-client';
+import { initAuth, onAuthChange, decodeTokenPayload } from '@/lib/auth-client';
 import { AppLayout } from '@/components/app-layout';
 import { LandingPage } from '@/components/pages/landing';
 import { DashboardPage } from '@/components/pages/dashboard';
@@ -67,19 +66,24 @@ export default function Home() {
     initAuth();
 
     const unsub = onAuthChange(async (user) => {
-      if (user) {
-        const token = await user.getIdToken();
-        const decoded = JSON.parse(atob(token.split('.')[1]));
-        setSession({
-          userId: user.uid,
-          email: user.email || '',
-          name: (decoded.name as string) || user.displayName || '',
-          role: (decoded.role as string) || 'reader',
-        });
-      } else {
-        setSession(null);
+      try {
+        if (user) {
+          const token = await user.getIdToken();
+          // Base64url-safe decode (plain atob throws on `-`/`_` chars) —
+          // a throw here would leave the app stuck on the loading spinner.
+          const decoded = decodeTokenPayload(token);
+          setSession({
+            userId: user.uid,
+            email: user.email || '',
+            name: (decoded.name as string) || user.displayName || '',
+            role: (decoded.role as string) || 'reader',
+          });
+        } else {
+          setSession(null);
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsub();

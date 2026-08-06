@@ -6,7 +6,7 @@ import { apiHandler } from '@/lib/api-handler';
 import { autoExpireSubscriptions } from '@/services/subscription.service';
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(undefined, request);
+  await getSessionOrThrow(undefined, request);
 
   await autoExpireSubscriptions();
 
@@ -28,19 +28,33 @@ export const GET = apiHandler(async (request: NextRequest) => {
     ['paymentDate', '>=', startOfMonth.toISOString()],
   ])) || 0;
 
-  const expiringSoonSubscriptions = await getDocs<any>('subscriptions', [
+  const expiringSoonSubscriptions = await getDocs<{
+    memberId: string;
+    serviceId: string;
+    endDate: string;
+    priceSnapshot: number;
+  }>('subscriptions', [
     ['status', '==', 'active'],
     ['endDate', '<=', sevenDaysFromNow.toISOString()],
     ['endDate', '>=', now.toISOString()],
   ], ['endDate', 'asc'], 20);
 
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const recentlyExpiredSubscriptions = await getDocs<any>('subscriptions', [
+  const recentlyExpiredSubscriptions = await getDocs<{
+    memberId: string;
+    endDate: string;
+  }>('subscriptions', [
     ['status', '==', 'expired'],
     ['endDate', '>=', thirtyDaysAgo.toISOString()],
   ], ['endDate', 'desc'], 10);
 
-  const recentPaymentsData = await getDocs<any>('payments', [
+  const recentPaymentsData = await getDocs<{
+    memberId: string;
+    amount: number;
+    paymentDate: string;
+    method: string;
+    receiptNumber: string | null;
+  }>('payments', [
     ['isVoided', '==', false],
   ], ['paymentDate', 'desc'], 10);
 

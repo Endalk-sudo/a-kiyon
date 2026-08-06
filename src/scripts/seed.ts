@@ -182,7 +182,7 @@ sex: m.sex as 'male' | 'female',
   const members = memberRefs;
   console.log(`Created ${members.length} members`);
 
-  // ── Create 11 subscriptions and 8 payments ──
+  // ── Create 11 subscriptions and 10 payments ──
   const date = new Date();
   const ts = date.toISOString();
 
@@ -256,14 +256,14 @@ sex: m.sex as 'male' | 'female',
   // Member 4: Yonas - Karate, active (paid mobile_money)
   await createSubWithPayment(4, karateId, 0, 1, 'active', 2000, { method: 'mobile_money', dayOffset: 0, createdBy: ownerId });
 
-  // Member 5: Hiwot - Aerobics, active (no payment yet - pending)
-  await createSubWithPayment(5, aerobicsId, 0, 1, 'active', 1200);
+  // Member 5: Hiwot - Aerobics, active (paid cash)
+  await createSubWithPayment(5, aerobicsId, 0, 1, 'active', 1200, { method: 'cash', dayOffset: 0, createdBy: ownerId });
 
   // Member 6: Solomon - Gym, active (paid bank transfer)
-  await createSubWithPayment(6, gymId, -1, 0, 'active', 1500, { method: 'bank_transfer', dayOffset: -1, createdBy: managerId });
+  await createSubWithPayment(6, gymId, -1, 1, 'active', 1500, { method: 'bank_transfer', dayOffset: -1, createdBy: managerId });
 
-  // Member 7: Frehiwot - Karate, active (no payment yet - pending)
-  await createSubWithPayment(7, karateId, 0, 1, 'active', 2000);
+  // Member 7: Frehiwot - Karate, active (paid mobile_money)
+  await createSubWithPayment(7, karateId, 0, 1, 'active', 2000, { method: 'mobile_money', dayOffset: 0, createdBy: ownerId });
 
   // Member 8: Bereket - Gym, cancelled
   await createSubWithPayment(8, gymId, -3, -2, 'cancelled', 1500, undefined, 'Cancelled at member request');
@@ -272,7 +272,7 @@ sex: m.sex as 'male' | 'female',
   await createSubWithPayment(9, gymId, 0, 1, 'active', 1500, { method: 'cash', dayOffset: 0, createdBy: ownerId });
   await createSubWithPayment(9, aerobicsId, 0, 1, 'active', 1200, { method: 'cash', dayOffset: 0, createdBy: managerId });
 
-  console.log('Created 11 subscriptions and 8 payments');
+  console.log('Created 11 subscriptions and 10 payments');
 
   console.log('Seeding complete!');
 }

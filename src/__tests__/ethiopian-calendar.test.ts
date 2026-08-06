@@ -75,21 +75,35 @@ describe('Ethiopian Calendar', () => {
       const result = gregorianToEthiopian(new Date(2024, 3, 23));
       expect(result.year).toBe(2016);
       expect(result.month).toBe(8);
-      expect(result.day).toBe(16);
+      expect(result.day).toBe(15);
     });
 
-    it('converts a date after Ethiopian New Year (Sept 11/12)', () => {
-      const result = gregorianToEthiopian(new Date(2024, 8, 12));
-      expect(result.year).toBe(2017);
+    it('converts Ethiopian New Year (Sept 12, 2023 = Meskerem 1, 2016)', () => {
+      const result = gregorianToEthiopian(new Date(2023, 8, 12));
+      expect(result.year).toBe(2016);
       expect(result.month).toBe(1);
       expect(result.day).toBe(1);
     });
 
-    it('converts a date before Ethiopian New Year', () => {
+    it('converts the day after New Year (Sept 12, 2024 = Meskerem 2, 2017)', () => {
+      const result = gregorianToEthiopian(new Date(2024, 8, 12));
+      expect(result.year).toBe(2017);
+      expect(result.month).toBe(1);
+      expect(result.day).toBe(2);
+    });
+
+    it('converts the last day of Pagume (Sept 10, 2024 = Pagume 5, 2016)', () => {
       const result = gregorianToEthiopian(new Date(2024, 8, 10));
       expect(result.year).toBe(2016);
       expect(result.month).toBe(13);
-      expect(result.day).toBe(6);
+      expect(result.day).toBe(5);
+    });
+
+    it('converts the day before Ethiopian Christmas (Jan 7, 2024 = Tahsas 28, 2016)', () => {
+      const result = gregorianToEthiopian(new Date(2024, 0, 7));
+      expect(result.year).toBe(2016);
+      expect(result.month).toBe(4);
+      expect(result.day).toBe(28);
     });
 
     it('handles the epoch correctly', () => {
@@ -105,7 +119,7 @@ describe('Ethiopian Calendar', () => {
       const result = ethiopianToGregorian(2016, 8, 16);
       expect(result.getFullYear()).toBe(2024);
       expect(result.getMonth()).toBe(3);
-      expect(result.getDate()).toBe(23);
+      expect(result.getDate()).toBe(24);
     });
 
     it('round-trips through gregorianToEthiopian', () => {
@@ -115,6 +129,30 @@ describe('Ethiopian Calendar', () => {
       expect(back.getFullYear()).toBe(original.getFullYear());
       expect(back.getMonth()).toBe(original.getMonth());
       expect(back.getDate()).toBe(original.getDate());
+    });
+  });
+
+  describe('round-trip consistency', () => {
+    it('round-trips every day across a 13-year span without impossible dates', () => {
+      const start = new Date(2020, 0, 1);
+      const end = new Date(2033, 0, 1);
+      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+        const eth = gregorianToEthiopian(d);
+        expect(validateEthiopianDate(eth.year, eth.month, eth.day)).toBeNull();
+        const back = ethiopianToGregorian(eth.year, eth.month, eth.day);
+        expect(back.getFullYear()).toBe(d.getFullYear());
+        expect(back.getMonth()).toBe(d.getMonth());
+        expect(back.getDate()).toBe(d.getDate());
+      }
+    });
+
+    it('matches known New Year anchors across leap cycles', () => {
+      expect(gregorianToEthiopian(new Date(2022, 8, 11))).toEqual({ year: 2015, month: 1, day: 1 });
+      expect(gregorianToEthiopian(new Date(2023, 8, 12))).toEqual({ year: 2016, month: 1, day: 1 });
+      expect(gregorianToEthiopian(new Date(2024, 8, 11))).toEqual({ year: 2017, month: 1, day: 1 });
+      expect(gregorianToEthiopian(new Date(2025, 8, 11))).toEqual({ year: 2018, month: 1, day: 1 });
+      expect(gregorianToEthiopian(new Date(2026, 8, 11))).toEqual({ year: 2019, month: 1, day: 1 });
+      expect(gregorianToEthiopian(new Date(2027, 8, 12))).toEqual({ year: 2020, month: 1, day: 1 });
     });
   });
 
@@ -225,7 +263,7 @@ describe('Ethiopian Calendar', () => {
       const date = new Date(2024, 3, 23);
       expect(getEthiopianYear(date)).toBe(2016);
       expect(getEthiopianMonth(date)).toBe(8);
-      expect(getEthiopianDay(date)).toBe(16);
+      expect(getEthiopianDay(date)).toBe(15);
     });
   });
 
@@ -333,7 +371,7 @@ describe('Ethiopian Calendar', () => {
       const info = getEthiopianDateInfo(new Date(2024, 3, 23));
       expect(info.year).toBe(2016);
       expect(info.month).toBe(8);
-      expect(info.day).toBe(16);
+      expect(info.day).toBe(15);
       expect(typeof info.monthNameEN).toBe('string');
       expect(typeof info.monthNameAM).toBe('string');
       expect(typeof info.dayNameEN).toBe('string');

@@ -18,7 +18,7 @@ async function publicUrl(bucket: Bucket, filePath: string) {
 }
 
 export const POST = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner', 'manager'], request);
 
   const formData = await request.formData();
   const file = formData.get('photo') as File | null;

@@ -69,7 +69,7 @@ const FIRESTORE_FREE_LIMIT = 1 * GB;
 const STORAGE_FREE_LIMIT = 5 * GB;
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
 
   const staleMonthsParam = Number(request.nextUrl.searchParams.get('staleMonths'));
   const staleMonths = Number.isInteger(staleMonthsParam) && staleMonthsParam >= 1
@@ -106,7 +106,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
 
 // DELETE — cleanup actions (all irreversible)
 export const DELETE = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
   const { searchParams } = request.nextUrl;
   const action = searchParams.get('action');
 

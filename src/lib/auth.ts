@@ -8,7 +8,7 @@ export interface Session {
   expiresAt: number;
 }
 
-type AuthenticatedRequest = { headers: { get(name: string): string | null } };
+type AuthenticatedRequest = { headers: { get(_name: string): string | null } };
 
 async function extractToken(request: AuthenticatedRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization');
@@ -21,8 +21,18 @@ export async function getSession(request?: AuthenticatedRequest): Promise<Sessio
     const token = request ? await extractToken(request) : null;
     if (!token) return null;
 
-    const decoded = await adminAuth.verifyIdToken(token);
+    // checkRevoked rejects tokens minted before the user's tokens were
+    // revoked (deactivation / role change calls revokeRefreshTokens).
+    const decoded = await adminAuth.verifyIdToken(token, true);
     if (!decoded) return null;
+
+    // The Auth emulator ignores token revocation, so enforce deactivation
+    // explicitly there. In production, verifyIdToken(token, true) already
+    // rejects revoked tokens — revoked tokens are equivalent to disabled.
+    if (process.env.FIREBASE_EMULATOR === 'true') {
+      const user = await adminAuth.getUser(decoded.uid);
+      if (user.disabled) return null;
+    }
 
     return {
       userId: decoded.uid,

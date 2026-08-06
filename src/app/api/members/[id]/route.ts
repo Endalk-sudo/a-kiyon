@@ -11,7 +11,7 @@ export const GET = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(undefined, request);
+  await getSessionOrThrow(undefined, request);
 
   const { id } = await params;
   const member = await getMember(id);
@@ -25,7 +25,7 @@ export const PUT = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner', 'manager'], request);
 
   const { id } = await params;
   const body = await request.json();
@@ -83,7 +83,7 @@ export const DELETE = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner', 'manager'], request);
 
   const { id } = await params;
 
@@ -91,7 +91,7 @@ export const DELETE = apiHandler(async (
   if (!existing) return apiError('Member not found', 404);
   if (existing.isDeleted) return apiError('Member is already deleted');
 
-  const member = await softDeleteMember(id);
+  await softDeleteMember(id);
 
   return apiResponse({ message: 'Member deleted successfully' });
 });

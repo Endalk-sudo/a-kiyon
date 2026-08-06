@@ -7,7 +7,6 @@ import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName, formatPaymentMethod } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
 import { sanitizeError } from '@/lib/errors';
-import { t } from '@/lib/messages';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

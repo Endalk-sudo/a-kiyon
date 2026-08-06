@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Camera, Upload, X, RotateCcw, SwitchCamera } from 'lucide-react';
+import { Camera, Upload, X, SwitchCamera } from 'lucide-react';
 import { toast } from 'sonner';
 import { sanitizeError } from '@/lib/errors';
 import { uploadApi } from '@/lib/api-client';
-import { t } from '@/lib/messages';
 import { useAppStore } from '@/lib/store';
 
 interface PhotoCaptureProps {
@@ -75,7 +74,7 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
   }, [mode, startCamera, stopCamera]);
 
   // Upload blob to server
-  const uploadBlob = async (blob: Blob, filename: string) => {
+  const uploadBlob = useCallback(async (blob: Blob, filename: string) => {
     setUploading(true);
     try {
       const formData = new FormData();
@@ -91,7 +90,7 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
     } finally {
       setUploading(false);
     }
-  };
+  }, [onChange, onThumbChange, locale]);
 
   // Capture photo from video
   const capturePhoto = useCallback(() => {
@@ -118,7 +117,7 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
       'image/jpeg',
       0.85
     );
-  }, []);
+  }, [uploadBlob]);
 
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

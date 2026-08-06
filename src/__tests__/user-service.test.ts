@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { adminAuth } from '@/lib/firebase-admin';
-import { db } from '@/lib/db';
 
 const PREFIX = 'test_usr_svc_';
 let createdUserIds: string[] = [];
@@ -64,8 +63,8 @@ describe('User Service (integration)', () => {
           role: 'manager',
         });
         expect('Should have thrown').toBe('never');
-      } catch (e: any) {
-        expect(e.message).toBeTruthy();
+      } catch (e: unknown) {
+        expect((e as Error).message).toBeTruthy();
       }
     });
   });
@@ -76,7 +75,7 @@ describe('User Service (integration)', () => {
       const result = await listUsers();
       expect(Array.isArray(result.data)).toBe(true);
       expect(result.data.length).toBeGreaterThanOrEqual(2);
-      const found = result.data.find((u: any) => u.email === `${PREFIX}owner@test.com`);
+      const found = result.data.find((u) => u.email === `${PREFIX}owner@test.com`);
       expect(found).toBeDefined();
       expect(found!.role).toBe('owner');
     });

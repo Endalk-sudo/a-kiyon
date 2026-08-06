@@ -68,7 +68,7 @@ describe('Member Service (integration)', () => {
   });
 
   describe('listMembers', () => {
-    let memberIds: string[] = [];
+    const memberIds: string[] = [];
 
     beforeAll(async () => {
       for (let i = 0; i < 5; i++) {
@@ -109,8 +109,8 @@ describe('Member Service (integration)', () => {
   });
 
   describe('listMembers search (across all pages)', () => {
-    let searchMemberIds: string[] = [];
-    let searchSubIds: string[] = [];
+    const searchMemberIds: string[] = [];
+    const searchSubIds: string[] = [];
 
     beforeAll(async () => {
       const batch = db.batch();

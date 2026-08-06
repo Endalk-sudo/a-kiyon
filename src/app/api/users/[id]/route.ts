@@ -29,7 +29,7 @@ export const GET = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
   const { id } = await params;
 
   let userRecord;
@@ -69,6 +69,13 @@ export const PUT = apiHandler(async (
     return apiError('User not found', 404);
   }
 
+  // Self-guard: an owner must not deactivate or demote themselves (matches
+  // the DELETE guard — avoids locking the last active owner out).
+  const selfDemoting = id === session.userId && data.role !== undefined && data.role !== 'owner';
+  const selfDeactivating = id === session.userId && data.isActive === false;
+  if (selfDemoting) return apiError('You cannot demote yourself');
+  if (selfDeactivating) return apiError('You cannot deactivate yourself');
+
   const authUpdateData: Record<string, unknown> = {};
   if (data.email !== undefined) {
     try {
@@ -102,16 +109,20 @@ export const PUT = apiHandler(async (
     await adminAuth.setCustomUserClaims(id, { role: data.role });
   }
 
+  // Invalidate existing tokens when the user is deactivated or demoted, so
+  // they lose access (or lose elevated access) immediately instead of at
+  // token expiry. getSession() enforces this via verifyIdToken(token, true).
+  const accessChanged = data.isActive === false || (data.role !== undefined && data.role !== userRecord.customClaims?.role);
+  if (accessChanged) {
+    await adminAuth.revokeRefreshTokens(id);
+  }
+
   if (data.phone !== undefined) {
     await updateDoc('users', id, { phone: data.phone || null });
   }
 
   const updatedUser = await adminAuth.getUser(id);
   const suppData = await getDocById<{ phone?: string }>('users', id);
-
-  const changedFields = Object.keys(data);
-  if (changedFields.length > 0) {
-  }
 
   return apiResponse({
     id: updatedUser.uid,
@@ -149,6 +160,10 @@ export const DELETE = apiHandler(async (
   }
 
   await adminAuth.updateUser(id, { disabled: true });
+
+  // Invalidate existing tokens so the deactivated user loses access
+  // immediately instead of at token expiry.
+  await adminAuth.revokeRefreshTokens(id);
 
   const updatedUser = await adminAuth.getUser(id);
   const suppData = await getDocById<{ phone?: string }>('users', id);

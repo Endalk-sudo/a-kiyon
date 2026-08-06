@@ -76,7 +76,6 @@ import {
   Droplets,
   Heart,
   RefreshCw,
-  X,
   TrendingUp,
   TrendingDown,
 } from 'lucide-react';
@@ -320,15 +319,20 @@ export function MembersPage() {
 
   // ─── Fetch Member Detail ────────────────────────────────────────────────
 
+  const detailFetchSeqRef = useRef(0);
   const fetchMemberDetail = async (id: string) => {
+    const seq = ++detailFetchSeqRef.current;
     setDetailLoading(true);
     try {
       const detail = await membersApi.get(id) as MemberDetail;
+      if (seq !== detailFetchSeqRef.current) return; // stale — a newer fetch superseded this one
       setMemberDetail(detail);
     } catch {
-      toast.error(t(locale, 'Failed to load member details', 'የአባል ዝርዝሮችን መጫን አልተሳካም'));
+      if (seq === detailFetchSeqRef.current) {
+        toast.error(t(locale, 'Failed to load member details', 'የአባል ዝርዝሮችን መጫን አልተሳካም'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (seq === detailFetchSeqRef.current) setDetailLoading(false);
     }
   };
 
@@ -361,11 +365,11 @@ export function MembersPage() {
     setSubscribeNotes('');
     setSubscribeError(null);
     setSubscribeDialogOpen(true);
-    if (subscribeServices.length === 0) {
-      servicesApi.list({ includeInactive: false }).then((res) => {
-        setSubscribeServices((res as { data: Array<{ id: string; name: string; price: number; duration: number }> }).data || []);
-      }).catch(() => toast.error(t(locale, 'Failed to load services', 'አገልግሎቶችን መጫን አልተሳካም')));
-    }
+    // Always refresh — prices/availability may have changed since the last
+    // open; the previously cached list stays visible while fetching.
+    servicesApi.list({ includeInactive: false }).then((res) => {
+      setSubscribeServices((res as { data: Array<{ id: string; name: string; price: number; duration: number }> }).data || []);
+    }).catch(() => toast.error(t(locale, 'Failed to load services', 'አገልግሎቶችን መጫን አልተሳካም')));
   };
 
   const handleSubscribeMember = async () => {

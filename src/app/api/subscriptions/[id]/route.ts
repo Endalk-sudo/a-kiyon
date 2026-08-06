@@ -27,7 +27,7 @@ export const PUT = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner', 'manager'], request);
   const { id } = await params;
   const body = await request.json();
   const data = updateSubscriptionSchema.parse(body);

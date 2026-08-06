@@ -304,6 +304,51 @@ describe('Payment Service (integration)', () => {
       expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 20 * DAY, -3);
     });
 
+    it('voiding the latest payment after a middle void rolls back to the last VALID payment', async () => {
+      const { subscriptionId: subId2 } = await createSubscriptionWithInitialPayment();
+      const first = await recordAndExtendPayment({
+        subscriptionId: subId2,
+        method: 'cash',
+        createdBy: 'test-user',
+      });
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+      await trackPayment(first.payment.id);
+
+      const second = await recordAndExtendPayment({
+        subscriptionId: subId2,
+        method: 'cash',
+        createdBy: 'test-user',
+      });
+      expect(second.ok).toBe(true);
+      if (!second.ok) return;
+      await trackPayment(second.payment.id);
+
+      // Void the middle renewal first — the end date must stay at the latest
+      // payment's validity.
+      await voidPayment(first.payment.id, 'test-user');
+      await settle(async () => {
+        const fresh = await getSub(subId2);
+        return fresh.hasVoidedPayment === true;
+      });
+      let sub = await getSub(subId2);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 80 * DAY, -3);
+
+      // Voiding the latest payment must NOT roll back through the voided middle
+      // payment (50d is backed by refunded money) — it lands on the initial
+      // payment's end date instead.
+      await voidPayment(second.payment.id, 'test-user');
+      await settle(async () => {
+        const fresh = await getSub(subId2);
+        return new Date(fresh.endDate as string).getTime() < Date.now() + 80 * DAY;
+      });
+      sub = await getSub(subId2);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 20 * DAY, -3);
+      expect(sub.status).toBe('active');
+
+      await db.collection('subscriptions').doc(subId2).delete();
+    });
+
     it('voiding the initial payment cancels the subscription', async () => {
       const voided = await voidPayment(initialPaymentId, 'test-user');
 

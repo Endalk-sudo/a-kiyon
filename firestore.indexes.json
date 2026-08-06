@@ -32,6 +32,11 @@
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "subscriptionId", "order": "ASCENDING" },
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [

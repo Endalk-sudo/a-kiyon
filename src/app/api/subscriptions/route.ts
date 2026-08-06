@@ -1,6 +1,6 @@
 import { db, getDocById, getDocs } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
-import { apiResponse, paginatedResponse, apiError } from '@/lib/api';
+import { apiResponse, paginatedResponse, apiError, parseIntParam } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createSubscriptionSchema } from '@/lib/schemas';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
@@ -10,11 +10,11 @@ import { NextRequest } from 'next/server';
 
 // GET /api/subscriptions - List subscriptions with server-side pagination
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(undefined, request);
+  await getSessionOrThrow(undefined, request);
 
   const { searchParams } = request.nextUrl;
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)));
+  const page = Math.max(1, parseIntParam(searchParams.get('page'), 1));
+  const limit = Math.min(100, Math.max(1, parseIntParam(searchParams.get('limit'), 10)));
   const memberId = searchParams.get('memberId') || undefined;
   const serviceId = searchParams.get('serviceId') || undefined;
   const status = searchParams.get('status') || undefined;

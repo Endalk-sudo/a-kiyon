@@ -2,17 +2,17 @@ import { NextRequest } from 'next/server';
 import { getDocs, countDocs, createDoc } from '@/lib/db';
 import type { WhereClause } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
-import { apiResponse } from '@/lib/api';
+import { apiResponse, parseIntParam } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createServiceSchema } from '@/lib/schemas';
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(undefined, request);
+  await getSessionOrThrow(undefined, request);
 
   const { searchParams } = request.nextUrl;
   const includeInactive = searchParams.get('includeInactive') === 'true';
-  const page = parseInt(searchParams.get('page') || '');
-  const limit = parseInt(searchParams.get('limit') || '');
+  const page = parseIntParam(searchParams.get('page'), 0);
+  const limit = parseIntParam(searchParams.get('limit'), 0);
 
   const where: WhereClause[] = includeInactive ? [] : [['isActive', '==', true]];
 
@@ -46,7 +46,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
 });
 
 export const POST = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
   const body = await request.json();
   const data = createServiceSchema.parse(body);
 

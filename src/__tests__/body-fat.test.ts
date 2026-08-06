@@ -53,10 +53,10 @@ describe('U.S. Navy Body Fat Formula', () => {
       expect(calculateNavyBodyFatPercent({ sex: 'male', heightCm: 177.8, neckCm: 39.37, waistCm: 86.36 })).toBe(16.5);
       // 5'4" / neck 12.5" / waist 28" / hip 37" (given in cm) → 25.9%
       expect(calculateNavyBodyFatPercent({ sex: 'female', heightCm: 162.56, neckCm: 31.75, waistCm: 71.12, hipCm: 93.98 })).toBe(25.9);
-      // Same reference values expressed directly in inches (unit-agnostic input)
-      expect(calculateNavyBodyFatPercent({ sex: 'male', heightCm: 177.8, neckCm: 38.1, waistCm: 88.9 })).toBe(
-        calculateNavyBodyFatPercent({ sex: 'male', heightCm: 177.8, neckCm: 38.1, waistCm: 88.9 }),
-      );
+      // 6'0" / neck 16" / waist 35" → 16.7%
+      expect(calculateNavyBodyFatPercent({ sex: 'male', heightCm: 182.88, neckCm: 40.64, waistCm: 88.9 })).toBe(16.7);
+      // 5'7" / neck 14" / waist 30" / hip 40" → 28.5%
+      expect(calculateNavyBodyFatPercent({ sex: 'female', heightCm: 170.18, neckCm: 35.56, waistCm: 76.2, hipCm: 101.6 })).toBe(28.5);
     });
   });
 

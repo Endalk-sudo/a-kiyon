@@ -1,5 +1,14 @@
 import { NextResponse } from 'next/server';
 
+/**
+ * Parse an integer query parameter with a fallback. NaN (e.g. `?page=abc`)
+ * must never reach Firestore's skip/limit — it silently disables pagination.
+ */
+export function parseIntParam(value: string | null, fallback: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export function apiResponse(data: unknown, status = 200) {
   return NextResponse.json(data, { status });
 }

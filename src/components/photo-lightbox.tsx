@@ -22,6 +22,7 @@ const INTERCEPT_EVENTS = [
 /** Fullscreen photo overlay — close via backdrop click, ✕ button or Esc. */
 export function PhotoLightbox({ src, alt, onClose }: PhotoLightboxProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
@@ -52,9 +53,25 @@ export function PhotoLightbox({ src, alt, onClose }: PhotoLightboxProps) {
     };
   }, []);
 
+  // Move focus into the overlay on open and restore it to the trigger on
+  // close (aria-modal overlays must not leave focus behind the backdrop).
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
+      // Only the ✕ button is focusable inside the overlay — trap Tab.
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        closeBtnRef.current?.focus();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -69,6 +86,7 @@ export function PhotoLightbox({ src, alt, onClose }: PhotoLightboxProps) {
       aria-label={`Full-size photo of ${alt}`}
     >
       <button
+        ref={closeBtnRef}
         type="button"
         className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10"
         aria-label="Close photo"

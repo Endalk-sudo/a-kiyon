@@ -2,43 +2,24 @@ import { NextRequest } from 'next/server';
 import { adminAuth } from '@/lib/auth';
 import { getSessionOrThrow } from '@/lib/auth';
 import { createDocWithId } from '@/lib/db';
-import { apiResponse, apiError } from '@/lib/api';
+import { apiResponse, apiError, parseIntParam } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createUserSchema } from '@/lib/schemas';
+import { listUsers } from '@/services/user.service';
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
 
   const { searchParams } = request.nextUrl;
-  const page = parseInt(searchParams.get('page') || '');
-  const limit = parseInt(searchParams.get('limit') || '');
+  const page = parseIntParam(searchParams.get('page'), 0);
+  const limit = parseIntParam(searchParams.get('limit'), 0);
 
-  const listUsersResult = await adminAuth.listUsers(1000);
-  let users = listUsersResult.users.map(u => ({
-    id: u.uid,
-    email: u.email || '',
-    name: u.displayName || '',
-    role: (u.customClaims?.role as string) || 'manager',
-    phone: (u.customClaims?.phone as string) || null,
-    isActive: !u.disabled,
-    createdAt: u.metadata.creationTime,
-  }));
-
-  if (page && limit) {
-    const total = users.length;
-    const start = (page - 1) * limit;
-    const paged = users.slice(start, start + limit);
-    return apiResponse({
-      data: paged,
-      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    });
-  }
-
-  return apiResponse({ data: users });
+  // Service walks every Auth page (>1000 users) and sorts by creation date.
+  return apiResponse(await listUsers(page || undefined, limit || undefined));
 });
 
 export const POST = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
 
   const body = await request.json();
   const data = createUserSchema.parse(body);
@@ -54,7 +35,16 @@ export const POST = apiHandler(async (request: NextRequest) => {
     email: data.email,
     displayName: data.name,
     password: data.password,
+  }).catch((e: unknown) => {
+    // Close the check-then-create race: the pre-check above can pass while a
+    // concurrent request creates the same email first.
+    if ((e as { code?: string })?.code === 'auth/email-already-exists') {
+      return null;
+    }
+    throw e;
   });
+
+  if (!userRecord) return apiError('A user with this email already exists', 409);
 
   await adminAuth.setCustomUserClaims(userRecord.uid, { role: data.role });
 

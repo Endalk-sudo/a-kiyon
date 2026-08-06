@@ -8,7 +8,7 @@ import { computeMemberStatus } from '@/lib/member-status';
 
 // GET /api/export/members - Export members as CSV (manager + owner). Optional ?startDate=&endDate= (ISO) filter on createdAt.
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner', 'manager'], request);
 
   const { searchParams } = request.nextUrl;
   const startDate = searchParams.get('startDate') || undefined;
@@ -18,20 +18,26 @@ export const GET = apiHandler(async (request: NextRequest) => {
   if (startDate) where.push(['createdAt', '>=', startDate]);
   if (endDate) where.push(['createdAt', '<=', endDate]);
 
-  const members = await getDocs<any>('members', where, ['createdAt', 'desc']);
+  const members = await getDocs<{
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    createdAt: string;
+  }>('members', where, ['createdAt', 'desc']);
 
-  const allSubs: any[] = [];
-  for (const idChunk of chunk(members.map((m: any) => m.id))) {
-    allSubs.push(...(await getDocs<any>('subscriptions', [['memberId', 'in', idChunk]], ['createdAt', 'desc'])));
+  type SubRow = { memberId: string; status: string; endDate: string };
+  const allSubs: SubRow[] = [];
+  for (const idChunk of chunk(members.map((m) => m.id))) {
+    allSubs.push(...(await getDocs<SubRow>('subscriptions', [['memberId', 'in', idChunk]], ['createdAt', 'desc'])));
   }
-  const subsByMember = new Map<string, any[]>();
+  const subsByMember = new Map<string, SubRow[]>();
   for (const sub of allSubs) {
     const list = subsByMember.get(sub.memberId) || [];
     list.push(sub);
     subsByMember.set(sub.memberId, list);
   }
 
-  const rows = members.map((member: any) => {
+  const rows = members.map((member) => {
     const subs = subsByMember.get(member.id) || [];
     const memberStatus = computeMemberStatus(subs);
     const createdDateEC = formatEthiopianDate(new Date(member.createdAt));

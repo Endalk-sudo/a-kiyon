@@ -56,7 +56,7 @@ export async function signOut() {
   await fbSignOut(auth);
 }
 
-export function onAuthChange(callback: (user: FirebaseUser | null) => void) {
+export function onAuthChange(callback: (_user: FirebaseUser | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
 

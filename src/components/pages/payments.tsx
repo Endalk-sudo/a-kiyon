@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { paymentsApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName, formatPaymentMethod } from '@/lib/format';
@@ -77,16 +77,6 @@ interface PaymentRecord {
   subscription: SubscriptionInfo;
 }
 
-interface PaymentsResponse {
-  data: PaymentRecord[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Payment method filter options
 // ---------------------------------------------------------------------------
@@ -125,30 +115,38 @@ export function PaymentsPage() {
   const [voiding, setVoiding] = useState(false);
 
   // ---- Fetch payments ----
+  const fetchSeq = useRef(0);
   const fetchPayments = useCallback(
     async (page = 1) => {
+      const seq = ++fetchSeq.current;
       setLoading(true);
       try {
         const params = {
           page,
           limit: pagination.limit,
           ...(methodFilter !== 'all' ? { method: methodFilter } : {}),
+          ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
         };
         const result = await paymentsApi.list(params);
+        if (seq !== fetchSeq.current) return; // stale response — a newer fetch superseded this one
         setPayments(result.data || []);
         setPagination(result.pagination || { total: 0, page: 1, limit: 10, totalPages: 0 });
       } catch {
-        toast.error(t(locale, 'Failed to load payments', 'ክፍያዎችን መጫን አልተሳካም'));
+        if (seq === fetchSeq.current) {
+          toast.error(t(locale, 'Failed to load payments', 'ክፍያዎችን መጫን አልተሳካም'));
+        }
       } finally {
-        setLoading(false);
+        if (seq === fetchSeq.current) setLoading(false);
       }
     },
-    [methodFilter, pagination.limit]
+    [methodFilter, pagination.limit, searchQuery, locale]
   );
 
   useEffect(() => {
-    fetchPayments(1);
-  }, [methodFilter, fetchPayments]);
+    // Debounce the search input, then restart from page 1.
+    const timer = setTimeout(() => fetchPayments(1), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery, methodFilter, fetchPayments]);
 
   // ---- Print receipt ----
   const handlePrintReceipt = (payment: PaymentRecord) => {
@@ -329,15 +327,6 @@ export function PaymentsPage() {
     fetchPayments(page);
   };
 
-  // ---- Compute filtered payments for client-side search ----
-  const displayedPayments = searchQuery
-    ? payments.filter(
-        (p) =>
-          p.receiptNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          formatMemberName(p.member).toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : payments;
-
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
@@ -422,14 +411,14 @@ export function PaymentsPage() {
                       ))}
                     </TableRow>
                   ))
-                ) : displayedPayments.length === 0 ? (
+                ) : payments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                       No payments found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  displayedPayments.map((payment) => (
+                  payments.map((payment) => (
                     <TableRow
                       key={payment.id}
                       className={payment.isVoided ? 'opacity-50 bg-muted/30' : ''}
@@ -520,12 +509,12 @@ export function PaymentsPage() {
                   </CardContent>
                 </Card>
               ))
-            ) : displayedPayments.length === 0 ? (
+            ) : payments.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground">
                 No payments found
               </div>
             ) : (
-              displayedPayments.map((payment) => (
+              payments.map((payment) => (
                 <Card
                   key={payment.id}
                   className={payment.isVoided ? 'opacity-50' : ''}

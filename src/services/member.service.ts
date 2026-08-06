@@ -41,10 +41,6 @@ interface SubscriptionSummary {
   serviceId: string;
 }
 
-interface MemberWithSubs extends MemberData {
-  subscriptions?: SubscriptionSummary[];
-}
-
 export async function listMembers(options: MemberListOptions = {}) {
   const { page = 1, limit = 20, search = '', statusFilter = '', showDeleted = false } = options;
 
@@ -122,15 +118,15 @@ export async function getMember(id: string) {
   const member = await getDocById<MemberData>('members', id);
   if (!member) return null;
 
-  const subs = await getDocs<any>('subscriptions', [['memberId', '==', member.id]], ['createdAt', 'desc']);
+  const subs = await getDocs<SubscriptionSummary>('subscriptions', [['memberId', '==', member.id]], ['createdAt', 'desc']);
 
   const subsServiceIds = [...new Set(subs.map((sub) => sub.serviceId))];
-  const subsServiceDocs = await getDocsByIds<any>('services', subsServiceIds);
+  const subsServiceDocs = await getDocsByIds<{ name: string; nameAm: string | null; price: number }>('services', subsServiceIds);
   const servicesMap = new Map(subsServiceDocs.map((s) => [s.id, s]));
 
   const subsWithService = await Promise.all(
     subs.map(async (sub) => {
-      const payments = await getDocs<any>(
+      const payments = await getDocs<Record<string, unknown>>(
         'payments',
         [['subscriptionId', '==', sub.id], ['isVoided', '==', false]],
         ['paymentDate', 'desc'],
@@ -144,14 +140,14 @@ export async function getMember(id: string) {
     }),
   );
 
-  const payments = await getDocs<any>('payments', [['memberId', '==', member.id]], ['paymentDate', 'desc']);
+  const payments = await getDocs<{ subscriptionId: string | null; memberId: string; paymentDate: string }>('payments', [['memberId', '==', member.id]], ['paymentDate', 'desc']);
 
-  const paymentSubIds = [...new Set(payments.map((p) => p.subscriptionId).filter(Boolean))];
-  const paymentSubs = await getDocsByIds<any>('subscriptions', paymentSubIds);
+  const paymentSubIds = [...new Set(payments.map((p) => p.subscriptionId).filter((id): id is string => Boolean(id)))];
+  const paymentSubs = await getDocsByIds<{ serviceId: string }>('subscriptions', paymentSubIds);
   const paymentSubsMap = new Map(paymentSubs.map((s) => [s.id, s]));
 
   const paymentServiceIds = [...new Set(paymentSubs.map((s) => s.serviceId).filter(Boolean))];
-  const paymentServiceDocs = await getDocsByIds<any>('services', paymentServiceIds);
+  const paymentServiceDocs = await getDocsByIds<{ name: string }>('services', paymentServiceIds);
   const paymentServicesMap = new Map(paymentServiceDocs.map((s) => [s.id, s]));
 
   const paymentsWithService = payments.map((p) => {

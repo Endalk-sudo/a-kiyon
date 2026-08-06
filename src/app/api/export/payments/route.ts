@@ -7,7 +7,7 @@ import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 
 // GET /api/export/payments - Export payments as CSV (manager + owner). Optional ?startDate=&endDate= (ISO) filter on paymentDate.
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner', 'manager'], request);
 
   const { searchParams } = request.nextUrl;
   const startDate = searchParams.get('startDate') || undefined;
@@ -17,7 +17,14 @@ export const GET = apiHandler(async (request: NextRequest) => {
   if (startDate) where.push(['paymentDate', '>=', startDate]);
   if (endDate) where.push(['paymentDate', '<=', endDate]);
 
-  const payments = await getDocs<any>('payments', where.length ? where : undefined, ['paymentDate', 'desc']);
+  const payments = await getDocs<{
+    memberId: string;
+    receiptNumber: string | null;
+    amount: number;
+    method: string;
+    paymentDate: string;
+    isVoided: boolean;
+  }>('payments', where.length ? where : undefined, ['paymentDate', 'desc']);
 
   const memberIds = [...new Set(payments.map((p) => p.memberId))];
   const memberDocs = await getDocsByIds<{ firstName: string; lastName: string }>('members', memberIds);

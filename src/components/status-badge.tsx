@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { useAppStore } from '@/lib/store';
 
 type StatusType = 'active' | 'expiring_soon' | 'expired' | 'no_subscription';
 
@@ -37,6 +38,7 @@ const statusConfig: Record<StatusType, { label: string; labelAm: string; variant
 };
 
 export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
+  const locale = useAppStore((s) => s.locale);
   const config = statusConfig[status];
   const sizeClasses = {
     sm: 'text-xs px-2 py-0.5',
@@ -56,7 +58,7 @@ export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
           status === 'expired' ? 'bg-white' :
           'bg-white'
         }`} />
-        {config.label}
+        {locale === 'am' ? config.labelAm : config.label}
       </span>
     </Badge>
   );

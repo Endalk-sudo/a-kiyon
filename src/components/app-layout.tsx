@@ -45,7 +45,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const setCurrentPage = useAppStore((s) => s.setCurrentPage);
   const locale = useAppStore((s) => s.locale);
   const setLocale = useAppStore((s) => s.setLocale);
-  const setSession = useAppStore((s) => s.setSession);
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const theme = useAppStore((s) => s.theme);

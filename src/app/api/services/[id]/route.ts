@@ -9,7 +9,7 @@ export const PUT = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
 
   const { id } = await params;
   const body = await request.json();
@@ -44,7 +44,7 @@ export const DELETE = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(['owner'], request);
+  await getSessionOrThrow(['owner'], request);
 
   const { id } = await params;
 
@@ -52,7 +52,7 @@ export const DELETE = apiHandler(async (
   if (!existing) return apiError('Service not found', 404);
   if (!existing.isActive) return apiError('Service is already inactive');
 
-  const service = await updateDoc<{ name: string; isActive: boolean }>('services', id, { isActive: false });
+  await updateDoc<{ name: string; isActive: boolean }>('services', id, { isActive: false });
 
   return apiResponse({ message: 'Service deactivated successfully' });
 });

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
-import { paginatedResponse, apiResponse, apiError } from '@/lib/api';
+import { paginatedResponse, apiResponse, apiError, parseIntParam } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createMemberSchema } from '@/lib/schemas';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
@@ -10,11 +10,11 @@ import { generateReceiptNumber } from '@/services/payment.service';
 import { NextRequest } from 'next/server';
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(undefined, request);
+  await getSessionOrThrow(undefined, request);
 
   const { searchParams } = request.nextUrl;
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
+  const page = Math.max(1, parseIntParam(searchParams.get('page'), 1));
+  const limit = Math.min(100, Math.max(1, parseIntParam(searchParams.get('limit'), 20)));
   const search = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || '';
   const showDeleted = searchParams.get('showDeleted') === 'true';

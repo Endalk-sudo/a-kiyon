@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { useAppStore } from '@/lib/store';
-import { sanitizeError } from '@/lib/errors';
 import { t } from '@/lib/messages';
 import {
   BarChart,
@@ -75,7 +74,7 @@ export function ReportsPage() {
     } finally {
       setExporting(null);
     }
-  }, [dateFromIso, dateToIso]);
+  }, [dateFromIso, dateToIso, locale]);
 
   if (loading) {
     return (

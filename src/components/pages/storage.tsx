@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiFetch, membersApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatDate } from '@/lib/format';
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,6 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useAppStore } from '@/lib/store';
-import { sanitizeError } from '@/lib/errors';
 import { t } from '@/lib/messages';
 import {
   Database,
@@ -104,7 +102,7 @@ export function StoragePage() {
   const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const result = await apiFetch<StorageData>('/storage');
@@ -114,11 +112,11 @@ export function StoragePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [locale]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleCleanup = async (action: string, label: string) => {
     setCleaning(action);

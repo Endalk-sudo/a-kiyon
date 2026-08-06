@@ -5,7 +5,7 @@ const PREFIX = 'test_sub_svc_';
 
 let memberId: string;
 let serviceId: string;
-let subscriptionIds: string[] = [];
+const subscriptionIds: string[] = [];
 
 async function cleanup() {
   const batch = db.batch();
@@ -95,8 +95,8 @@ describe('Subscription Service (integration)', () => {
   });
 
   describe('listSubscriptions search (more than 10 matching members)', () => {
-    let searchMemberIds: string[] = [];
-    let searchSubIds: string[] = [];
+    const searchMemberIds: string[] = [];
+    const searchSubIds: string[] = [];
 
     beforeAll(async () => {
       const batch = db.batch();

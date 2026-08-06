@@ -1,27 +1,28 @@
 import { NextRequest } from 'next/server';
 import { getSessionOrThrow } from '@/lib/auth';
-import { paginatedResponse, apiResponse, apiError } from '@/lib/api';
+import { paginatedResponse, apiResponse, apiError, parseIntParam } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { createPaymentSchema } from '@/lib/schemas';
 import { listPayments, recordAndExtendPayment } from '@/services/payment.service';
 import { autoExpireSubscriptions } from '@/services/subscription.service';
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(undefined, request);
+  await getSessionOrThrow(undefined, request);
 
   await autoExpireSubscriptions();
 
   const { searchParams } = new URL(request.url);
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
+  const page = Math.max(1, parseIntParam(searchParams.get('page'), 1));
+  const limit = Math.min(100, Math.max(1, parseIntParam(searchParams.get('limit'), 20)));
   const memberId = searchParams.get('memberId') || undefined;
   const method = searchParams.get('method') || undefined;
   const isVoidedParam = searchParams.get('isVoided');
   const isVoided = isVoidedParam !== null ? isVoidedParam === 'true' : undefined;
   const startDate = searchParams.get('startDate') || undefined;
   const endDate = searchParams.get('endDate') || undefined;
+  const search = searchParams.get('search') || '';
 
-  const { data, pagination } = await listPayments({ page, limit, memberId, method, isVoided, startDate, endDate });
+  const { data, pagination } = await listPayments({ page, limit, memberId, method, isVoided, startDate, endDate, search });
   return paginatedResponse(data, pagination);
 });
 

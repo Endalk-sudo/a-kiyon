@@ -22,19 +22,19 @@ export type Theme = 'light' | 'dark';
 
 interface AppState {
   currentPage: PageId;
-  setCurrentPage: (page: PageId) => void;
+  setCurrentPage: (_page: PageId) => void;
 
   session: Session | null;
-  setSession: (session: Session | null) => void;
+  setSession: (_session: Session | null) => void;
 
   locale: 'en' | 'am';
-  setLocale: (locale: 'en' | 'am') => void;
+  setLocale: (_locale: 'en' | 'am') => void;
 
   sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
+  setSidebarOpen: (_open: boolean) => void;
 
   theme: Theme;
-  setTheme: (theme: Theme) => void;
+  setTheme: (_theme: Theme) => void;
 
   resetAppState: () => void;
 }

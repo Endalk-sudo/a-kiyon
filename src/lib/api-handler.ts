@@ -37,8 +37,8 @@ const SAFE_ERROR_MESSAGES = new Set([
   'You cannot deactivate yourself',
 ]);
 
-export function apiHandler<T extends (...args: any[]) => Promise<Response>>(handler: T): T {
-  return (async (...args: unknown[]) => {
+export function apiHandler<T extends (...args: never[]) => Promise<Response>>(handler: T): T {
+  return (async (...args: never[]) => {
     try {
       return await handler(...args);
     } catch (error: unknown) {

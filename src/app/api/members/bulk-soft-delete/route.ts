@@ -13,7 +13,7 @@ const bodySchema = z.object({
 // batches (owner + manager). Used by the Storage data-hygiene flow instead of
 // N parallel DELETE requests.
 export const POST = apiHandler(async (request: NextRequest) => {
-  const session = await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner', 'manager'], request);
 
   const body = await request.json();
   const { ids } = bodySchema.parse(body);

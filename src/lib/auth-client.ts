@@ -8,13 +8,13 @@ import type { User as FirebaseUser } from 'firebase/auth';
 
 let currentToken: string | null = null;
 let tokenRefreshInterval: ReturnType<typeof setInterval> | null = null;
-let onTokenCallbacks: Array<(token: string | null) => void> = [];
+let onTokenCallbacks: Array<(_token: string | null) => void> = [];
 
 export function getCurrentToken(): string | null {
   return currentToken;
 }
 
-export function onTokenChange(callback: (token: string | null) => void) {
+export function onTokenChange(callback: (_token: string | null) => void) {
   onTokenCallbacks.push(callback);
   if (currentToken) callback(currentToken);
   return () => {
@@ -70,7 +70,7 @@ export { onAuthChange };
 // JWT payloads are base64url-encoded (`-`/`_`, no padding) — plain `atob`
 // breaks on tokens containing those characters. Also handles `claims.*`
 // nesting (newer Firebase ID token format).
-function decodeTokenPayload(token: string): Record<string, unknown> {
+export function decodeTokenPayload(token: string): Record<string, unknown> {
   const part = token.split('.')[1] || '';
   const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');

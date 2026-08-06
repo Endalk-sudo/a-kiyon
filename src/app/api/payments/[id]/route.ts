@@ -9,7 +9,7 @@ export const GET = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) => {
-  const session = await getSessionOrThrow(undefined, request);
+  await getSessionOrThrow(undefined, request);
 
   const { id } = await params;
 
@@ -25,6 +25,10 @@ export const GET = apiHandler(async (
     voidedBy: string | null;
     notes: string | null;
     createdBy: string;
+    extendedTo?: string | null;
+    previousExtendedTo?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
   }>('payments', id);
 
   if (!payment) return apiError('Payment not found', 404);
@@ -41,8 +45,20 @@ export const GET = apiHandler(async (
     })(),
   ]);
 
+  // Explicit shape only — never spread the raw doc (leaks createdBy and
+  // rollback internals).
   return apiResponse({
-    ...payment,
+    id,
+    subscriptionId: payment.subscriptionId,
+    memberId: payment.memberId,
+    amount: payment.amount,
+    paymentDate: payment.paymentDate,
+    method: payment.method,
+    receiptNumber: payment.receiptNumber,
+    isVoided: payment.isVoided,
+    voidedAt: payment.voidedAt,
+    voidedBy: payment.voidedBy,
+    notes: payment.notes,
     member: member
       ? { id: member.id, firstName: member.firstName, lastName: member.lastName, phone: member.phone || null, photo: member.photo || null }
       : null,

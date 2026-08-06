@@ -1,5 +1,4 @@
 import { getFirestore, Timestamp, Filter, AggregateField } from 'firebase-admin/firestore';
-import { getApps } from 'firebase-admin/app';
 import type {
   DocumentSnapshot,
   QuerySnapshot,

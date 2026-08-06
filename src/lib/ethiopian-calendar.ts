@@ -73,9 +73,6 @@ export const ETH_DAY_NAMES_EN: readonly string[] = [
   'Saturday',
 ] as const;
 
-/** Number of days in each Ethiopian month (1-indexed, index 12 = Pagume) */
-const ETH_MONTH_DAYS = [30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 5] as const;
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -100,18 +97,16 @@ export interface EthiopianParseResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns true if the given Gregorian year is a leap year.
- */
-function isGregorianLeapYear(year: number): boolean {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-/**
  * Returns the Gregorian day-of-month on which Ethiopian New Year (Meskerem 1)
  * falls for the given Gregorian year (September 11 or 12).
+ *
+ * Ethiopian New Year falls on September 12 in the Gregorian year before a
+ * Gregorian leap year (`gregorianYear % 4 === 3`, e.g. 2023), and September 11
+ * otherwise (e.g. 2024). Anchored: Meskerem 1, 2016 EC = Sept 12, 2023 and
+ * Meskerem 1, 2017 EC = Sept 11, 2024.
  */
 function ethiopianNewYearGregorianDay(gregorianYear: number): number {
-  return isGregorianLeapYear(gregorianYear) ? 12 : 11;
+  return gregorianYear % 4 === 3 ? 12 : 11;
 }
 
 // ---------------------------------------------------------------------------
