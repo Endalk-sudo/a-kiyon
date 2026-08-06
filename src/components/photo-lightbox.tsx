@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface PhotoLightboxProps {
@@ -9,38 +9,68 @@ interface PhotoLightboxProps {
   onClose: () => void;
 }
 
+const INTERCEPT_EVENTS = [
+  'pointerdown',
+  'pointerup',
+  'mousedown',
+  'mouseup',
+  'touchstart',
+  'touchend',
+  'click',
+] as const;
+
 /** Fullscreen photo overlay — close via backdrop click, ✕ button or Esc. */
 export function PhotoLightbox({ src, alt, onClose }: PhotoLightboxProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Native capture-phase interception: runs before any document-level bubble
+  // listener (Radix dialog outside-click/pointerdown dismissal), independent
+  // of React event delegation. The overlay can also be a DOM descendant of a
+  // clickable row/card (via MemberAvatar), so nothing may see these events
+  // but the lightbox itself.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const intercept = (event: Event) => {
+      event.stopPropagation();
+      if (event.type === 'click') onCloseRef.current();
+    };
+
+    for (const type of INTERCEPT_EVENTS) {
+      root.addEventListener(type, intercept, true);
+    }
+    return () => {
+      for (const type of INTERCEPT_EVENTS) {
+        root.removeEventListener(type, intercept, true);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, []);
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center cursor-zoom-out"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        // stopPropagation: the overlay can be a DOM descendant of a clickable
-        // row/card (via MemberAvatar) — don't let the closing click fall
-        // through to it, or to Radix outside-click handlers on dialogs.
-        e.stopPropagation();
-        onClose();
-      }}
+      ref={rootRef}
+      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center cursor-zoom-out pointer-events-auto"
       role="dialog"
       aria-modal="true"
       aria-label={`Full-size photo of ${alt}`}
     >
       <button
+        type="button"
         className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
         aria-label="Close photo"
       >
         <X className="h-8 w-8" />

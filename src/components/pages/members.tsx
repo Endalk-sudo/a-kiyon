@@ -896,7 +896,15 @@ export function MembersPage() {
       </Dialog>
 
       {/* ─── View Member Dialog ──────────────────────────────────────────── */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+      <Dialog
+        open={viewDialogOpen}
+        onOpenChange={(open) => {
+          // Never dismiss the modal while its photo lightbox is showing — the
+          // first close should always target the on-top lightbox.
+          if (!open && photoPreviewOpen) return;
+          setViewDialogOpen(open);
+        }}
+      >
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Member Details</DialogTitle>
