@@ -72,6 +72,7 @@ pnpm run test           # vitest (needs Firebase emulators running)
 
 ## Deployment
 
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) on push to `dev`/`main` + PRs — pnpm install, `tsc --noEmit`, lint, build, then `firebase emulators:exec "pnpm run test"` (fresh emulators, no secrets needed).
 - Self-hosted: Caddy reverse proxy on `:81` → `localhost:3000` (see `Caddyfile`).
 - Required env: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `NEXT_PUBLIC_FIREBASE_*` vars. Set `FIREBASE_EMULATOR=true` + `NEXT_PUBLIC_FIREBASE_EMULATOR=true` for local dev.
 - **Composite indexes**: queries in code must be covered by `firestore.indexes.json`. The emulator auto-creates indexes, so missing ones only fail in production. Deploy with `firebase deploy --only firestore:indexes` before shipping code that needs a new index (e.g. `payments(subscriptionId ASC, isVoided ASC, createdAt DESC)` added for void rollback).

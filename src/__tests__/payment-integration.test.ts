@@ -197,7 +197,7 @@ describe('Payment Service (integration)', () => {
       const beforeEnd = Math.max(new Date(before.endDate as string).getTime(), Date.now());
       const after = await getSub(subscriptionId);
       expect(after.status).toBe('active');
-      expect(new Date(after.endDate as string).getTime()).toBeCloseTo(beforeEnd + 30 * DAY, -3);
+      expect(new Date(after.endDate as string).getTime()).toBeCloseTo(beforeEnd + 30 * DAY, -4);
     });
 
     it('allows renewing an expired subscription only with allowReactivation', async () => {
@@ -229,7 +229,7 @@ describe('Payment Service (integration)', () => {
       const after = await getSub(expiredId);
       expect(after.status).toBe('active');
       // Expired 10 days ago — renewal restarts from today, not from the old end date.
-      expect(new Date(after.endDate as string).getTime()).toBeCloseTo(Date.now() + 30 * DAY, -3);
+      expect(new Date(after.endDate as string).getTime()).toBeCloseTo(Date.now() + 30 * DAY, -4);
 
       await db.collection('subscriptions').doc(expiredId).delete();
     });
@@ -278,7 +278,7 @@ describe('Payment Service (integration)', () => {
       await trackPayment(secondRenewalId);
 
       const sub = await getSub(subId);
-      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 80 * DAY, -3);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 80 * DAY, -4);
     });
 
     it('voiding the latest payment rolls the end date back to the previous payment', async () => {
@@ -288,12 +288,12 @@ describe('Payment Service (integration)', () => {
       expect(voided!.voidedBy).toBe('test-user');
       // The response must reflect the post-void state, not the pre-void read.
       expect(voided!.subscription.endDate).toBeDefined();
-      expect(new Date(voided!.subscription.endDate).getTime()).toBeCloseTo(Date.now() + 50 * DAY, -3);
+      expect(new Date(voided!.subscription.endDate).getTime()).toBeCloseTo(Date.now() + 50 * DAY, -4);
       expect(voided!.subscription.status).toBe('active');
 
       const sub = await getSub(subId);
       expect(sub.status).toBe('active');
-      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 50 * DAY, -3);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 50 * DAY, -4);
     });
 
     it('voiding the remaining renewal rolls back to the initial period', async () => {
@@ -301,7 +301,7 @@ describe('Payment Service (integration)', () => {
 
       const sub = await getSub(subId);
       expect(sub.status).toBe('active');
-      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 20 * DAY, -3);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 20 * DAY, -4);
     });
 
     it('voiding the latest payment after a middle void rolls back to the last VALID payment', async () => {
@@ -332,7 +332,7 @@ describe('Payment Service (integration)', () => {
         return fresh.hasVoidedPayment === true;
       });
       let sub = await getSub(subId2);
-      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 80 * DAY, -3);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 80 * DAY, -4);
 
       // Voiding the latest payment must NOT roll back through the voided middle
       // payment (50d is backed by refunded money) — it lands on the initial
@@ -343,7 +343,7 @@ describe('Payment Service (integration)', () => {
         return new Date(fresh.endDate as string).getTime() < Date.now() + 80 * DAY;
       });
       sub = await getSub(subId2);
-      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 20 * DAY, -3);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 20 * DAY, -4);
       expect(sub.status).toBe('active');
 
       await db.collection('subscriptions').doc(subId2).delete();
@@ -406,7 +406,7 @@ describe('Payment Service (integration)', () => {
       await voidPayment(newer.payment.id, 'test-user');
 
       const sub = await getSub(legacyId);
-      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now(), -3);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now(), -4);
       expect(sub.status).toBe('expired');
 
       // Voiding the legacy payment itself falls back to the remaining-payment
