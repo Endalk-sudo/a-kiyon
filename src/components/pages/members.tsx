@@ -1592,7 +1592,11 @@ function MemberForm({ formData, setFormData, formErrors }: {
               {previewBodyFat != null ? (
                 <span>Body Fat (U.S. Navy): {previewBodyFat.toFixed(1)}%</span>
               ) : (
-                <span>Waist must be greater than neck to calculate body fat</span>
+                <span>
+                  {sex === 'female'
+                    ? 'Waist + hip must be greater than neck to calculate body fat'
+                    : 'Waist must be greater than neck to calculate body fat'}
+                </span>
               )}
             </div>
           );

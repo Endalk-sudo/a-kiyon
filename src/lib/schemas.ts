@@ -5,6 +5,11 @@ export const sexes = ['male', 'female'] as const;
 export const paymentMethods = ['cash', 'bank_transfer', 'mobile_money'] as const;
 export const userRoles = ['owner', 'manager', 'reader'] as const;
 
+// Optional body measurements (cm/kg) — finite with physiological sanity
+// bounds so typo'd or extreme values (e.g. 1e999 → Infinity) never persist.
+const measurement = (min: number, max: number) =>
+  z.coerce.number().finite().min(min).max(max).optional().nullable();
+
 export const createMemberSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
@@ -12,15 +17,15 @@ export const createMemberSchema = z.object({
   photo: z.string().optional().nullable(),
   photoThumb: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
-  weight: z.coerce.number().nonnegative().optional().nullable(),
-  height: z.coerce.number().nonnegative().optional().nullable(),
+  weight: measurement(5, 500),
+  height: measurement(50, 300),
   bloodType: z.enum(bloodTypes).optional().nullable(),
   emergencyContact: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   sex: z.enum(sexes).optional().nullable(),
-  neck: z.coerce.number().nonnegative().optional().nullable(),
-  waist: z.coerce.number().nonnegative().optional().nullable(),
-  hip: z.coerce.number().nonnegative().optional().nullable(),
+  neck: measurement(10, 100),
+  waist: measurement(20, 300),
+  hip: measurement(20, 300),
   serviceId: z.string().optional(),
   paymentMethod: z.enum(paymentMethods).optional(),
   paymentDate: z.string().optional(),
@@ -42,15 +47,15 @@ export const updateMemberSchema = z.object({
   photo: z.string().optional().nullable(),
   photoThumb: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
-  weight: z.coerce.number().nonnegative().optional().nullable(),
-  height: z.coerce.number().nonnegative().optional().nullable(),
+  weight: measurement(5, 500),
+  height: measurement(50, 300),
   bloodType: z.enum(bloodTypes).optional().nullable(),
   emergencyContact: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   sex: z.enum(sexes).optional().nullable(),
-  neck: z.coerce.number().nonnegative().optional().nullable(),
-  waist: z.coerce.number().nonnegative().optional().nullable(),
-  hip: z.coerce.number().nonnegative().optional().nullable(),
+  neck: measurement(10, 100),
+  waist: measurement(20, 300),
+  hip: measurement(20, 300),
 });
 
 export const createServiceSchema = z.object({
