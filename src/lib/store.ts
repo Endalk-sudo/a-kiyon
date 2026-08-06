@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { useShallow } from 'zustand/react/shallow';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 
 export type PageId = 
@@ -74,10 +73,11 @@ export const useAppStore = create<AppState>()(
 
         resetAppState: () => {
           const prevTheme = useAppStore.getState().theme;
+          const prevLocale = useAppStore.getState().locale;
           set({
             currentPage: 'dashboard',
             session: null,
-            locale: 'en',
+            locale: prevLocale,
             sidebarOpen: false,
             theme: prevTheme,
           });
@@ -105,7 +105,3 @@ export const useAppStore = create<AppState>()(
     { name: 'AppStore' }
   )
 );
-
-export function useShallowAppStore<T>(selector: (state: AppState) => T): T {
-  return useAppStore(useShallow(selector));
-}

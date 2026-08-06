@@ -125,8 +125,10 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
   if (action === 'purge-deleted-members') {
     if (!adminBucket) return apiError('Storage not configured', 500);
     const photosDeleted = await purgeDeletedMemberPhotos(adminBucket);
-    const count = await purgeDeletedMembers();
-    return apiResponse({ message: `Permanently deleted ${count} member(s) and ${photosDeleted} photo(s)` });
+    const { members, payments, subscriptions } = await purgeDeletedMembers();
+    return apiResponse({
+      message: `Permanently deleted ${members} member(s), ${subscriptions} subscription(s), ${payments} payment(s) and ${photosDeleted} photo(s)`,
+    });
   }
 
   return apiError('Unknown cleanup action', 400);

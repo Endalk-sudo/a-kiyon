@@ -69,15 +69,10 @@ export async function recordAndExtendPayment(data: {
     memberId: string;
     serviceId: string;
     startDate: string;
-    endDate: string;
-    status: string;
     priceSnapshot: number;
   }>('subscriptions', data.subscriptionId);
 
   if (!existing) return { ok: false, reason: 'subscription_not_found' };
-  if (existing.status !== 'active' && !data.allowReactivation) {
-    return { ok: false, reason: 'subscription_inactive' };
-  }
 
   const member = await getDocById<{ isDeleted: boolean }>('members', existing.memberId);
   if (!member || member.isDeleted) return { ok: false, reason: 'member_not_found' };
@@ -92,17 +87,37 @@ export async function recordAndExtendPayment(data: {
 
   const amount = data.amount ?? service.price;
   const now = new Date();
-  const currentEndDate = new Date(existing.endDate);
-  const startDate = currentEndDate > now ? currentEndDate : now;
-  const newEndDate = new Date(startDate);
-  newEndDate.setDate(newEndDate.getDate() + service.duration);
-
   const receiptNumber = generateReceiptNumber();
 
-  const { paymentId } = await db.runTransaction(async (tx) => {
+  // The subscription is read INSIDE the transaction so concurrent renewals
+  // each extend from the latest committed end date. Without this, two
+  // simultaneous payments on the same subscription would both compute the
+  // same new end date and the second would take money but add zero days.
+  const result = await db.runTransaction(async (tx) => {
     const subRef = db.collection('subscriptions').doc(data.subscriptionId);
+    const subSnap = await tx.get(subRef);
+    if (!subSnap.exists) return { error: 'subscription_not_found' as const };
+
+    const sub = subSnap.data() as {
+      memberId: string;
+      serviceId: string;
+      startDate: string;
+      endDate: string;
+      status: string;
+      priceSnapshot: number;
+    };
+    if (sub.status !== 'active' && !data.allowReactivation) {
+      return { error: 'subscription_inactive' as const };
+    }
+
+    const currentEndDate = new Date(sub.endDate);
+    const startDate = currentEndDate > now ? currentEndDate : now;
+    const newEndDate = new Date(startDate);
+    newEndDate.setDate(newEndDate.getDate() + service.duration);
+    const newEndDateIso = newEndDate.toISOString();
+
     tx.update(subRef, {
-      endDate: newEndDate.toISOString(),
+      endDate: newEndDateIso,
       status: 'active',
       updatedAt: now.toISOString(),
     });
@@ -110,7 +125,7 @@ export async function recordAndExtendPayment(data: {
     const payRef = db.collection('payments').doc();
     tx.set(payRef, {
       subscriptionId: data.subscriptionId,
-      memberId: existing.memberId,
+      memberId: sub.memberId,
       amount,
       paymentDate: now.toISOString(),
       method: data.method,
@@ -118,21 +133,32 @@ export async function recordAndExtendPayment(data: {
       notes: data.notes || null,
       createdBy: data.createdBy,
       isVoided: false,
-      extendedTo: newEndDate.toISOString(),
-      previousExtendedTo: existing.endDate,
+      extendedTo: newEndDateIso,
+      previousExtendedTo: sub.endDate,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     });
 
-    return { paymentId: payRef.id };
+    return {
+      error: null as null,
+      paymentId: payRef.id,
+      newEndDateIso,
+      sub,
+    };
   });
+
+  if (result.error) {
+    return { ok: false, reason: result.error };
+  }
+
+  const { paymentId, newEndDateIso, sub } = result;
 
   return {
     ok: true,
     payment: {
       id: paymentId,
       subscriptionId: data.subscriptionId,
-      memberId: existing.memberId,
+      memberId: sub.memberId,
       amount,
       paymentDate: now.toISOString(),
       method: data.method,
@@ -140,17 +166,17 @@ export async function recordAndExtendPayment(data: {
       notes: data.notes || null,
       createdBy: data.createdBy,
       isVoided: false,
-      extendedTo: newEndDate.toISOString(),
-      previousExtendedTo: existing.endDate,
+      extendedTo: newEndDateIso,
+      previousExtendedTo: sub.endDate,
     },
     subscription: {
-      id: existing.id,
-      memberId: existing.memberId,
-      serviceId: existing.serviceId,
-      startDate: existing.startDate,
-      endDate: newEndDate.toISOString(),
+      id: data.subscriptionId,
+      memberId: sub.memberId,
+      serviceId: sub.serviceId,
+      startDate: sub.startDate,
+      endDate: newEndDateIso,
       status: 'active',
-      priceSnapshot: existing.priceSnapshot,
+      priceSnapshot: sub.priceSnapshot,
       service: { id: service.id, name: service.name, price: service.price, duration: service.duration },
     },
   };
@@ -482,7 +508,10 @@ export async function listPayments(options: PaymentListOptions = {}) {
   const memberIds = [...new Set(payments.map((p) => p.memberId))];
   const subscriptionIds = [...new Set(payments.map((p) => p.subscriptionId))];
   const [memberDocs, subscriptionDocs] = await Promise.all([
-    getDocsByIds<{ firstName: string; lastName: string; photo: string | null }>('members', memberIds),
+    getDocsByIds<{ firstName: string; lastName: string; photo: string | null; photoThumb?: string | null }>(
+      'members',
+      memberIds,
+    ),
     getDocsByIds<{ startDate: string; endDate: string; status: string; priceSnapshot: number; serviceId: string }>(
       'subscriptions',
       subscriptionIds,

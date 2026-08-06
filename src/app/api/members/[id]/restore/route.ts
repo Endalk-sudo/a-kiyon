@@ -1,7 +1,8 @@
-import { getDocById } from '@/lib/db';
+import { getDocById, getDocs } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
+import { computeMemberStatus } from '@/lib/member-status';
 import { restoreMember } from '@/services/member.service';
 import { NextRequest } from 'next/server';
 
@@ -19,5 +20,8 @@ export const POST = apiHandler(async (
 
   const member = await restoreMember(id);
 
-  return apiResponse({ ...member, status: 'no_subscription' });
+  // Status is derived from the member's subscriptions — never stored.
+  const subs = await getDocs<{ endDate: string; status: string }>('subscriptions', [['memberId', '==', id]]);
+
+  return apiResponse({ ...member, status: computeMemberStatus(subs) });
 });

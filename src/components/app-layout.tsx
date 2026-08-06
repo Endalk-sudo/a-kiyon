@@ -119,10 +119,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           <Separator />
           <div className="p-3 space-y-2">
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
+              <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
-              <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9">
+              <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9" aria-label="Switch language">
                 <Globe className="h-4 w-4" />
               </Button>
               <Button variant="ghost" size="sm" onClick={handleLogout} className="ml-auto text-destructive hover:text-destructive">
@@ -187,10 +187,10 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Separator />
             <div className="p-3 space-y-2">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
+                <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
                   {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </Button>
-                <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9">
+                <Button variant="ghost" size="icon" onClick={toggleLocale} className="h-9 w-9" aria-label="Switch language">
                   <Globe className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="ml-auto text-destructive hover:text-destructive">
@@ -218,6 +218,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             size="icon"
             className="md:hidden"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation menu"
           >
             <Menu className="h-5 w-5" />
           </Button>

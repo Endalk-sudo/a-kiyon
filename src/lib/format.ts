@@ -15,12 +15,18 @@ export function formatDate(date: string | Date): string {
   return formatEthiopianDate(d);
 }
 
-export function formatDateTime(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return formatEthiopianDate(d) + ' ' + d.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
+/**
+ * Escape a value for a CSV cell. Defends against CSV formula injection
+ * (cells starting with = + - @ are prefixed with a tab) and handles quotes,
+ * commas, and both newline types.
+ */
+export function escapeCsv(value: string): string {
+  let v = String(value);
+  if (/^[=+\-@]/.test(v)) v = `\t${v}`;
+  if (v.includes(',') || v.includes('"') || v.includes('\n') || v.includes('\r')) {
+    return `"${v.replace(/"/g, '""')}"`;
+  }
+  return v;
 }
 
 export function getInitials(firstName: string, lastName: string): string {
@@ -29,10 +35,6 @@ export function getInitials(firstName: string, lastName: string): string {
 
 export function formatMemberName(member: { firstName: string; lastName: string }): string {
   return `${member.firstName} ${member.lastName}`;
-}
-
-export function formatReceiptNumber(receiptNumber: string): string {
-  return receiptNumber;
 }
 
 export function formatPaymentMethod(method: string): string {
@@ -51,9 +53,4 @@ export function formatSubscriptionStatus(status: string): string {
     cancelled: 'Cancelled',
   };
   return statuses[status] || status;
-}
-
-export function truncate(str: string, length: number): string {
-  if (str.length <= length) return str;
-  return str.substring(0, length) + '...';
 }

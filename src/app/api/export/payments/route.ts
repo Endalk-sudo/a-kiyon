@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getDocs, getDocsByIds, type WhereClause } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiHandler } from '@/lib/api-handler';
+import { escapeCsv } from '@/lib/format';
 import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 
 // GET /api/export/payments - Export payments as CSV (manager + owner). Optional ?startDate=&endDate= (ISO) filter on paymentDate.
@@ -21,13 +22,6 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const memberIds = [...new Set(payments.map((p) => p.memberId))];
   const memberDocs = await getDocsByIds<{ firstName: string; lastName: string }>('members', memberIds);
   const membersMap = new Map(memberDocs.map((m) => [m.id, m]));
-
-  const escapeCsv = (val: string) => {
-    if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-      return `"${val.replace(/"/g, '""')}"`;
-    }
-    return val;
-  };
 
   const rows = payments.map((payment) => {
     const member = membersMap.get(payment.memberId);

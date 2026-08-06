@@ -49,16 +49,28 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const bucket = adminBucket;
   if (!bucket) return apiError('Storage not configured', 500);
 
-  await bucket.file(`uploads/${filename}`).save(fullBuffer, {
-    contentType: 'image/webp',
-  });
+  const filePath = `uploads/${filename}`;
+  const thumbPath = `uploads/thumbs/${thumbFilename}`;
 
-  await bucket.file(`uploads/thumbs/${thumbFilename}`).save(thumbBuffer, {
-    contentType: 'image/webp',
-  });
+  try {
+    await bucket.file(filePath).save(fullBuffer, {
+      contentType: 'image/webp',
+    });
 
-  const photoUrl = await publicUrl(bucket, `uploads/${filename}`);
-  const thumbnailUrl = await publicUrl(bucket, `uploads/thumbs/${thumbFilename}`);
+    await bucket.file(thumbPath).save(thumbBuffer, {
+      contentType: 'image/webp',
+    });
 
-  return apiResponse({ url: photoUrl, thumbnailUrl });
+    const photoUrl = await publicUrl(bucket, filePath);
+    const thumbnailUrl = await publicUrl(bucket, thumbPath);
+
+    return apiResponse({ url: photoUrl, thumbnailUrl });
+  } catch (err) {
+    // Don't leave orphans behind if a later step fails.
+    await Promise.allSettled([
+      bucket.file(filePath).delete(),
+      bucket.file(thumbPath).delete(),
+    ]);
+    throw err;
+  }
 });

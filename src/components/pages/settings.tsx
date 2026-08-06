@@ -278,7 +278,7 @@ export function SettingsPage() {
     if (!togglingUser) return;
     setToggling(true);
     try {
-      await usersApi.deactivate(togglingUser.id);
+      await usersApi.update(togglingUser.id, { isActive: !togglingUser.isActive });
       toast.success(t(locale, togglingUser.isActive ? 'User deactivated' : 'User reactivated', togglingUser.isActive ? 'ተጠቃሚ ተከልክሏል' : 'ተጠቃሚ ነቅቷል'));
       setToggleDialogOpen(false);
       setTogglingUser(null);
@@ -561,6 +561,7 @@ export function SettingsPage() {
                                 className="h-9 w-9"
                                 onClick={() => openEditDialog(user)}
                                 title="Edit user"
+                                aria-label="Edit user"
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -570,6 +571,7 @@ export function SettingsPage() {
                                 className={`h-9 w-9 ${user.id === session?.userId ? 'opacity-30 pointer-events-none' : ''}`}
                                 onClick={() => openToggleDialog(user)}
                                 title={user.isActive ? 'Deactivate user' : 'Activate user'}
+                                aria-label={user.isActive ? 'Deactivate user' : 'Activate user'}
                               >
                                 <Power className={`h-4 w-4 ${user.isActive ? 'text-green-600' : 'text-red-600'}`} />
                               </Button>

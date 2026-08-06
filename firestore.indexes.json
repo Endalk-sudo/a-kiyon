@@ -51,6 +51,69 @@
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "memberId", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "services", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "isActive", "order": "ASCENDING" },
+      { "fieldPath": "name", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "serviceId", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "serviceId", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "serviceId", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "serviceId", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "serviceId", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "method", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "method", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "method", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "method", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "DESCENDING" }
     ]}
   ]
 }

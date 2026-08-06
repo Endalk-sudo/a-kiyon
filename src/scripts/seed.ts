@@ -1,15 +1,19 @@
 import 'dotenv/config';
 import { adminAuth, adminDb } from '../lib/firebase-admin';
-import { computeMemberStatus } from '@/lib/member-status';
 import { generateReceiptNumber } from '@/services/payment.service';
 import { calculateNavyBodyFatPercent } from '@/lib/body-fat';
+
+const BATCH_SIZE = 400; // Firestore caps a batch at 500 writes
 
 async function deleteAllDocs(collectionName: string) {
   const snap = await adminDb.collection(collectionName).get();
   if (snap.empty) return;
-  const batch = adminDb.batch();
-  snap.docs.forEach((doc) => batch.delete(doc.ref));
-  await batch.commit();
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const batch = adminDb.batch();
+    docs.slice(i, i + BATCH_SIZE).forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
 }
 
 async function main() {
@@ -22,14 +26,19 @@ async function main() {
     deleteAllDocs('subscriptions'),
     deleteAllDocs('members'),
     deleteAllDocs('services'),
+    deleteAllDocs('users'),
   ]);
 
-  // ── Clean existing Firebase Auth users ──
+  // ── Clean existing Firebase Auth users (all pages) ──
   console.log('Cleaning Firebase Auth users...');
-  const listResult = await adminAuth.listUsers();
-  if (listResult.users.length > 0) {
-    await adminAuth.deleteUsers(listResult.users.map((u) => u.uid));
-  }
+  let token: string | undefined;
+  do {
+    const listResult = await adminAuth.listUsers(1000, token);
+    if (listResult.users.length > 0) {
+      await adminAuth.deleteUsers(listResult.users.map((u) => u.uid));
+    }
+    token = listResult.pageToken || undefined;
+  } while (token);
 
   // ── Create users via Firebase Auth ──
   const ownerUser = await adminAuth.createUser({
@@ -46,29 +55,34 @@ async function main() {
   });
   await adminAuth.setCustomUserClaims(managerUser.uid, { role: 'manager' });
 
-  // Store user profiles in Firestore
+  const readerUser = await adminAuth.createUser({
+    email: 'reader@fcms.com',
+    password: 'reader123',
+    displayName: 'Reader',
+  });
+  await adminAuth.setCustomUserClaims(readerUser.uid, { role: 'reader' });
+
+  // Store supplementary user profiles in Firestore ({ id, phone } shape)
   const ownerId = ownerUser.uid;
   const managerId = managerUser.uid;
+  const readerId = readerUser.uid;
 
   await adminDb.collection('users').doc(ownerId).set({
-    email: 'owner@fcms.com',
-    name: 'Owner',
-    role: 'owner',
+    id: ownerId,
     phone: '+251911000000',
-    isActive: true,
-    createdAt: new Date().toISOString(),
   });
 
   await adminDb.collection('users').doc(managerId).set({
-    email: 'manager@fcms.com',
-    name: 'Manager',
-    role: 'manager',
+    id: managerId,
     phone: '+251922000000',
-    isActive: true,
-    createdAt: new Date().toISOString(),
   });
 
-  console.log('Created users:', 'owner@fcms.com', 'manager@fcms.com');
+  await adminDb.collection('users').doc(readerId).set({
+    id: readerId,
+    phone: '+251933000000',
+  });
+
+  console.log('Created users:', 'owner@fcms.com', 'manager@fcms.com', 'reader@fcms.com');
 
   // ── Create 3 services ──
   const gymRef = adminDb.collection('services').doc();
@@ -259,16 +273,6 @@ sex: m.sex as 'male' | 'female',
   await createSubWithPayment(9, aerobicsId, 0, 1, 'active', 1200, { method: 'cash', dayOffset: 0, createdBy: managerId });
 
   console.log('Created 11 subscriptions and 8 payments');
-
-  // ── Update member statuses based on subscriptions (for seed data integrity) ──
-  for (let i = 0; i < members.length; i++) {
-    const subsSnap = await adminDb.collection('subscriptions')
-      .where('memberId', '==', members[i])
-      .get();
-    const subs = subsSnap.docs.map((d) => d.data() as { endDate: string; status: string });
-    const status = computeMemberStatus(subs);
-    await adminDb.collection('members').doc(members[i]).update({ status, updatedAt: ts });
-  }
 
   console.log('Seeding complete!');
 }

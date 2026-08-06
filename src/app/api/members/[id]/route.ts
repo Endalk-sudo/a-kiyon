@@ -60,6 +60,7 @@ export const PUT = apiHandler(async (
     ...(data.lastName !== undefined && { lastName: data.lastName }),
     ...(data.phone !== undefined && { phone: data.phone }),
     ...(data.photo !== undefined && { photo: data.photo }),
+    ...(data.photoThumb !== undefined && { photoThumb: data.photoThumb }),
     ...(data.address !== undefined && { address: data.address }),
     ...(data.weight !== undefined && { weight: data.weight }),
     ...(data.height !== undefined && { height: data.height }),

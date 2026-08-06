@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { membersApi, servicesApi, subscriptionsApi } from '@/lib/api-client';
 import { StatusBadge, type StatusType } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
@@ -88,6 +88,7 @@ interface Member {
   lastName: string;
   phone: string | null;
   photo: string | null;
+  photoThumb?: string | null;
   address: string | null;
   weight: number | null;
   height: number | null;
@@ -162,6 +163,7 @@ interface MemberFormData {
   emergencyContact: string;
   notes: string;
   photo: string | null;
+  photoThumb: string | null;
 }
 
 const emptyFormData: MemberFormData = {
@@ -179,6 +181,7 @@ const emptyFormData: MemberFormData = {
   emergencyContact: '',
   notes: '',
   photo: null,
+  photoThumb: null,
 };
 
 const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -266,7 +269,11 @@ export function MembersPage() {
 
   // ─── Fetch Members ──────────────────────────────────────────────────────
 
+  // Guards against out-of-order responses: only the latest request wins.
+  const fetchSeqRef = useRef(0);
+
   const fetchMembers = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
     setLoading(true);
     try {
       const params = {
@@ -278,17 +285,19 @@ export function MembersPage() {
       };
 
       const result = await membersApi.list(params);
+      if (seq !== fetchSeqRef.current) return;
       setMembers(result.data || []);
       setPagination((prev) => ({
         ...result.pagination,
         page: prev.page,
       }));
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       toast.error(t(locale, 'Failed to load members', 'አባላትን መጫን አልተሳካም'));
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
-  }, [pagination.page, searchDebounced, statusFilter, showDeleted]);
+  }, [pagination.page, searchDebounced, statusFilter, showDeleted, locale]);
 
   useEffect(() => {
     fetchMembers();
@@ -412,8 +421,11 @@ export function MembersPage() {
       emergencyContact: member.emergencyContact || '',
       notes: member.notes || '',
       photo: member.photo || null,
+      photoThumb: member.photoThumb || null,
     });
     setFormErrors({});
+    setNewServiceId('');
+    setSubscriptionErrors(null);
     setEditDialogOpen(true);
   };
 
@@ -442,7 +454,7 @@ export function MembersPage() {
 
   // ─── Form Validation ────────────────────────────────────────────────────
 
-  const validateForm = (data: MemberFormData): boolean => {
+  const validateForm = (data: MemberFormData, requireService: boolean): boolean => {
     const errors: Partial<Record<keyof MemberFormData, string>> = {};
     if (!data.firstName.trim()) errors.firstName = t(locale, 'First name is required', 'ስም ያስፈልጋል');
     if (!data.lastName.trim()) errors.lastName = t(locale, 'Last name is required', 'የአባት ስም ያስፈልጋል');
@@ -476,19 +488,20 @@ export function MembersPage() {
     if (data.bloodType && !['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(data.bloodType)) {
       errors.bloodType = t(locale, 'Select a valid blood type', 'ትክክለኛ የደም አይነት ይምረጡ');
     }
-    if (!newServiceId) {
+    // The service selection is only required on the create-with-subscription flow.
+    if (requireService && !newServiceId) {
       setSubscriptionErrors(t(locale, 'Please select a service', 'እባክዎ አገልግሎት ይምረጡ'));
     } else {
       setSubscriptionErrors(null);
     }
     setFormErrors(errors);
-    return Object.keys(errors).length === 0 && !!newServiceId;
+    return Object.keys(errors).length === 0 && (!requireService || !!newServiceId);
   };
 
   // ─── Submit Handlers ────────────────────────────────────────────────────
 
   const handleCreateMember = async () => {
-    if (!validateForm(formData)) return;
+    if (!validateForm(formData, true)) return;
     setSubmitting(true);
     try {
       const payload: Record<string, unknown> = {
@@ -496,6 +509,7 @@ export function MembersPage() {
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim() || null,
         photo: formData.photo,
+        photoThumb: formData.photoThumb,
         address: formData.address.trim() || null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
         height: formData.height ? parseFloat(formData.height) : null,
@@ -525,7 +539,7 @@ export function MembersPage() {
   };
 
   const handleUpdateMember = async () => {
-    if (!selectedMember || !validateForm(formData)) return;
+    if (!selectedMember || !validateForm(formData, false)) return;
     setSubmitting(true);
     try {
       await membersApi.update(selectedMember.id, {
@@ -533,6 +547,7 @@ export function MembersPage() {
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim() || null,
         photo: formData.photo,
+        photoThumb: formData.photoThumb,
         address: formData.address.trim() || null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
         height: formData.height ? parseFloat(formData.height) : null,
@@ -560,7 +575,12 @@ export function MembersPage() {
       await membersApi.delete(selectedMember.id);
       toast.success(t(locale, 'Member deleted successfully', 'አባል በተሳካ ሁኔታ ተሰርዟል'));
       setDeleteDialogOpen(false);
-      fetchMembers();
+      // Step back a page when this was the last row on the current page.
+      if (members.length === 1 && pagination.page > 1) {
+        setPagination((prev) => ({ ...prev, page: prev.page - 1 }));
+      } else {
+        fetchMembers();
+      }
     } catch (err) {
       toast.error(sanitizeError(err, locale, 'Failed to delete member', 'አባል መሰረዝ አልተሳካም'));
     }
@@ -716,7 +736,7 @@ export function MembersPage() {
                   <TableRow key={member.id} className={member.isDeleted ? 'opacity-60 cursor-pointer' : 'cursor-pointer'} onClick={() => handleViewMember(member)}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <MemberAvatar photo={member.photo} firstName={member.firstName} lastName={member.lastName} size="sm" />
+                        <MemberAvatar photo={member.photo} photoThumb={member.photoThumb} firstName={member.firstName} lastName={member.lastName} size="sm" />
                         <div className="min-w-0">
                           <div className="font-medium truncate">
                             {formatMemberName(member)}
@@ -1385,7 +1405,7 @@ function MemberCard({ member, isManagerOrAbove, onView, onEdit, onDelete, onRest
     <Card className={member.isDeleted ? 'opacity-60 cursor-pointer' : 'cursor-pointer'} onClick={() => onView(member)}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <MemberAvatar photo={member.photo} firstName={member.firstName} lastName={member.lastName} size="md" />
+          <MemberAvatar photo={member.photo} photoThumb={member.photoThumb} firstName={member.firstName} lastName={member.lastName} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold truncate">{formatMemberName(member)}</span>
@@ -1422,10 +1442,10 @@ function MemberActions({ member, isManagerOrAbove, onView, onEdit, onDelete, onR
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-4 w-4" /></Button>
-      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-4 w-4" /></Button>}
-      {isManagerOrAbove && member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-4 w-4" /></Button>}
-      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
+      <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="View member" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-4 w-4" /></Button>
+      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Edit member" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-4 w-4" /></Button>}
+      {isManagerOrAbove && member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Restore member" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-4 w-4" /></Button>}
+      {isManagerOrAbove && !member.isDeleted && <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" aria-label="Delete member" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
     </div>
   );
 }
@@ -1451,6 +1471,7 @@ function MemberForm({ formData, setFormData, formErrors }: {
       <PhotoCapture
         value={formData.photo}
         onChange={(url) => updateField('photo', url)}
+        onThumbChange={(thumbUrl) => updateField('photoThumb', thumbUrl)}
         firstName={formData.firstName}
         lastName={formData.lastName}
       />

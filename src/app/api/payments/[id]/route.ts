@@ -10,7 +10,6 @@ export const GET = apiHandler(async (
   { params }: { params: Promise<{ id: string }> }
 ) => {
   const session = await getSessionOrThrow(undefined, request);
-  if (!['owner', 'manager'].includes(session.role)) throw new Error('Forbidden');
 
   const { id } = await params;
 

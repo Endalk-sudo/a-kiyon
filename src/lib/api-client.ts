@@ -46,7 +46,7 @@ export async function apiFetch<T = unknown>(
   });
 
   if (response.status === 401) {
-    return { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } } as T;
+    throw new Error('Unauthorized');
   }
 
   if (response.status === 403) {
@@ -113,6 +113,11 @@ export const membersApi = {
     apiFetch<MemberResponse>(`/members/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/members/${id}`, { method: 'DELETE' }),
+  bulkSoftDelete: (ids: string[]) =>
+    apiFetch<{ message: string; deleted: number }>('/members/bulk-soft-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
   restore: (id: string) =>
     apiFetch<MemberResponse>(`/members/${id}/restore`, { method: 'POST' }),
 };

@@ -3,7 +3,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { parseEthiopianDate, getCurrentEthiopianDateString } from '@/lib/ethiopian-calendar';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useId } from 'react';
 
 interface EthiopianDateInputProps {
   value: string;
@@ -56,12 +56,13 @@ export function EthiopianDateInput({
   }, [onChange]);
 
   const displayError = error || localError;
+  const inputId = useId();
 
   return (
     <div className="space-y-2">
       {label && (
         <div className="flex items-center justify-between">
-          <Label htmlFor="eth-date">{label}</Label>
+          <Label htmlFor={inputId}>{label}</Label>
           <button
             type="button"
             onClick={setToday}
@@ -72,7 +73,7 @@ export function EthiopianDateInput({
         </div>
       )}
       <Input
-        id="eth-date"
+        id={inputId}
         type="text"
         value={value}
         onChange={handleChange}

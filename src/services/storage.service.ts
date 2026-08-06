@@ -1,4 +1,4 @@
-import { getDocs, batchDelete } from '@/lib/db';
+import { getDocs, batchDelete, chunk } from '@/lib/db';
 import { adminBucket } from '@/lib/firebase-admin';
 
 export interface StaleMember {
@@ -6,6 +6,7 @@ export interface StaleMember {
   firstName: string;
   lastName: string;
   photo: string | null;
+  photoThumb?: string | null;
   lastPaymentDate: string | null;
 }
 
@@ -61,6 +62,7 @@ export async function findStaleMembers(months = DEFAULT_STALE_MONTHS): Promise<S
     firstName: string;
     lastName: string;
     photo?: string | null;
+    photoThumb?: string | null;
     isDeleted: boolean;
   }>('members', [['isDeleted', '==', false]]);
 
@@ -90,6 +92,7 @@ export async function findStaleMembers(months = DEFAULT_STALE_MONTHS): Promise<S
       firstName: member.firstName,
       lastName: member.lastName,
       photo: member.photo ?? null,
+      photoThumb: member.photoThumb ?? null,
       lastPaymentDate: last ? last.paymentDate : null,
     });
   }
@@ -148,11 +151,36 @@ export async function purgeDeletedMemberPhotos(bucket: StorageBucket): Promise<n
 }
 
 /**
- * Permanently delete soft-deleted member documents, chunked into batches
- * under Firestore's 500-write limit. Photos are handled separately.
+ * Permanently delete soft-deleted member documents AND their orphaned
+ * subscriptions/payments, chunked into batches under Firestore's 500-write
+ * limit. Photos are handled separately.
  */
-export async function purgeDeletedMembers(): Promise<number> {
+export async function purgeDeletedMembers(): Promise<{
+  members: number;
+  payments: number;
+  subscriptions: number;
+}> {
   const deletedMembers = await getDocs<Record<string, unknown>>('members', [['isDeleted', '==', true]]);
-  if (deletedMembers.length === 0) return 0;
-  return batchDelete('members', deletedMembers.map((m) => m.id));
+  if (deletedMembers.length === 0) return { members: 0, payments: 0, subscriptions: 0 };
+
+  const memberIds = deletedMembers.map((m) => m.id);
+
+  const paymentIds: string[] = [];
+  const subscriptionIds: string[] = [];
+  for (const idChunk of chunk(memberIds)) {
+    const [payments, subscriptions] = await Promise.all([
+      getDocs<Record<string, unknown>>('payments', [['memberId', 'in', idChunk]]),
+      getDocs<Record<string, unknown>>('subscriptions', [['memberId', 'in', idChunk]]),
+    ]);
+    paymentIds.push(...payments.map((p) => p.id));
+    subscriptionIds.push(...subscriptions.map((s) => s.id));
+  }
+
+  const [deletedPayments, deletedSubscriptions, deletedMembersCount] = await Promise.all([
+    batchDelete('payments', paymentIds),
+    batchDelete('subscriptions', subscriptionIds),
+    batchDelete('members', memberIds),
+  ]);
+
+  return { members: deletedMembersCount, payments: deletedPayments, subscriptions: deletedSubscriptions };
 }

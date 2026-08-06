@@ -259,8 +259,8 @@ describe('Storage Service (integration)', () => {
         updatedAt: new Date().toISOString(),
       });
 
-      const count = await purgeDeletedMembers();
-      expect(count).toBeGreaterThanOrEqual(1);
+      const result = await purgeDeletedMembers();
+      expect(result.members).toBeGreaterThanOrEqual(1);
 
       const doomedSnap = await db.collection('members').doc(doomed.id).get();
       expect(doomedSnap.exists).toBe(false);

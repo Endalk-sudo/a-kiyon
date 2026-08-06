@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { dashboardApi } from '@/lib/api-client';
 import { StatusBadge } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
@@ -46,6 +46,7 @@ interface ExpiringSoonMember {
   firstName: string;
   lastName: string;
   photo?: string | null;
+  photoThumb?: string | null;
   subscriptionId: string;
   serviceName: string;
   endDate: string;
@@ -57,6 +58,7 @@ interface RecentlyExpiredMember {
   firstName: string;
   lastName: string;
   photo?: string | null;
+  photoThumb?: string | null;
   subscriptionId: string;
   endDate: string;
 }
@@ -164,6 +166,12 @@ export function DashboardPage() {
   const locale = useAppStore((s) => s.locale);
   const isOwner = session?.role === 'owner';
 
+  // Read locale via ref so a language toggle doesn't trigger a refetch.
+  const localeRef = useRef(locale);
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
+
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
@@ -171,11 +179,11 @@ export function DashboardPage() {
       const result = await dashboardApi.get() as DashboardData;
       setData(result);
     } catch (err) {
-      setError(sanitizeError(err, locale, 'Failed to load dashboard data', 'የዳሽቦርድ መረጃዎችን መጫን አልተሳካም'));
+      setError(sanitizeError(err, localeRef.current, 'Failed to load dashboard data', 'የዳሽቦርድ መረጃዎችን መጫን አልተሳካም'));
     } finally {
       setLoading(false);
     }
-  }, [locale]);
+  }, []);
 
   useEffect(() => {
     fetchDashboard();
@@ -339,6 +347,7 @@ export function DashboardPage() {
                   >
                     <MemberAvatar
                       photo={member.photo}
+                      photoThumb={member.photoThumb}
                       firstName={member.firstName}
                       lastName={member.lastName}
                       size="sm"
@@ -409,6 +418,7 @@ export function DashboardPage() {
                   >
                     <MemberAvatar
                       photo={member.photo}
+                      photoThumb={member.photoThumb}
                       firstName={member.firstName}
                       lastName={member.lastName}
                       size="sm"

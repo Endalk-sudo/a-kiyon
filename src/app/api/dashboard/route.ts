@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { countDocs, getDocs, getDocById, aggregateSum } from '@/lib/db';
+import { countDocs, getDocs, getDocsByIds, aggregateSum } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
@@ -56,25 +56,25 @@ export const GET = apiHandler(async (request: NextRequest) => {
   ];
 
   const [memberDocs, serviceDocs] = await Promise.all([
-    Promise.all(memberIds.map((id) => getDocById<any>('members', id))),
-    Promise.all(serviceIds.map((id) => getDocById<any>('services', id))),
+    getDocsByIds<{ firstName: string; lastName: string; photo: string | null; photoThumb?: string | null }>(
+      'members',
+      memberIds,
+    ),
+    getDocsByIds<{ name: string; nameAm: string | null }>('services', serviceIds),
   ]);
 
-  const membersMap = Object.fromEntries(
-    memberDocs.filter(Boolean).map((m) => [m.id, m]),
-  );
-  const servicesMap = Object.fromEntries(
-    serviceDocs.filter(Boolean).map((s) => [s.id, s]),
-  );
+  const membersMap = new Map(memberDocs.map((m) => [m.id, m]));
+  const servicesMap = new Map(serviceDocs.map((s) => [s.id, s]));
 
   const expiringSoonMembers = expiringSoonSubscriptions.map((sub) => {
-    const member = membersMap[sub.memberId];
-    const service = servicesMap[sub.serviceId];
+    const member = membersMap.get(sub.memberId);
+    const service = servicesMap.get(sub.serviceId);
     return {
       memberId: sub.memberId,
       firstName: member?.firstName || '',
       lastName: member?.lastName || '',
       photo: member?.photo || null,
+      photoThumb: member?.photoThumb || null,
       subscriptionId: sub.id,
       serviceName: service?.name || '',
       serviceNameAm: service?.nameAm || '',
@@ -84,19 +84,20 @@ export const GET = apiHandler(async (request: NextRequest) => {
   });
 
   const recentlyExpiredMembers = recentlyExpiredSubscriptions.map((sub) => {
-    const member = membersMap[sub.memberId];
+    const member = membersMap.get(sub.memberId);
     return {
       memberId: sub.memberId,
       firstName: member?.firstName || '',
       lastName: member?.lastName || '',
       photo: member?.photo || null,
+      photoThumb: member?.photoThumb || null,
       subscriptionId: sub.id,
       endDate: sub.endDate,
     };
   });
 
   const recentPayments = recentPaymentsData.map((payment) => {
-    const member = membersMap[payment.memberId];
+    const member = membersMap.get(payment.memberId);
     return {
       id: payment.id,
       amount: payment.amount,

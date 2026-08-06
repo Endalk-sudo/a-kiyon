@@ -45,6 +45,7 @@ interface StaleMember {
   firstName: string;
   lastName: string;
   photo: string | null;
+  photoThumb?: string | null;
   lastPaymentDate: string | null;
 }
 
@@ -138,14 +139,8 @@ export function StoragePage() {
     const target = memberId ? [memberId] : data?.staleMembers.map((m) => m.id) ?? [];
     if (target.length === 0) return;
     try {
-      await Promise.all(target.map((id) => membersApi.delete(id)));
-      toast.success(
-        t(
-          locale,
-          `Soft-deleted ${target.length} member(s)`,
-          `${target.length} አባላት ተሰርዘዋል`,
-        ),
-      );
+      const result = await membersApi.bulkSoftDelete(target);
+      toast.success(result.message);
       fetchData();
     } catch {
       toast.error(t(locale, 'Failed to soft-delete members', 'አባላትን መሰረዝ አልተሳካም'));
@@ -322,6 +317,7 @@ export function StoragePage() {
                     <div className="flex items-center gap-3 min-w-0">
                       <MemberAvatar
                         photo={member.photo}
+                        photoThumb={member.photoThumb}
                         firstName={member.firstName}
                         lastName={member.lastName}
                         size="sm"

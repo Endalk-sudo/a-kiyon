@@ -11,7 +11,6 @@ import { NextRequest } from 'next/server';
 // GET /api/subscriptions - List subscriptions with server-side pagination
 export const GET = apiHandler(async (request: NextRequest) => {
   const session = await getSessionOrThrow(undefined, request);
-  if (!['owner', 'manager'].includes(session.role)) throw new Error('Forbidden');
 
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));

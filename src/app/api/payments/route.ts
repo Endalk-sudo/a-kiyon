@@ -8,7 +8,6 @@ import { autoExpireSubscriptions } from '@/services/subscription.service';
 
 export const GET = apiHandler(async (request: NextRequest) => {
   const session = await getSessionOrThrow(undefined, request);
-  if (!['owner', 'manager'].includes(session.role)) throw new Error('Forbidden');
 
   await autoExpireSubscriptions();
 

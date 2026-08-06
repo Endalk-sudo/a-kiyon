@@ -6,6 +6,25 @@ import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { updateUserSchema } from '@/lib/schemas';
 
+// Counts active (non-disabled) owners across all Auth pages. Used to guard
+// against deactivating/demoting the final active owner.
+async function countActiveOwners(): Promise<number> {
+  let count = 0;
+  let token: string | undefined;
+  do {
+    const page = await adminAuth.listUsers(1000, token);
+    for (const user of page.users) {
+      if (user.customClaims?.role === 'owner' && !user.disabled) count++;
+    }
+    token = page.pageToken || undefined;
+  } while (token);
+  return count;
+}
+
+async function isOwner(user: { customClaims?: Record<string, unknown> | null }): Promise<boolean> {
+  return user.customClaims?.role === 'owner';
+}
+
 export const GET = apiHandler(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -64,6 +83,17 @@ export const PUT = apiHandler(async (
   if (data.password !== undefined) authUpdateData.password = data.password;
   if (data.isActive !== undefined) authUpdateData.disabled = !data.isActive;
 
+  // Last-owner guard: reject deactivating or demoting the final active owner.
+  const demoting = data.role !== undefined && data.role !== 'owner' && await isOwner(userRecord);
+  const deactivating = data.isActive === false && await isOwner(userRecord);
+  if ((demoting || deactivating) && (await countActiveOwners()) <= 1) {
+    return apiError(
+      demoting
+        ? 'Cannot demote the last active owner'
+        : 'Cannot deactivate the last active owner',
+    );
+  }
+
   if (Object.keys(authUpdateData).length > 0) {
     await adminAuth.updateUser(id, authUpdateData);
   }
@@ -111,6 +141,12 @@ export const DELETE = apiHandler(async (
   }
 
   if (userRecord.disabled) return apiError('User is already deactivated');
+
+  if (await isOwner(userRecord)) {
+    if ((await countActiveOwners()) <= 1) {
+      return apiError('Cannot deactivate the last active owner');
+    }
+  }
 
   await adminAuth.updateUser(id, { disabled: true });
 

@@ -13,11 +13,12 @@ import { useAppStore } from '@/lib/store';
 interface PhotoCaptureProps {
   value: string | null;
   onChange: (url: string | null) => void;
+  onThumbChange?: (thumbUrl: string | null) => void;
   firstName?: string;
   lastName?: string;
 }
 
-export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }: PhotoCaptureProps) {
+export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', lastName = '' }: PhotoCaptureProps) {
   const locale = useAppStore((s) => s.locale);
   const [mode, setMode] = useState<'none' | 'camera' | 'upload'>('none');
   const [streaming, setStreaming] = useState(false);
@@ -82,6 +83,7 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
 
       const result = await uploadApi.photo(formData);
       onChange(result.url);
+      onThumbChange?.(result.thumbnailUrl);
       setMode('none');
     } catch (err) {
       toast.error(sanitizeError(err, locale, 'Failed to upload photo', 'ፎቶ መጫን አልተሳካም'));
@@ -130,6 +132,7 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
 
       const result = await uploadApi.photo(formData);
       onChange(result.url);
+      onThumbChange?.(result.thumbnailUrl);
     } catch (err) {
       toast.error(sanitizeError(err, locale, 'Failed to upload photo', 'ፎቶ መጫን አልተሳካም'));
       console.error('Upload error:', err);
@@ -145,6 +148,7 @@ export function PhotoCapture({ value, onChange, firstName = '', lastName = '' }:
   // Remove photo
   const removePhoto = () => {
     onChange(null);
+    onThumbChange?.(null);
     setMode('none');
   };
 

@@ -77,6 +77,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
       lastName: data.lastName,
       phone: data.phone || null,
       photo: data.photo || null,
+      photoThumb: data.photoThumb || null,
       address: data.address || null,
       weight: data.weight ?? null,
       height: data.height ?? null,

@@ -56,6 +56,7 @@ interface MemberInfo {
   firstName: string;
   lastName: string;
   photo?: string | null;
+  photoThumb?: string | null;
 }
 
 interface SubscriptionInfo {
@@ -158,11 +159,19 @@ export function PaymentsPage() {
     const dateFormatted = formatDate(payment.paymentDate);
     const methodFormatted = formatPaymentMethod(payment.method);
 
+    // Escape anything user-typed before injecting into the receipt document.
+    const esc = (v: string) =>
+      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const memberNameEsc = esc(memberName);
+    const serviceNameEsc = esc(serviceName);
+    const receiptNumberEsc = esc(payment.receiptNumber || '');
+    const notesEsc = payment.notes ? esc(payment.notes) : null;
+
     const receiptHtml = `
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Receipt - ${payment.receiptNumber}</title>
+          <title>Receipt - ${receiptNumberEsc}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -237,7 +246,7 @@ export function PaymentsPage() {
           </div>
           <div class="row">
             <span class="label">Receipt #</span>
-            <span class="value">${payment.receiptNumber}</span>
+            <span class="value">${receiptNumberEsc}</span>
           </div>
           <div class="row">
             <span class="label">Date</span>
@@ -246,17 +255,17 @@ export function PaymentsPage() {
           <div class="separator"></div>
           <div class="row">
             <span class="label">Member</span>
-            <span class="value">${memberName}</span>
+            <span class="value">${memberNameEsc}</span>
           </div>
           <div class="row">
             <span class="label">Service</span>
-            <span class="value">${serviceName}</span>
+            <span class="value">${serviceNameEsc}</span>
           </div>
           <div class="row">
             <span class="label">Method</span>
             <span class="value">${methodFormatted}</span>
           </div>
-          ${payment.notes ? `<div class="row"><span class="label">Notes</span><span class="value">${payment.notes}</span></div>` : ''}
+          ${notesEsc ? `<div class="row"><span class="label">Notes</span><span class="value">${notesEsc}</span></div>` : ''}
           <div class="amount">
             <div class="currency">Amount (ETB)</div>
             <div class="value">${amountFormatted}</div>
@@ -432,6 +441,7 @@ export function PaymentsPage() {
                         <div className="flex items-center gap-2">
                           <MemberAvatar
                             photo={payment.member.photo}
+                            photoThumb={payment.member.photoThumb}
                             firstName={payment.member.firstName}
                             lastName={payment.member.lastName}
                             size="sm"
@@ -472,6 +482,7 @@ export function PaymentsPage() {
                               size="icon"
                               onClick={() => handlePrintReceipt(payment)}
                               title="Print Receipt"
+                              aria-label="Print receipt"
                             >
                               <Printer className="h-4 w-4" />
                             </Button>
@@ -482,6 +493,7 @@ export function PaymentsPage() {
                               size="icon"
                               onClick={() => openVoidDialog(payment)}
                               title="Void Payment"
+                              aria-label="Void payment"
                               className="text-destructive hover:text-destructive"
                             >
                               <Ban className="h-4 w-4" />
@@ -539,6 +551,7 @@ export function PaymentsPage() {
                     <div className="flex items-center gap-2">
                       <MemberAvatar
                         photo={payment.member.photo}
+                        photoThumb={payment.member.photoThumb}
                         firstName={payment.member.firstName}
                         lastName={payment.member.lastName}
                         size="sm"

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getDocs, chunk, type WhereClause } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiHandler } from '@/lib/api-handler';
+import { escapeCsv } from '@/lib/format';
 import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 import { computeMemberStatus } from '@/lib/member-status';
 
@@ -29,13 +30,6 @@ export const GET = apiHandler(async (request: NextRequest) => {
     list.push(sub);
     subsByMember.set(sub.memberId, list);
   }
-
-  const escapeCsv = (val: string) => {
-    if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-      return `"${val.replace(/"/g, '""')}"`;
-    }
-    return val;
-  };
 
   const rows = members.map((member: any) => {
     const subs = subsByMember.get(member.id) || [];

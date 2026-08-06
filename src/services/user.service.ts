@@ -2,18 +2,27 @@ import { adminAuth } from '@/lib/auth';
 import { createDoc, updateDoc } from '@/lib/db';
 
 export async function listUsers(page?: number, limit?: number) {
-  const result = await adminAuth.listUsers();
-  const users = result.users
-    .map(u => ({
-      id: u.uid,
-      email: u.email || '',
-      name: u.displayName || '',
-      role: (u.customClaims?.role as string) || 'manager',
-      phone: (u.customClaims?.phone as string) || null,
-      isActive: !u.disabled,
-      createdAt: u.metadata.creationTime || '',
-    }))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // listUsers() caps at 1000 per page — walk all pages so clubs with more
+  // users aren't silently truncated.
+  const users = [];
+  let token: string | undefined;
+  do {
+    const result = await adminAuth.listUsers(1000, token);
+    for (const u of result.users) {
+      users.push({
+        id: u.uid,
+        email: u.email || '',
+        name: u.displayName || '',
+        role: (u.customClaims?.role as string) || 'manager',
+        phone: (u.customClaims?.phone as string) || null,
+        isActive: !u.disabled,
+        createdAt: u.metadata.creationTime || '',
+      });
+    }
+    token = result.pageToken || undefined;
+  } while (token);
+
+  users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   if (page && limit) {
     const start = (page - 1) * limit;

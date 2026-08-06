@@ -15,6 +15,7 @@ export interface MemberInfo {
   firstName: string;
   lastName: string;
   photo: string | null;
+  photoThumb?: string | null;
 }
 
 export interface MemberResponse extends MemberInfo {
@@ -30,7 +31,6 @@ export interface MemberResponse extends MemberInfo {
   bodyFatPercent: number | null;
   emergencyContact: string | null;
   notes: string | null;
-  photo: string | null;
   isDeleted: boolean;
   deletedAt: string | null;
   createdAt: string;
@@ -43,6 +43,7 @@ export interface PaymentMemberInfo {
   firstName: string;
   lastName: string;
   photo?: string | null;
+  photoThumb?: string | null;
 }
 
 export interface PaymentRecord {
@@ -74,6 +75,7 @@ export interface SubscriptionMemberInfo {
   firstName: string;
   lastName: string;
   photo: string | null;
+  photoThumb?: string | null;
   phone?: string;
 }
 
@@ -139,6 +141,7 @@ export interface DashboardData {
     firstName: string;
     lastName: string;
     photo?: string | null;
+    photoThumb?: string | null;
     subscriptionId: string;
     serviceName: string;
     serviceNameAm: string | null;
@@ -150,6 +153,7 @@ export interface DashboardData {
     firstName: string;
     lastName: string;
     photo?: string | null;
+    photoThumb?: string | null;
     subscriptionId: string;
     endDate: string;
   }>;

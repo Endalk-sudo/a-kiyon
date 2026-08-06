@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { subscriptionsApi, membersApi, servicesApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
@@ -72,6 +72,7 @@ interface Member {
   firstName: string;
   lastName: string;
   photo?: string | null;
+  photoThumb?: string | null;
 }
 
 interface Subscription {
@@ -182,6 +183,7 @@ export function SubscriptionsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createMembers, setCreateMembers] = useState<Array<{ id: string; firstName: string; lastName: string; phone: string | null }>>([]);
   const [createMemberSearch, setCreateMemberSearch] = useState('');
+  const [createMemberSearchDebounced, setCreateMemberSearchDebounced] = useState('');
   const [createMemberId, setCreateMemberId] = useState('');
   const [createServices, setCreateServices] = useState<Array<{ id: string; name: string; price: number; duration: number }>>([]);
   const [createServiceId, setCreateServiceId] = useState('');
@@ -191,7 +193,9 @@ export function SubscriptionsPage() {
   const [creating, setCreating] = useState(false);
 
   // Fetch subscriptions
+  const fetchSeqRef = useRef(0);
   const fetchSubscriptions = useCallback(async (page = 1) => {
+    const seq = ++fetchSeqRef.current;
     setLoading(true);
     try {
       const params = {
@@ -201,15 +205,17 @@ export function SubscriptionsPage() {
         ...(searchDebounced ? { search: searchDebounced } : {}),
       };
       const response = await subscriptionsApi.list(params);
+      if (seq !== fetchSeqRef.current) return;
       setSubscriptions(response.data);
       setPagination(response.pagination);
     } catch (error) {
+      if (seq !== fetchSeqRef.current) return;
       toast.error(sanitizeError(error, locale, 'Failed to load subscriptions', 'ምዝገባዎችን መጫን አልተሳካም'));
       console.error('Failed to fetch subscriptions:', error);
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
-  }, [statusFilter, searchDebounced]);
+  }, [statusFilter, searchDebounced, locale]);
 
   useEffect(() => {
     fetchSubscriptions(1);
@@ -270,6 +276,7 @@ export function SubscriptionsPage() {
     setCreateNotes('');
     setCreateError(null);
     setCreateMemberSearch('');
+    setCreateMemberSearchDebounced('');
     setCreateDialogOpen(true);
     if (createMembers.length === 0 || createServices.length === 0) {
       try {
@@ -284,6 +291,30 @@ export function SubscriptionsPage() {
       }
     }
   };
+
+  // Debounce the dialog's member search so clubs with more than 100 members
+  // can find anyone — the server filters by name/phone.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCreateMemberSearchDebounced(createMemberSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [createMemberSearch]);
+
+  useEffect(() => {
+    if (!createDialogOpen) return;
+    let cancelled = false;
+    membersApi.list({ limit: 100, search: createMemberSearchDebounced || undefined })
+      .then((res) => {
+        if (!cancelled) {
+          setCreateMembers((res as { data: Array<{ id: string; firstName: string; lastName: string; phone: string | null }> }).data || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) toast.error(t(locale, 'Failed to load members', 'አባላትን መጫን አልተሳካም'));
+      });
+    return () => { cancelled = true; };
+  }, [createMemberSearchDebounced, createDialogOpen, locale]);
 
   const handleCreateSubscription = async () => {
     if (!createMemberId) {
@@ -412,6 +443,7 @@ export function SubscriptionsPage() {
                     <div className="flex items-center gap-3">
                       <MemberAvatar
                         photo={sub.member.photo}
+                        photoThumb={sub.member.photoThumb}
                         firstName={sub.member.firstName}
                         lastName={sub.member.lastName}
                         size="sm"
@@ -506,6 +538,7 @@ export function SubscriptionsPage() {
                 <div className="flex items-center gap-2 min-w-0">
                   <MemberAvatar
                     photo={sub.member.photo}
+                    photoThumb={sub.member.photoThumb}
                     firstName={sub.member.firstName}
                     lastName={sub.member.lastName}
                     size="sm"
@@ -759,17 +792,23 @@ export function SubscriptionsPage() {
                   <SelectValue placeholder="Select a member" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
-                  {createMembers
-                    .filter((m) =>
-                      !createMemberSearch ||
-                      `${m.firstName} ${m.lastName}`.toLowerCase().includes(createMemberSearch.toLowerCase()) ||
-                      (m.phone || '').includes(createMemberSearch)
-                    )
-                    .map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.firstName} {m.lastName}{m.phone ? ` — ${m.phone}` : ''}
-                      </SelectItem>
-                    ))}
+                  {createMembers.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      No members found
+                    </div>
+                  ) : (
+                    createMembers
+                      .filter((m) =>
+                        !createMemberSearch ||
+                        `${m.firstName} ${m.lastName}`.toLowerCase().includes(createMemberSearch.toLowerCase()) ||
+                        (m.phone || '').includes(createMemberSearch)
+                      )
+                      .map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.firstName} {m.lastName}{m.phone ? ` — ${m.phone}` : ''}
+                        </SelectItem>
+                      ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

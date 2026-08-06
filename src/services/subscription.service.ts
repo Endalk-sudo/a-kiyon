@@ -94,7 +94,10 @@ async function enrichSubscriptions(subscriptions: Doc<SubscriptionDoc>[]) {
   const serviceIds = [...new Set(subscriptions.map((sub) => sub.serviceId))];
 
   const [memberDocs, serviceDocs] = await Promise.all([
-    getDocsByIds<{ firstName: string; lastName: string; photo: string | null }>('members', memberIds),
+    getDocsByIds<{ firstName: string; lastName: string; photo: string | null; photoThumb?: string | null }>(
+      'members',
+      memberIds,
+    ),
     getDocsByIds<{ name: string; nameAm: string | null; price: number; duration: number }>('services', serviceIds),
   ]);
 
@@ -121,7 +124,10 @@ export async function getSubscription(id: string) {
   if (!sub) return null;
 
   const [member, service] = await Promise.all([
-    getDocById<{ firstName: string; lastName: string; photo: string | null; phone: string | null }>('members', sub.memberId),
+    getDocById<{ firstName: string; lastName: string; photo: string | null; photoThumb?: string | null; phone: string | null }>(
+      'members',
+      sub.memberId,
+    ),
     getDocById<{ name: string; nameAm: string | null; price: number; duration: number }>('services', sub.serviceId),
   ]);
 

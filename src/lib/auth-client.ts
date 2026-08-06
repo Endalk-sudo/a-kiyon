@@ -67,6 +67,23 @@ export async function logout() {
 
 export { onAuthChange };
 
+// JWT payloads are base64url-encoded (`-`/`_`, no padding) — plain `atob`
+// breaks on tokens containing those characters. Also handles `claims.*`
+// nesting (newer Firebase ID token format).
+function decodeTokenPayload(token: string): Record<string, unknown> {
+  const part = token.split('.')[1] || '';
+  const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+  return JSON.parse(atob(padded));
+}
+
+function roleFromToken(token: string): string | null {
+  const payload = decodeTokenPayload(token);
+  const nested = payload.claims as { role?: string } | undefined;
+  const role = nested?.role ?? (payload.role as string | undefined);
+  return role || null;
+}
+
 export const authClient = {
   signIn: {
     email: async ({ email, password }: { email: string; password: string }) => {
@@ -76,9 +93,8 @@ export const authClient = {
         let role = 'reader';
         let name = user.displayName || '';
         if (token) {
-          const decoded = JSON.parse(atob(token.split('.')[1]));
-          role = decoded.role || 'reader';
-          name = decoded.name || user.displayName || '';
+          role = roleFromToken(token) || 'reader';
+          name = user.displayName || '';
         }
         return {
           data: {
