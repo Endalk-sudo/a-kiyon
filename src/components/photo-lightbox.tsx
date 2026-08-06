@@ -88,10 +88,10 @@ export function PhotoLightbox({ src, alt, onClose }: PhotoLightboxProps) {
       <button
         ref={closeBtnRef}
         type="button"
-        className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10"
+        className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10 flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10"
         aria-label="Close photo"
       >
-        <X className="h-8 w-8" />
+        <X className="h-6 w-6" />
       </button>
       <img
         src={src}

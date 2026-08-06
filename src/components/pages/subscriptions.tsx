@@ -130,7 +130,7 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
 function VoidedPaymentNote({ sub }: { sub: Subscription }) {
   if (!sub.hasVoidedPayment && !sub.voidedPaymentNote) return null;
   return (
-    <p className="text-[11px] text-amber-600 flex items-start gap-1 mt-0.5" title={sub.voidedPaymentNote || ''}>
+    <p className="text-xs text-amber-600 flex items-start gap-1 mt-0.5" title={sub.voidedPaymentNote || ''}>
       <TriangleAlert className="h-3 w-3 shrink-0 mt-px" />
       <span>{sub.voidedPaymentNote || 'A payment was voided on this subscription'}</span>
     </p>
@@ -586,14 +586,14 @@ export function SubscriptionsPage() {
 
       {/* Pagination */}
       {!loading && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
             {pagination.total} subscriptions
           </p>
           <Pagination>
-            <PaginationContent>
+            <PaginationContent className="flex-wrap">
               <PaginationItem>
                 <PaginationPrevious
                   href="#"

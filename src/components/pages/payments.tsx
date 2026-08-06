@@ -498,7 +498,7 @@ export function PaymentsPage() {
           </div>
 
           {/* Mobile card layout */}
-          <div className="md:hidden space-y-3 p-4 max-h-[600px] overflow-y-auto">
+          <div className="md:hidden space-y-3 p-4">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i}>

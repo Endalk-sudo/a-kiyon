@@ -223,31 +223,33 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
             {/* Hidden canvas for capture */}
             <canvas ref={canvasRef} className="hidden" />
           </div>
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="default"
+              className="h-9"
               onClick={flipCamera}
               disabled={!streaming}
             >
-              <SwitchCamera className="h-3.5 w-3.5 mr-1.5" />
+              <SwitchCamera className="h-4 w-4 mr-1.5" />
               Flip
             </Button>
             <Button
               type="button"
-              size="sm"
+              size="default"
+              className="h-9 bg-emerald-600 hover:bg-emerald-700"
               onClick={capturePhoto}
               disabled={!streaming || uploading}
-              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              <Camera className="h-3.5 w-3.5 mr-1.5" />
+              <Camera className="h-4 w-4 mr-1.5" />
               {uploading ? 'Saving...' : 'Capture'}
             </Button>
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="default"
+              className="h-9"
               onClick={() => setMode('none')}
             >
               Cancel

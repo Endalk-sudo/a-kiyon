@@ -303,7 +303,7 @@ export function DashboardPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{card.value}</div>
+                  <div className="text-xl sm:text-2xl font-bold break-words">{card.value}</div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {card.description}
                   </p>
@@ -374,7 +374,7 @@ export function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-primary hover:text-primary/80 shrink-0 h-8 text-xs"
+                      className="text-primary hover:text-primary/80 shrink-0 h-9 text-xs"
                       onClick={() => setCurrentPage('payments')}
                     >
                       Record Payment
@@ -464,7 +464,7 @@ export function DashboardPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs text-muted-foreground hover:text-foreground h-8"
+                  className="text-xs text-muted-foreground hover:text-foreground h-9"
                   onClick={() => setCurrentPage('payments')}
                 >
                   View All
@@ -559,7 +559,7 @@ export function DashboardPage() {
               </div>
               {data && (
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-emerald-600">
+                  <span className="text-xl sm:text-2xl font-bold text-emerald-600 break-words">
                     {formatCurrency(data.totalRevenue)}
                   </span>
                   <span className="text-xs text-muted-foreground">total</span>

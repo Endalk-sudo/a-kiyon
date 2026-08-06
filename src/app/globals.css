@@ -118,5 +118,22 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* No pull-to-refresh / overscroll glow inside the app's inner scroll
+       container on mobile browsers. */
+    overscroll-behavior-y: none;
   }
+}
+
+/* Slim, theme-aware scrollbar for nested scroll lists on desktop. */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background-color: var(--border);
 }

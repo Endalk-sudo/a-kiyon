@@ -66,7 +66,7 @@ export function EthiopianDateInput({
           <button
             type="button"
             onClick={setToday}
-            className="text-xs text-primary hover:underline"
+            className="text-xs text-primary hover:underline h-9 px-1 flex items-center -mr-1"
           >
             Today
           </button>

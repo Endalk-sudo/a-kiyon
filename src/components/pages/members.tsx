@@ -1001,7 +1001,7 @@ export function MembersPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+                      className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-9 text-xs"
                       onClick={handleOpenSubscribe}
                     >
                       <Plus className="h-3 w-3 mr-1" />
@@ -1019,7 +1019,7 @@ export function MembersPage() {
                           <div className="font-medium text-sm">{sub.service?.name ?? 'Unknown Service'}</div>
                           <div className="text-xs text-muted-foreground">{formatDate(sub.startDate)} — {formatDate(sub.endDate)}</div>
                           {(sub.hasVoidedPayment || sub.voidedPaymentNote) && (
-                            <div className="text-[11px] text-amber-600 flex items-start gap-1 mt-0.5" title={sub.voidedPaymentNote || ''}>
+                            <div className="text-xs text-amber-600 flex items-start gap-1 mt-0.5" title={sub.voidedPaymentNote || ''}>
                               <AlertTriangle className="h-3 w-3 shrink-0 mt-px" />
                               <span>{sub.voidedPaymentNote || 'A payment was voided on this subscription'}</span>
                             </div>
@@ -1032,7 +1032,7 @@ export function MembersPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+                              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-9 text-xs"
                               onClick={() => {
                                 setSubscriptionToRenew(sub);
                                 setRenewPaymentMethod('cash');
@@ -1425,10 +1425,10 @@ function MemberCard({ member, isManagerOrAbove, onView, onEdit, onDelete, onRest
               )}
             </div>
             <div className="flex items-center gap-1.5 mt-3">
-              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-3.5 w-3.5" /></Button>
-              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-3.5 w-3.5" /></Button>}
-              {isManagerOrAbove && member.isDeleted && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-3.5 w-3.5" /></Button>}
-              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
+              <Button variant="outline" size="icon" className="h-9 w-9" aria-label="View member" onClick={(e) => { e.stopPropagation(); onView(member); }}><Eye className="h-4 w-4" /></Button>
+              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="icon" className="h-9 w-9" aria-label="Edit member" onClick={(e) => { e.stopPropagation(); onEdit(member); }}><Pencil className="h-4 w-4" /></Button>}
+              {isManagerOrAbove && member.isDeleted && <Button variant="outline" size="icon" className="h-9 w-9" aria-label="Restore member" onClick={(e) => { e.stopPropagation(); onRestore(member); }}><RotateCcw className="h-3.5 w-3.5" /></Button>}
+              {isManagerOrAbove && !member.isDeleted && <Button variant="outline" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" aria-label="Delete member" onClick={(e) => { e.stopPropagation(); onDelete(member); }}><Trash2 className="h-4 w-4" /></Button>}
             </div>
           </div>
         </div>
@@ -1497,7 +1497,7 @@ function MemberForm({ formData, setFormData, formErrors }: {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="phone">Phone</Label>
-          <Input id="phone" value={formData.phone} onChange={(e) => handlePhoneInput(e.target.value)} placeholder="+251 9XX XXX XXX" className={formErrors.phone ? 'border-destructive' : ''} />
+          <Input id="phone" type="tel" inputMode="tel" value={formData.phone} onChange={(e) => handlePhoneInput(e.target.value)} placeholder="+251 9XX XXX XXX" className={formErrors.phone ? 'border-destructive' : ''} />
           {formErrors.phone && <p className="text-xs text-destructive">{formErrors.phone}</p>}
         </div>
         <div className="space-y-1.5">
