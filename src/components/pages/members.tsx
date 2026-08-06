@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { membersApi, servicesApi, subscriptionsApi } from '@/lib/api-client';
 import { StatusBadge, type StatusType } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
+import { PhotoLightbox } from '@/components/photo-lightbox';
 import { PhotoCapture } from '@/components/photo-capture';
 import { formatCurrency, formatDate, formatMemberName, getInitials } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
@@ -1225,22 +1226,11 @@ export function MembersPage() {
 
       {/* ─── Photo Lightbox ─────────────────────────────────────────────────── */}
       {photoPreviewOpen && memberDetail?.photo && (
-        <div
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center cursor-zoom-out"
-          onClick={() => setPhotoPreviewOpen(false)}
-        >
-          <button
-            className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10"
-            onClick={() => setPhotoPreviewOpen(false)}
-          >
-            <X className="h-8 w-8" />
-          </button>
-          <img
-            src={memberDetail.photo}
-            alt={formatMemberName(memberDetail)}
-            className="max-w-[95vw] max-h-[95vh] object-contain"
-          />
-        </div>
+        <PhotoLightbox
+          src={memberDetail.photo}
+          alt={formatMemberName(memberDetail)}
+          onClose={() => setPhotoPreviewOpen(false)}
+        />
       )}
 
       {/* ─── Delete Confirmation Dialog ──────────────────────────────────── */}

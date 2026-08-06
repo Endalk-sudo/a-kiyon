@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PhotoLightbox } from '@/components/photo-lightbox';
 import { getInitials } from '@/lib/format';
 
 interface MemberAvatarProps {
@@ -24,13 +26,40 @@ const textSizes = {
 };
 
 export function MemberAvatar({ photo, photoThumb, firstName, lastName, size = 'md' }: MemberAvatarProps) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const full = photo || photoThumb || null;
   const src = photoThumb || photo;
-  return (
+  const name = `${firstName} ${lastName}`;
+
+  const avatar = (
     <Avatar className={sizeClasses[size]}>
-      {src && <AvatarImage src={src} alt={`${firstName} ${lastName}`} loading="lazy" />}
+      {src && <AvatarImage src={src} alt={name} loading="lazy" />}
       <AvatarFallback className={`${textSizes[size]} bg-primary/10 text-primary font-medium`}>
         {getInitials(firstName, lastName)}
       </AvatarFallback>
     </Avatar>
+  );
+
+  return (
+    <>
+      {full ? (
+        <button
+          type="button"
+          className="rounded-full overflow-hidden cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLightboxOpen(true);
+          }}
+          aria-label={`View full-size photo of ${name}`}
+        >
+          {avatar}
+        </button>
+      ) : (
+        avatar
+      )}
+      {lightboxOpen && full && (
+        <PhotoLightbox src={full} alt={name} onClose={() => setLightboxOpen(false)} />
+      )}
+    </>
   );
 }
