@@ -17,16 +17,10 @@
       { "fieldPath": "endDate", "order": "DESCENDING" }
     ]},
     { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "memberId", "order": "ASCENDING" }
-    ]},
-    { "collectionGroup": "subscriptions", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "memberId", "order": "ASCENDING" },
       { "fieldPath": "createdAt", "order": "DESCENDING" }
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "subscriptionId", "order": "ASCENDING" }
-    ]},
-    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "subscriptionId", "order": "ASCENDING" },
       { "fieldPath": "isVoided", "order": "ASCENDING" },
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
@@ -35,9 +29,6 @@
       { "fieldPath": "subscriptionId", "order": "ASCENDING" },
       { "fieldPath": "isVoided", "order": "ASCENDING" },
       { "fieldPath": "createdAt", "order": "DESCENDING" }
-    ]},
-    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "paymentDate", "order": "DESCENDING" }
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "isVoided", "order": "ASCENDING" },
@@ -50,12 +41,6 @@
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "memberId", "order": "ASCENDING" },
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
-    ]},
-    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "method", "order": "ASCENDING" }
-    ]},
-    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "memberId", "order": "ASCENDING" }
     ]},
     { "collectionGroup": "services", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "isActive", "order": "ASCENDING" },
