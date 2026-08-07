@@ -13,7 +13,12 @@ async function publicUrl(bucket: Bucket, filePath: string) {
   if (process.env.FIREBASE_EMULATOR === 'true') {
     return `http://127.0.0.1:9199/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media`;
   }
-  const [url] = await file.getSignedUrl({ action: 'read', expires: '01-01-2050' });
+  const [url] = await file.getSignedUrl({
+    action: 'read',
+    // 1 year — URLs are unauthenticated once issued, so long-lived links
+    // (previously ~25 years) were a leak risk if ever shared.
+    expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+  });
   return url;
 }
 
@@ -37,11 +42,25 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
+  // Decompression-bomb guard: verify real dimensions and an upper bound on
+  // pixels BEFORE sharp decodes (a small PNG can decompress to a huge
+  // bitmap, turning an authenticated request into a memory DoS).
+  let image = sharp(buffer);
+  try {
+    const metadata = await image.metadata();
+    const { width, height } = metadata;
+    if (!width || !height || width * height > 24_000_000) {
+      return apiError('Image too large. Maximum dimensions are 6000x4000.', 400);
+    }
+  } catch {
+    return apiError('Invalid image file', 400);
+  }
+
   const uuid = randomUUID();
   const filename = `${uuid}.webp`;
   const thumbFilename = `${uuid}-thumb.webp`;
 
-  const image = sharp(buffer).webp({ quality: 80 });
+  image = sharp(buffer).webp({ quality: 80 });
 
   const fullBuffer = await image.clone().toBuffer();
   const thumbBuffer = await image.clone().resize(200, 200, { fit: 'cover' }).toBuffer();

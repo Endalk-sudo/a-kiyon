@@ -40,19 +40,13 @@ import {
   Loader2,
   Clock,
   Banknote,
+  TriangleAlert,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { ServiceRecord } from '@/lib/api-types';
 
-interface Service {
-  id: string;
-  name: string;
-  nameAm: string | null;
-  description: string | null;
-  descriptionAm: string | null;
-  price: number;
-  duration: number;
-  isActive: boolean;
-}
+type Service = ServiceRecord;
 
 interface ServiceFormData {
   name: string;
@@ -81,6 +75,7 @@ export function ServicesPage() {
 
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -96,12 +91,13 @@ export function ServicesPage() {
   const fetchServices = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const result = await servicesApi.list({
         includeInactive: showInactive || isOwner,
       });
-      const data = (result as { data: Service[] }).data;
-      setServices(data);
+      setServices(result.data);
     } catch (err) {
+      setLoadError(true);
       toast.error(
         sanitizeError(err, locale, 'Failed to load services', 'አገልግሎቶችን መጫን አልተሳካም')
       );
@@ -485,8 +481,30 @@ export function ServicesPage() {
         </div>
       )}
 
+      {/* Error State */}
+      {!loading && loadError && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <TriangleAlert className="h-12 w-12 text-destructive mb-4" />
+            <p className="text-lg font-medium text-muted-foreground">
+              {locale === 'en'
+                ? 'Failed to load services'
+                : 'አገልግሎቶችን መጫን አልተሳካም'}
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={fetchServices}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {locale === 'en' ? 'Retry' : 'እንደገና ሞክር'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Empty State */}
-      {!loading && filteredServices.length === 0 && (
+      {!loading && !loadError && filteredServices.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Dumbbell className="h-12 w-12 text-muted-foreground mb-4" />

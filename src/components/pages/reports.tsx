@@ -21,12 +21,7 @@ import {
 } from 'recharts';
 import { Download, DollarSign, TrendingUp } from 'lucide-react';
 import { EthiopianDateInput } from '@/components/ethiopian-date-input';
-
-interface DashboardData {
-  totalRevenue: number;
-  revenueThisMonth: number;
-  monthlyRevenue: { monthNameEN: string; monthNameAM: string; ecYear: number; revenue: number }[];
-}
+import type { DashboardData } from '@/lib/api-types';
 
 export function ReportsPage() {
   const locale = useAppStore((s) => s.locale);

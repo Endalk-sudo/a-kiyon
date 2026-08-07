@@ -87,6 +87,8 @@ export interface SubscriptionRecord {
   endDate: string;
   status: string;
   priceSnapshot: number;
+  hasVoidedPayment?: boolean;
+  voidedPaymentNote?: string | null;
   notes?: string | null;
   member: SubscriptionMemberInfo;
   service: { id: string; name: string; nameAm: string | null; price: number; duration: number };

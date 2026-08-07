@@ -40,7 +40,8 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const rows = members.map((member) => {
     const subs = subsByMember.get(member.id) || [];
     const memberStatus = computeMemberStatus(subs);
-    const createdDateEC = formatEthiopianDate(new Date(member.createdAt));
+    const createdAt = new Date(member.createdAt);
+    const createdDateEC = Number.isNaN(createdAt.getTime()) ? '' : formatEthiopianDate(createdAt);
     const name = `${member.firstName} ${member.lastName}`;
     const phone = member.phone || '';
 

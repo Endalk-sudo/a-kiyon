@@ -1,4 +1,27 @@
 :81 {
+	encode zstd gzip
+	request_body {
+		# Camera uploads + JSON bodies — 6MB caps the max 5MB photo upload.
+		max_size 6MB
+	}
+
+	# Security headers (defense in depth on top of Next.js' own headers).
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	# NOTE: this site is served over plain HTTP on :81. If it is reachable from
+	# the public internet, TLS is mandatory — Firebase ID tokens and passwords
+	# would otherwise cross the network in cleartext. Replace with:
+	#
+	#   yourdomain.com {
+	#     reverse_proxy localhost:3000 { ... }
+	#   }
+	#
+	# Caddy will then issue a Let's Encrypt certificate automatically.
+
 	reverse_proxy localhost:3000 {
 		header_up Host {host}
 		header_up X-Forwarded-For {remote_host}

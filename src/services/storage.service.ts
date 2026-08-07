@@ -74,30 +74,36 @@ export async function findStaleMembers(months = DEFAULT_STALE_MONTHS): Promise<S
   ]);
   const recentPayerIds = new Set(recentPayments.map((p) => p.memberId));
 
-  // Only members outside that set need their history checked.
+  // Every remaining member is stale by definition (they have no non-voided
+  // payment >= cutoff). Their lastPaymentDate is fetched for display with
+  // chunked `in` queries (Firestore caps `in` at 30 values) instead of one
+  // query per member — the previous N+1.
   const candidates = members.filter((m) => !recentPayerIds.has(m.id));
 
-  const stale: StaleMember[] = [];
-  for (const member of candidates) {
-    const payments = await getDocs<{ paymentDate: string; isVoided: boolean }>(
+  const latestPaymentByMember = new Map<string, string | null>();
+  for (const idChunk of chunk(candidates.map((m) => m.id))) {
+    const payments = await getDocs<{ memberId: string; paymentDate: string; isVoided: boolean }>(
       'payments',
-      [['memberId', '==', member.id]],
+      [['memberId', 'in', idChunk]],
       ['paymentDate', 'desc'],
-      10,
+      idChunk.length * 20,
     );
-    const last = payments.find((p) => !p.isVoided);
-    if (last && last.paymentDate >= cutoff) continue;
-    stale.push({
-      id: member.id,
-      firstName: member.firstName,
-      lastName: member.lastName,
-      photo: member.photo ?? null,
-      photoThumb: member.photoThumb ?? null,
-      lastPaymentDate: last ? last.paymentDate : null,
-    });
+    const seen = new Set<string>();
+    for (const p of payments) {
+      if (p.isVoided || seen.has(p.memberId)) continue;
+      seen.add(p.memberId);
+      latestPaymentByMember.set(p.memberId, p.paymentDate);
+    }
   }
 
-  return stale;
+  return candidates.map((member) => ({
+    id: member.id,
+    firstName: member.firstName,
+    lastName: member.lastName,
+    photo: member.photo ?? null,
+    photoThumb: member.photoThumb ?? null,
+    lastPaymentDate: latestPaymentByMember.get(member.id) ?? null,
+  }));
 }
 
 /**
@@ -119,10 +125,13 @@ export async function purgeOrphanedFiles(bucket: StorageBucket): Promise<number>
   }
 
   let deleted = 0;
-  for (const file of files) {
-    if (referenced.has(file.name)) continue;
-    await file.delete();
-    deleted++;
+  for (const chunkOfFiles of chunk(files.map((f) => f.name))) {
+    const results = await Promise.allSettled(
+      chunkOfFiles
+        .filter((name) => !referenced.has(name))
+        .map((name) => bucket.file(name).delete()),
+    );
+    deleted += results.filter((r) => r.status === 'fulfilled').length;
   }
   return deleted;
 }
@@ -134,18 +143,25 @@ export async function purgeOrphanedFiles(bucket: StorageBucket): Promise<number>
 export async function purgeDeletedMemberPhotos(bucket: StorageBucket): Promise<number> {
   const deletedMembers = await getDocs<{ photo?: string | null }>('members', [['isDeleted', '==', true]]);
 
-  let deleted = 0;
+  const targets: string[] = [];
   for (const member of deletedMembers) {
     const path = photoPathFromUrl(member.photo);
     if (!path) continue;
-    const targets = [path, thumbPathFromPhotoPath(path)].filter(Boolean) as string[];
-    for (const target of targets) {
-      const file = bucket.file(target);
-      const [exists] = await file.exists();
-      if (!exists) continue;
-      await file.delete();
-      deleted++;
-    }
+    targets.push(path, ...(thumbPathFromPhotoPath(path) ? [thumbPathFromPhotoPath(path) as string] : []));
+  }
+
+  let deleted = 0;
+  for (const targetChunk of chunk(targets)) {
+    const results = await Promise.allSettled(
+      targetChunk.map(async (target) => {
+        const file = bucket.file(target);
+        const [exists] = await file.exists();
+        if (!exists) return false;
+        await file.delete();
+        return true;
+      }),
+    );
+    deleted += results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
   }
   return deleted;
 }

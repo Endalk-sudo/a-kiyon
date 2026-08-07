@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { useAppStore } from '@/lib/store';
 
-type StatusType = 'active' | 'expiring_soon' | 'expired' | 'no_subscription';
+type StatusType = 'active' | 'expiring_soon' | 'expired' | 'cancelled' | 'no_subscription';
 
 interface StatusBadgeProps {
   status: StatusType;
@@ -29,6 +29,12 @@ const statusConfig: Record<StatusType, { label: string; labelAm: string; variant
     variant: 'destructive',
     className: 'bg-red-500 hover:bg-red-500 text-white border-red-500',
   },
+  cancelled: {
+    label: 'Cancelled',
+    labelAm: 'ተሰርዟል',
+    variant: 'secondary',
+    className: 'bg-gray-400 hover:bg-gray-400 text-white border-gray-400',
+  },
   no_subscription: {
     label: 'No Subscription',
     labelAm: 'ደንበኛነት የለም',
@@ -52,12 +58,7 @@ export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
       className={`${config.className} ${sizeClasses[size]} font-medium rounded-full`}
     >
       <span className="flex items-center gap-1.5">
-        <span className={`w-2 h-2 rounded-full ${
-          status === 'active' ? 'bg-white' :
-          status === 'expiring_soon' ? 'bg-white animate-pulse' :
-          status === 'expired' ? 'bg-white' :
-          'bg-white'
-        }`} />
+        <span className={`w-2 h-2 rounded-full bg-white ${status === 'expiring_soon' ? 'animate-pulse' : ''}`} />
         {locale === 'am' ? config.labelAm : config.label}
       </span>
     </Badge>
@@ -69,6 +70,7 @@ export function getStatusColor(status: StatusType): string {
     active: 'emerald',
     expiring_soon: 'amber',
     expired: 'red',
+    cancelled: 'gray',
     no_subscription: 'gray',
   };
   return colors[status];

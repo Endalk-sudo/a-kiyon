@@ -217,7 +217,8 @@ describe('Subscription Service (integration)', () => {
       });
       subscriptionIds.push(sub.id);
 
-      const { autoExpireSubscriptions } = await import('@/services/subscription.service');
+      const { autoExpireSubscriptions, resetAutoExpireDebounce } = await import('@/services/subscription.service');
+      resetAutoExpireDebounce();
       await autoExpireSubscriptions();
 
       const snap = await db.collection('subscriptions').doc(sub.id).get();

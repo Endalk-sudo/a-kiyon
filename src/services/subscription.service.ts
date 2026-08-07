@@ -13,11 +13,26 @@ interface SubscriptionDoc {
   notes?: string | null;
 }
 
+// Expiry is normally enforced on every read (documented design). Debounce the
+// actual scan+write so a page with many API calls (or many concurrent users)
+// doesn't trigger the full scan + batch update once per request — the status
+// just becomes slightly less "live" between ticks.
+const EXPIRE_DEBOUNCE_MS = 60_000;
+let lastExpireRun = 0;
+
+/** Test hook — clears the debounce window so the next call runs immediately. */
+export function resetAutoExpireDebounce() {
+  lastExpireRun = 0;
+}
+
 export async function autoExpireSubscriptions() {
-  const now = new Date();
+  const now = Date.now();
+  if (now - lastExpireRun < EXPIRE_DEBOUNCE_MS) return;
+  lastExpireRun = now;
+
   await batchUpdate('subscriptions', [
     ['status', '==', 'active'],
-    ['endDate', '<', now.toISOString()],
+    ['endDate', '<', new Date(now).toISOString()],
   ], { status: 'expired' });
 }
 

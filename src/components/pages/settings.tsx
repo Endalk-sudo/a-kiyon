@@ -53,16 +53,9 @@ import {
   Pencil,
   Power,
 } from 'lucide-react';
+import type { UserRecord } from '@/lib/api-types';
 
-interface UserItem {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  phone: string | null;
-  isActive: boolean;
-  createdAt: string;
-}
+type UserItem = UserRecord;
 
 export function SettingsPage() {
   const session = useAppStore((s) => s.session);

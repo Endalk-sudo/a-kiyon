@@ -31,18 +31,28 @@ async function getStorageUsage() {
   const prefixMap = new Map<string, { count: number; bytes: number }>();
   let totalBytes = 0;
 
-  for (const file of files) {
-    const [metadata] = await file.getMetadata();
-    const size = Number(metadata.size) || 0;
-    totalBytes += size;
+  // Metadata calls are one HTTP round-trip per file — run them in parallel
+  // instead of serially.
+  const sizes = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const [metadata] = await file.getMetadata();
+        return Number(metadata.size) || 0;
+      } catch {
+        return 0;
+      }
+    }),
+  );
 
+  files.forEach((file, i) => {
+    totalBytes += sizes[i];
     const parts = file.name.split('/');
     const prefix = parts.length > 1 ? parts[0] : '(root)';
     const entry = prefixMap.get(prefix) || { count: 0, bytes: 0 };
     entry.count++;
-    entry.bytes += size;
+    entry.bytes += sizes[i];
     prefixMap.set(prefix, entry);
-  }
+  });
 
   return {
     files: files.length,
@@ -57,13 +67,6 @@ async function getStorageUsage() {
 const KB = 1024;
 const MB = KB * KB;
 const GB = MB * KB;
-
-function formatBytes(bytes: number): string {
-  if (bytes >= GB) return `${(bytes / GB).toFixed(2)} GB`;
-  if (bytes >= MB) return `${(bytes / MB).toFixed(2)} MB`;
-  if (bytes >= KB) return `${(bytes / KB).toFixed(2)} KB`;
-  return `${bytes} B`;
-}
 
 const FIRESTORE_FREE_LIMIT = 1 * GB;
 const STORAGE_FREE_LIMIT = 5 * GB;
@@ -100,7 +103,6 @@ export const GET = apiHandler(async (request: NextRequest) => {
     },
     staleMonths,
     staleMembers,
-    formatBytes,
   });
 });
 

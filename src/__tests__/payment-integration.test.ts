@@ -304,7 +304,7 @@ describe('Payment Service (integration)', () => {
       expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 20 * DAY, -4);
     });
 
-    it('voiding the latest payment after a middle void rolls back to the last VALID payment', async () => {
+    it('voiding a middle payment claws back its days from later payments', async () => {
       const { subscriptionId: subId2 } = await createSubscriptionWithInitialPayment();
       const first = await recordAndExtendPayment({
         subscriptionId: subId2,
@@ -324,19 +324,20 @@ describe('Payment Service (integration)', () => {
       if (!second.ok) return;
       await trackPayment(second.payment.id);
 
-      // Void the middle renewal first — the end date must stay at the latest
-      // payment's validity.
+      // Void the middle renewal first — the end date must drop to the
+      // re-simulated validity of the remaining payments (initial + second):
+      // the second renewal's days are recomputed from the initial period's
+      // end instead of the voided middle payment's end.
       await voidPayment(first.payment.id, 'test-user');
       await settle(async () => {
         const fresh = await getSub(subId2);
         return fresh.hasVoidedPayment === true;
       });
       let sub = await getSub(subId2);
-      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 80 * DAY, -4);
+      expect(new Date(sub.endDate as string).getTime()).toBeCloseTo(Date.now() + 50 * DAY, -4);
 
-      // Voiding the latest payment must NOT roll back through the voided middle
-      // payment (50d is backed by refunded money) — it lands on the initial
-      // payment's end date instead.
+      // Voiding the latest payment then lands on the initial payment's end
+      // date (the only validity left).
       await voidPayment(second.payment.id, 'test-user');
       await settle(async () => {
         const fresh = await getSub(subId2);
@@ -423,6 +424,54 @@ describe('Payment Service (integration)', () => {
       expect(after.status).toBe('expired');
 
       await db.collection('subscriptions').doc(legacyId).delete();
+    });
+  });
+
+  describe('concurrent renewals', () => {
+    it('applies parallel payments exactly once each — no lost days', async () => {
+      // Subscription expiring "tomorrow" — two simultaneous renewals must
+      // both add 30 days, chained off each other's committed end date.
+      const subId = await createTestSubscription({ endDate: isoFromNow(1) });
+      const startEnd = new Date(isoFromNow(1)).getTime();
+
+      const [first, second] = await Promise.all([
+        recordAndExtendPayment({
+          subscriptionId: subId,
+          method: 'cash',
+          createdBy: 'test-user',
+          allowReactivation: true,
+        }),
+        recordAndExtendPayment({
+          subscriptionId: subId,
+          method: 'cash',
+          createdBy: 'test-user',
+          allowReactivation: true,
+        }),
+      ]);
+
+      expect(first.ok).toBe(true);
+      expect(second.ok).toBe(true);
+      if (!first.ok || !second.ok) return;
+
+      await trackPayment(first.payment.id);
+      await trackPayment(second.payment.id);
+
+      // The final end date must be start + 2 × 30 days (both payments
+      // credited), never start + 30 (one payment lost to a race).
+      const sub = await getSub(subId);
+      const finalEnd = new Date(sub.endDate as string).getTime();
+      expect(finalEnd).toBeGreaterThan(startEnd + 59 * DAY - 60_000);
+      expect(finalEnd).toBeLessThan(startEnd + 61 * DAY + 60_000);
+
+      // Both payments must be non-voided and recorded.
+      const [p1, p2] = await Promise.all([
+        db.collection('payments').doc(first.payment.id).get(),
+        db.collection('payments').doc(second.payment.id).get(),
+      ]);
+      expect(p1.data()?.isVoided).toBe(false);
+      expect(p2.data()?.isVoided).toBe(false);
+
+      await db.collection('subscriptions').doc(subId).delete();
     });
   });
 });

@@ -44,9 +44,14 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
       setStreaming(true);
     } catch (err) {
       console.error('Camera error:', err);
+      toast.error(
+        locale === 'am'
+          ? 'ካሜራ መክፈት አልተሳካም። ይፈቀድ ወይም ፎቶ መስቀል ይጠቀሙ'
+          : 'Could not open the camera. Check permissions or use photo upload instead.'
+      );
       setMode('none');
     }
-  }, [facingMode]);
+  }, [facingMode, locale]);
 
   // Stop camera
   const stopCamera = useCallback(() => {

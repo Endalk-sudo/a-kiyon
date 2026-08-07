@@ -119,6 +119,11 @@
       { "fieldPath": "isVoided", "order": "ASCENDING" },
       { "fieldPath": "method", "order": "ASCENDING" },
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "subscription-locks", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "memberId", "order": "ASCENDING" },
+      { "fieldPath": "serviceId", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" }
     ]}
   ]
 }

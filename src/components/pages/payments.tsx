@@ -51,31 +51,7 @@ import { toast } from 'sonner';
 // Types
 // ---------------------------------------------------------------------------
 
-interface MemberInfo {
-  id: string;
-  firstName: string;
-  lastName: string;
-  photo?: string | null;
-  photoThumb?: string | null;
-}
-
-interface SubscriptionInfo {
-  service?: { name: string };
-}
-
-interface PaymentRecord {
-  id: string;
-  memberId: string;
-  amount: number;
-  paymentDate: string;
-  method: string;
-  receiptNumber: string;
-  isVoided: boolean;
-  voidedAt: string | null;
-  notes: string | null;
-  member: MemberInfo;
-  subscription: SubscriptionInfo;
-}
+import type { PaymentRecord } from '@/lib/api-types';
 
 // ---------------------------------------------------------------------------
 // Payment method filter options
@@ -308,7 +284,10 @@ export function PaymentsPage() {
       toast.success(t(locale, 'Payment voided successfully', 'ክፍያ በተሳካ ሁኔታ ተሰርዟል'));
       setVoidDialogOpen(false);
       setVoidTarget(null);
-      fetchPayments(pagination.page);
+      // Voiding removes the last row of a page — step back instead of
+      // leaving the user on a page that no longer exists.
+      const wasLastOnPage = payments.length === 1 && pagination.page > 1;
+      fetchPayments(wasLastOnPage ? pagination.page - 1 : pagination.page);
     } catch (err) {
       toast.error(sanitizeError(err, locale, 'Failed to void payment', 'ክፍያ መሰረዝ አልተሳካም'));
     } finally {

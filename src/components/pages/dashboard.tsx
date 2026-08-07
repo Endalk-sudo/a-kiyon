@@ -38,59 +38,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-
-// Types matching the API response
-interface ExpiringSoonMember {
-  memberId: string;
-  firstName: string;
-  lastName: string;
-  photo?: string | null;
-  photoThumb?: string | null;
-  subscriptionId: string;
-  serviceName: string;
-  endDate: string;
-  priceSnapshot: number;
-}
-
-interface RecentlyExpiredMember {
-  memberId: string;
-  firstName: string;
-  lastName: string;
-  photo?: string | null;
-  photoThumb?: string | null;
-  subscriptionId: string;
-  endDate: string;
-}
-
-interface RecentPayment {
-  id: string;
-  amount: number;
-  paymentDate: string;
-  method: string;
-  receiptNumber: string;
-  memberName: string;
-  memberId: string;
-}
-
-interface MonthlyRevenue {
-  monthNameEN: string;
-  monthNameAM: string;
-  ecYear: number;
-  revenue: number;
-}
-
-interface DashboardData {
-  totalMembers: number;
-  activeSubscriptions: number;
-  expiringSoonCount: number;
-  expiredCount: number;
-  totalRevenue: number;
-  revenueThisMonth: number;
-  expiringSoonMembers: ExpiringSoonMember[];
-  recentlyExpiredMembers: RecentlyExpiredMember[];
-  recentPayments: RecentPayment[];
-  monthlyRevenue: MonthlyRevenue[];
-}
+import type { DashboardData } from '@/lib/api-types';
 
 // Custom Tooltip for the chart
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {

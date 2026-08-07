@@ -1,19 +1,58 @@
 'use client';
 
 import { Component, useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useAppStore } from '@/lib/store';
-import { initAuth, onAuthChange, decodeTokenPayload } from '@/lib/auth-client';
+import { initAuth, onAuthChange, decodeTokenPayload, authClient } from '@/lib/auth-client';
+import { onSessionExpired } from '@/lib/api-client';
 import { AppLayout } from '@/components/app-layout';
 import { LandingPage } from '@/components/pages/landing';
-import { DashboardPage } from '@/components/pages/dashboard';
-import { MembersPage } from '@/components/pages/members';
-import { ServicesPage } from '@/components/pages/services';
-import { SubscriptionsPage } from '@/components/pages/subscriptions';
-import { PaymentsPage } from '@/components/pages/payments';
-import { ReportsPage } from '@/components/pages/reports';
-import { SettingsPage } from '@/components/pages/settings';
-import { StoragePage } from '@/components/pages/storage';
 import { Loader2 } from 'lucide-react';
+
+// Pages are code-split so the initial bundle only contains the landing page,
+// auth plumbing, and the layout — not every feature page (members.tsx alone
+// is ~1600 lines) plus recharts on the dashboard. Each chunk is fetched on
+// first navigation to that page.
+const DashboardPage = dynamic(() => import('@/components/pages/dashboard').then((m) => m.DashboardPage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+const MembersPage = dynamic(() => import('@/components/pages/members').then((m) => m.MembersPage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+const ServicesPage = dynamic(() => import('@/components/pages/services').then((m) => m.ServicesPage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+const SubscriptionsPage = dynamic(() => import('@/components/pages/subscriptions').then((m) => m.SubscriptionsPage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+const PaymentsPage = dynamic(() => import('@/components/pages/payments').then((m) => m.PaymentsPage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+const ReportsPage = dynamic(() => import('@/components/pages/reports').then((m) => m.ReportsPage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+const SettingsPage = dynamic(() => import('@/components/pages/settings').then((m) => m.SettingsPage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+const StoragePage = dynamic(() => import('@/components/pages/storage').then((m) => m.StoragePage), {
+  ssr: false,
+  loading: () => <PageLoading />,
+});
+
+function PageLoading() {
+  return (
+    <div className="flex items-center justify-center h-full py-24">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
 
 const pageComponents: Record<string, React.ComponentType> = {
   dashboard: DashboardPage,
@@ -65,12 +104,11 @@ export default function Home() {
   useEffect(() => {
     initAuth();
 
-    const unsub = onAuthChange(async (user) => {
+    const unsubAuth = onAuthChange(async (user) => {
       try {
         if (user) {
           const token = await user.getIdToken();
-          // Base64url-safe decode (plain atob throws on `-`/`_` chars) —
-          // a throw here would leave the app stuck on the loading spinner.
+          // Base64url-safe decode (plain atob throws on `-`/`_` chars).
           const decoded = decodeTokenPayload(token);
           setSession({
             userId: user.uid,
@@ -81,12 +119,26 @@ export default function Home() {
         } else {
           setSession(null);
         }
+      } catch (err) {
+        console.error('Failed to resolve auth session:', err);
+        setSession(null);
       } finally {
         setLoading(false);
       }
     });
 
-    return () => unsub();
+    // Token expired or revoked server-side: tear the session down instead of
+    // leaving the user with a dead session and per-page Unauthorized toasts.
+    const unsubExpired = onSessionExpired(async () => {
+      await authClient.signOut().catch(() => {});
+      setSession(null);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubAuth();
+      unsubExpired();
+    };
   }, [setSession]);
 
   if (loading) {

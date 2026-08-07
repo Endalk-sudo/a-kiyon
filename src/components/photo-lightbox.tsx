@@ -55,11 +55,15 @@ export function PhotoLightbox({ src, alt, onClose }: PhotoLightboxProps) {
 
   // Move focus into the overlay on open and restore it to the trigger on
   // close (aria-modal overlays must not leave focus behind the backdrop).
+  // Also lock body scroll while the overlay is open and restore it after.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
     closeBtnRef.current?.focus();
 
     return () => {
+      document.body.style.overflow = overflow;
       previouslyFocused?.focus?.();
     };
   }, []);

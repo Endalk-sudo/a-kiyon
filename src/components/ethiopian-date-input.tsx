@@ -79,10 +79,12 @@ export function EthiopianDateInput({
         onChange={handleChange}
         placeholder={placeholder}
         required={required}
+        aria-invalid={displayError ? true : undefined}
+        aria-describedby={displayError ? `${inputId}-error` : undefined}
         className={displayError ? 'border-red-500' : ''}
       />
       {displayError && (
-        <p className="text-xs text-red-500">{displayError}</p>
+        <p id={`${inputId}-error`} className="text-xs text-red-500">{displayError}</p>
       )}
       <p className="text-xs text-muted-foreground">
         Ethiopian Calendar format: dd/mm/yyyy EC

@@ -124,23 +124,18 @@ export async function getMember(id: string) {
   const subsServiceDocs = await getDocsByIds<{ name: string; nameAm: string | null; price: number }>('services', subsServiceIds);
   const servicesMap = new Map(subsServiceDocs.map((s) => [s.id, s]));
 
-  const subsWithService = await Promise.all(
-    subs.map(async (sub) => {
-      const payments = await getDocs<Record<string, unknown>>(
-        'payments',
-        [['subscriptionId', '==', sub.id], ['isVoided', '==', false]],
-        ['paymentDate', 'desc'],
-      );
-      const service = servicesMap.get(sub.serviceId);
-      return {
-        ...sub,
-        service: service ? { id: service.id, name: service.name, nameAm: service.nameAm, price: service.price } : null,
-        payments,
-      };
-    }),
-  );
-
+  // All the member's payments in one query — grouped per subscription for the
+  // response instead of running one payments query per subscription (N+1).
   const payments = await getDocs<{ subscriptionId: string | null; memberId: string; paymentDate: string }>('payments', [['memberId', '==', member.id]], ['paymentDate', 'desc']);
+
+  const subsWithService = subs.map((sub) => {
+    const service = servicesMap.get(sub.serviceId);
+    return {
+      ...sub,
+      service: service ? { id: service.id, name: service.name, nameAm: service.nameAm, price: service.price } : null,
+      payments: payments.filter((p) => p.subscriptionId === sub.id),
+    };
+  });
 
   const paymentSubIds = [...new Set(payments.map((p) => p.subscriptionId).filter((id): id is string => Boolean(id)))];
   const paymentSubs = await getDocsByIds<{ serviceId: string }>('subscriptions', paymentSubIds);

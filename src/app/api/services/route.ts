@@ -7,10 +7,14 @@ import { apiHandler } from '@/lib/api-handler';
 import { createServiceSchema } from '@/lib/schemas';
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  await getSessionOrThrow(undefined, request);
+  const session = await getSessionOrThrow(undefined, request);
 
   const { searchParams } = request.nextUrl;
-  const includeInactive = searchParams.get('includeInactive') === 'true';
+  // Inactive services are only exposed to owner/manager — the view-only role
+  // sees the active catalog.
+  const includeInactive =
+    searchParams.get('includeInactive') === 'true' &&
+    (session.role === 'owner' || session.role === 'manager');
   const page = parseIntParam(searchParams.get('page'), 0);
   const limit = parseIntParam(searchParams.get('limit'), 0);
 

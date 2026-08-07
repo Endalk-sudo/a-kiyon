@@ -63,7 +63,6 @@ interface StorageData {
   };
   staleMonths: number;
   staleMembers: StaleMember[];
-  formatBytes: (bytes: number) => string;
 }
 
 const GB = 1073741824;
@@ -134,14 +133,18 @@ export function StoragePage() {
   };
 
   const handleSoftDelete = async (memberId?: string) => {
+    const actionKey = memberId ? `soft-delete:${memberId}` : 'bulk-soft-delete';
     const target = memberId ? [memberId] : data?.staleMembers.map((m) => m.id) ?? [];
     if (target.length === 0) return;
+    setCleaning(actionKey);
     try {
       const result = await membersApi.bulkSoftDelete(target);
       toast.success(result.message);
       fetchData();
     } catch {
       toast.error(t(locale, 'Failed to soft-delete members', 'አባላትን መሰረዝ አልተሳካም'));
+    } finally {
+      setCleaning(null);
     }
   };
 
@@ -332,15 +335,13 @@ export function StoragePage() {
                         </p>
                       </div>
                     </div>
-                    <Button
+                    <ConfirmButton
+                      action={`soft-delete:${member.id}`}
+                      label="Soft Delete"
+                      cleaning={cleaning}
+                      onConfirm={(action) => handleSoftDelete(action.replace('soft-delete:', ''))}
                       variant="outline"
-                      size="sm"
-                      onClick={() => handleSoftDelete(member.id)}
-                      disabled={cleaning !== null}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Soft delete
-                    </Button>
+                    />
                   </div>
                 ))}
               </div>

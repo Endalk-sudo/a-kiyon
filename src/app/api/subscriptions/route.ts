@@ -47,9 +47,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   ]);
   if (existingActive.length > 0) {
     return apiError('Member already has an active subscription for this service');
-  }
-
-  let parsedStartDate: Date;
+  }  let parsedStartDate: Date;
   const dateStr = String(startDate).trim();
   const ethiopianPattern = /^\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*(EC)?$/i;
   if (ethiopianPattern.test(dateStr)) {
@@ -71,7 +69,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
     const paymentStr = String(data.paymentDate).trim();
     if (ethiopianPattern.test(paymentStr)) {
       const result = parseEthiopianDate(paymentStr);
-      if (result.success && result.date) paymentDateValue = result.date;
+      if (!result.success || !result.date) return apiError(result.error || 'Invalid Ethiopian date format');
+      paymentDateValue = result.date;
     } else {
       const d = new Date(paymentStr);
       if (!isNaN(d.getTime())) paymentDateValue = d;
@@ -86,7 +85,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   const receiptNumber = generateReceiptNumber();
 
-  const { subscriptionId, paymentId } = await db.runTransaction(async (tx) => {
+  // The duplicate-active check runs INSIDE the transaction against a
+  // member+service lock doc. Firestore transactions retry when the docs they
+  // touched changed, so two concurrent POSTs for the same member+service
+  // serialize: the loser re-checks on retry, sees the winner's active
+  // subscription, and aborts with the conflict error.
+  const { subscriptionId, paymentId, existing } = await db.runTransaction(async (tx) => {
+    const lockRef = db.collection('subscription-locks').doc(`${data.memberId}_${data.serviceId}`);
+    await tx.get(lockRef);
+
+    const activeCheck = await tx.get(
+      db
+        .collection('subscriptions')
+        .where('memberId', '==', data.memberId)
+        .where('serviceId', '==', data.serviceId)
+        .where('status', '==', 'active')
+        .limit(1),
+    );
+    if (!activeCheck.empty) return { existing: true as const };
+
+    tx.set(lockRef, { updatedAt: new Date().toISOString() });
+
     const subRef = db.collection('subscriptions').doc();
     tx.set(subRef, {
       memberId: data.memberId,
@@ -116,8 +135,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
       updatedAt: new Date().toISOString(),
     });
 
-    return { subscriptionId: subRef.id, paymentId: payRef.id };
+    return { existing: false as const, subscriptionId: subRef.id, paymentId: payRef.id };
   });
+
+  if (existing) {
+    return apiError('Member already has an active subscription for this service');
+  }
 
   const subscription = {
     id: subscriptionId,

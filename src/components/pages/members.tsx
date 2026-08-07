@@ -82,30 +82,9 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface Member {
-  id: string;
-  firstName: string;
-  lastName: string;
-  phone: string | null;
-  photo: string | null;
-  photoThumb?: string | null;
-  address: string | null;
-  weight: number | null;
-  height: number | null;
-  bloodType: string | null;
-  sex: Sex | null;
-  neck: number | null;
-  waist: number | null;
-  hip: number | null;
-  bodyFatPercent: number | null;
-  emergencyContact: string | null;
-  notes: string | null;
-  isDeleted: boolean;
-  deletedAt: string | null;
-  createdAt: string;
-  status: StatusType;
-  subscriptionEndDate: string | null;
-}
+import type { MemberResponse, PaginationInfo } from '@/lib/api-types';
+
+type Member = MemberResponse;
 
 interface MemberDetail extends Member {
   subscriptions: Array<{
@@ -139,13 +118,6 @@ interface MemberDetail extends Member {
       service: { name: string } | null;
     } | null;
   }>;
-}
-
-interface PaginationInfo {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
 }
 
 interface MemberFormData {
@@ -926,6 +898,9 @@ export function MembersPage() {
                   <img
                     src={memberDetail.photo}
                     alt={formatMemberName(memberDetail)}
+                    width={128}
+                    height={128}
+                    loading="lazy"
                     className="w-32 h-32 rounded-xl object-cover cursor-pointer shrink-0 border"
                     onClick={() => setPhotoPreviewOpen(true)}
                   />
@@ -1458,14 +1433,14 @@ function MemberForm({ formData, setFormData, formErrors }: {
   setFormData: React.Dispatch<React.SetStateAction<MemberFormData>>;
   formErrors: Partial<Record<keyof MemberFormData, string>>;
 }) {
-  const updateField = (field: keyof MemberFormData, value: string | null) => {
+  const updateField = useCallback((field: keyof MemberFormData, value: string | null) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  }, [setFormData]);
 
-  const handlePhoneInput = (value: string) => {
+  const handlePhoneInput = useCallback((value: string) => {
     const digits = value.replace(/\D/g, '').replace(/^251/, '').replace(/^0/, '').slice(0, 9);
     updateField('phone', digits ? `+251${digits}` : '');
-  };
+  }, [updateField]);
 
   return (
     <div className="space-y-5">

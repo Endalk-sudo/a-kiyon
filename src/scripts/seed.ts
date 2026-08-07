@@ -18,6 +18,15 @@ async function deleteAllDocs(collectionName: string) {
 }
 
 async function main() {
+  // This script deletes every document and every Auth user. Refuse to run
+  // against anything but the emulator so one accidental run cannot wipe
+  // production data.
+  if (process.env.FIREBASE_EMULATOR !== 'true') {
+    throw new Error(
+      'Refusing to seed: FIREBASE_EMULATOR is not "true". This script wipes all Firestore collections and all Auth users.',
+    );
+  }
+
   console.log('Seeding Firebase...');
 
   // ── Clean existing Firestore data ──

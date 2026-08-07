@@ -16,6 +16,22 @@ interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
 }
 
+// Global handler fired when any API call returns 401 (expired/revoked token).
+// Registered by the app shell (page.tsx) so the session can be torn down
+// instead of silently showing per-page "Unauthorized" toasts.
+let sessionExpiredHandler: (() => void) | null = null;
+
+export function onSessionExpired(handler: () => void): () => void {
+  sessionExpiredHandler = handler;
+  return () => {
+    if (sessionExpiredHandler === handler) sessionExpiredHandler = null;
+  };
+}
+
+function emitSessionExpired() {
+  sessionExpiredHandler?.();
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: FetchOptions = {}
@@ -46,6 +62,7 @@ export async function apiFetch<T = unknown>(
   });
 
   if (response.status === 401) {
+    emitSessionExpired();
     throw new Error('Unauthorized');
   }
 
@@ -78,7 +95,10 @@ export async function apiUpload<T = unknown>(
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
-  if (response.status === 401) throw new Error('Unauthorized');
+  if (response.status === 401) {
+    emitSessionExpired();
+    throw new Error('Unauthorized');
+  }
   if (response.status === 403) throw new Error('Forbidden');
 
   if (!response.ok) {
@@ -138,8 +158,6 @@ export const servicesApi = {
 export const subscriptionsApi = {
   list: (params?: Record<string, string | number | boolean | undefined>) =>
     apiFetch<PaginatedResponse<SubscriptionRecord>>('/subscriptions', { params }),
-  get: (id: string) =>
-    apiFetch<SubscriptionRecord>(`/subscriptions/${id}`),
   create: (data: { memberId: string; serviceId: string; paymentMethod: string; startDate?: string; paymentDate?: string; notes?: string }) =>
     apiFetch<{ subscription: SubscriptionRecord; payment: { id: string; amount: number; receiptNumber: string } }>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<SubscriptionRecord>) =>
@@ -152,10 +170,6 @@ export const subscriptionsApi = {
 export const paymentsApi = {
   list: (params?: Record<string, string | number | boolean | undefined>) =>
     apiFetch<PaginatedResponse<PaymentRecord>>('/payments', { params }),
-  get: (id: string) =>
-    apiFetch<PaymentRecord>(`/payments/${id}`),
-  create: (data: Partial<PaymentRecord>) =>
-    apiFetch<PaymentRecord>('/payments', { method: 'POST', body: JSON.stringify(data) }),
   void: (id: string) =>
     apiFetch<PaymentRecord>(`/payments/${id}/void`, { method: 'POST' }),
 };
@@ -170,14 +184,10 @@ export const dashboardApi = {
 export const usersApi = {
   list: () =>
     apiFetch<{ data: UserRecord[] }>('/users'),
-  get: (id: string) =>
-    apiFetch<UserRecord>(`/users/${id}`),
   create: (data: CreateUserBody) =>
     apiFetch<UserRecord>('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<UserRecord>) =>
     apiFetch<UserRecord>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deactivate: (id: string) =>
-    apiFetch<{ message: string }>(`/users/${id}`, { method: 'DELETE' }),
 };
 
 // Export

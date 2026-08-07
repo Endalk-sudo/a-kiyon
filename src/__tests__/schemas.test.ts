@@ -202,9 +202,7 @@ describe('Schemas', () => {
     it('accepts valid payment data', () => {
       const data = {
         subscriptionId: 's1',
-        memberId: 'm1',
         amount: 500,
-        paymentDate: '2024-01-15',
         method: 'cash',
       };
       const result = createPaymentSchema.parse(data);
@@ -220,9 +218,7 @@ describe('Schemas', () => {
       expect(() =>
         createPaymentSchema.parse({
           subscriptionId: 's1',
-          memberId: 'm1',
           amount: 0,
-          paymentDate: '2024-01-15',
           method: 'cash',
         })
       ).toThrow();
@@ -232,9 +228,7 @@ describe('Schemas', () => {
       expect(() =>
         createPaymentSchema.parse({
           subscriptionId: 's1',
-          memberId: 'm1',
           amount: -100,
-          paymentDate: '2024-01-15',
           method: 'cash',
         })
       ).toThrow();

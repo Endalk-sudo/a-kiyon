@@ -12,6 +12,11 @@ import { normalizePhone, phoneToEmail } from '../lib/phone-auth';
  *
  * Users without a phone number are left alone and keep email login.
  *
+ * After the auth migration, the `users` collection is scanned for orphaned
+ * docs — docs whose ID is not a Firebase Auth UID (created by the pre-phone
+ * code, which used a random doc ID and never linked it to the user). They
+ * are deleted. Only Firestore docs are removed, never auth users.
+ *
  * Run against the emulator for a dry check, or against production with the
  * real service-account env vars:
  *   pnpm exec tsx src/scripts/migrate-phone-login.ts
@@ -67,6 +72,29 @@ async function main() {
   } while (token);
 
   console.log(`\nDone: ${migrated} migrated, ${skipped} skipped, ${failed} failed.`);
+
+  // Orphaned users-doc cleanup: the pre-phone code created `users` docs with
+  // random IDs that were never linked to an auth user. Delete any doc whose
+  // ID does not belong to an existing auth user (auth users are never touched).
+  console.log('\nScanning users collection for orphaned docs...');
+  let orphans = 0;
+  const authUids = new Set<string>();
+  token = undefined;
+  do {
+    const page = await adminAuth.listUsers(1000, token);
+    for (const u of page.users) authUids.add(u.uid);
+    token = page.pageToken || undefined;
+  } while (token);
+
+  const docs = await adminDb.collection('users').listDocuments();
+  for (const ref of docs) {
+    if (authUids.has(ref.id)) continue;
+    await ref.delete();
+    console.log(`  ORPHAN DELETED users/${ref.id}`);
+    orphans += 1;
+  }
+  console.log(`Orphaned docs: ${orphans} deleted.`);
+
   if (failed > 0) process.exitCode = 1;
 }
 

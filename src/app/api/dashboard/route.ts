@@ -18,7 +18,10 @@ export const GET = apiHandler(async (request: NextRequest) => {
 
   const now = new Date();
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // "This month" follows the Ethiopian calendar (matching the revenue chart
+  // below) instead of a Gregorian month boundary.
+  const todayEth = gregorianToEthiopian(now);
+  const startOfMonth = ethiopianToGregorian(todayEth.year, todayEth.month, 1);
 
   const totalMembers = await countDocs('members', [['isDeleted', '==', false]]);
   const activeSubscriptions = await countDocs('subscriptions', [['status', '==', 'active']]);
@@ -131,7 +134,6 @@ export const GET = apiHandler(async (request: NextRequest) => {
 
   // Revenue grouped by Ethiopian calendar month — the last 6 EC months
   // (Meskerem..Pagume boundaries), labelled with both locale month names.
-  const todayEth = gregorianToEthiopian(now);
   const ecMonths: { year: number; month: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     let month = todayEth.month - i;

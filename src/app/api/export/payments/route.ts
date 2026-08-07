@@ -36,7 +36,8 @@ export const GET = apiHandler(async (request: NextRequest) => {
     const receiptNumber = payment.receiptNumber || '';
     const amount = String(payment.amount);
     const method = payment.method || '';
-    const dateEC = formatEthiopianDate(new Date(payment.paymentDate));
+    const paymentDate = new Date(payment.paymentDate);
+    const dateEC = Number.isNaN(paymentDate.getTime()) ? '' : formatEthiopianDate(paymentDate);
     const voided = payment.isVoided ? 'Yes' : 'No';
 
     return [

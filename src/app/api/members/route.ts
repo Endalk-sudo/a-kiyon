@@ -10,14 +10,17 @@ import { generateReceiptNumber } from '@/services/payment.service';
 import { NextRequest } from 'next/server';
 
 export const GET = apiHandler(async (request: NextRequest) => {
-  await getSessionOrThrow(undefined, request);
+  const session = await getSessionOrThrow(undefined, request);
 
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, parseIntParam(searchParams.get('page'), 1));
   const limit = Math.min(100, Math.max(1, parseIntParam(searchParams.get('limit'), 20)));
   const search = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || '';
-  const showDeleted = searchParams.get('showDeleted') === 'true';
+  // Soft-deleted members' full PII is only exposed to owner/manager.
+  const showDeleted =
+    searchParams.get('showDeleted') === 'true' &&
+    (session.role === 'owner' || session.role === 'manager');
 
   await autoExpireSubscriptions();
 
@@ -54,7 +57,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
     const paymentStr = String(data.paymentDate).trim();
     if (ethiopianPattern.test(paymentStr)) {
       const parsed = parseEthiopianDate(paymentStr);
-      if (parsed.success && parsed.date) paymentDateValue = parsed.date;
+      if (!parsed.success || !parsed.date) return apiError(parsed.error || 'Invalid Ethiopian date format');
+      paymentDateValue = parsed.date;
     } else {
       const d = new Date(paymentStr);
       if (!isNaN(d.getTime())) paymentDateValue = d;

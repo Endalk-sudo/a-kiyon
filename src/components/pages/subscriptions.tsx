@@ -45,7 +45,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import {
   Pagination,
   PaginationContent,
@@ -63,32 +62,13 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { StatusBadge, type StatusType } from '@/components/status-badge';
+import type { SubscriptionRecord } from '@/lib/api-types';
 
 const PAGE_LIMIT = 20;
 
 // Types
-interface Member {
-  id: string;
-  firstName: string;
-  lastName: string;
-  photo?: string | null;
-  photoThumb?: string | null;
-}
-
-interface Subscription {
-  id: string;
-  memberId: string;
-  serviceId: string;
-  startDate: string;
-  endDate: string;
-  status: string;
-  priceSnapshot: number;
-  hasVoidedPayment?: boolean;
-  voidedPaymentNote?: string | null;
-  notes?: string | null;
-  member: Member;
-  service: { id: string; name: string; nameAm: string | null; price: number; duration: number };
-}
+type Subscription = SubscriptionRecord;
 
 type SubscriptionStatus = 'all' | 'active' | 'expired' | 'cancelled';
 
@@ -98,34 +78,6 @@ const statusFilters: { value: SubscriptionStatus; label: string }[] = [
   { value: 'expired', label: 'Expired' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
-
-function SubscriptionStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { label: string; className: string }> = {
-    active: {
-      label: 'Active',
-      className: 'bg-emerald-500 hover:bg-emerald-500 text-white border-emerald-500',
-    },
-    expired: {
-      label: 'Expired',
-      className: 'bg-red-500 hover:bg-red-500 text-white border-red-500',
-    },
-    cancelled: {
-      label: 'Cancelled',
-      className: 'bg-gray-400 hover:bg-gray-400 text-white border-gray-400',
-    },
-  };
-
-  const c = config[status] || { label: status, className: '' };
-
-  return (
-    <Badge variant="default" className={`${c.className} text-xs px-2.5 py-0.5 font-medium rounded-full`}>
-      <span className="flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-white" />
-        {c.label}
-      </span>
-    </Badge>
-  );
-}
 
 function VoidedPaymentNote({ sub }: { sub: Subscription }) {
   if (!sub.hasVoidedPayment && !sub.voidedPaymentNote) return null;
@@ -146,7 +98,7 @@ export function SubscriptionsPage() {
   const [pagination, setPagination] = useState({
     total: 0,
     page: 1,
-    limit: 10,
+    limit: PAGE_LIMIT,
     totalPages: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -268,16 +220,12 @@ export function SubscriptionsPage() {
     setCreateMemberSearch('');
     setCreateMemberSearchDebounced('');
     setCreateDialogOpen(true);
-    if (createMembers.length === 0 || createServices.length === 0) {
+    if (createServices.length === 0) {
       try {
-        const [membersRes, servicesRes] = await Promise.all([
-          membersApi.list({ limit: 100 }),
-          servicesApi.list({ includeInactive: false }),
-        ]);
-        setCreateMembers((membersRes as { data: Array<{ id: string; firstName: string; lastName: string; phone: string | null }> }).data || []);
+        const servicesRes = await servicesApi.list({ includeInactive: false });
         setCreateServices((servicesRes as { data: Array<{ id: string; name: string; price: number; duration: number }> }).data || []);
       } catch {
-        toast.error(t(locale, 'Failed to load members and services', 'አባላትን እና አገልግሎቶችን መጫን አልተሳካም'));
+        toast.error(t(locale, 'Failed to load services', 'አገልግሎቶችን መጫን አልተሳካም'));
       }
     }
   };
@@ -451,7 +399,7 @@ export function SubscriptionsPage() {
                     {formatDate(sub.endDate)}
                   </TableCell>
                   <TableCell>
-                    <SubscriptionStatusBadge status={sub.status} />
+                    <StatusBadge status={sub.status as StatusType} size="sm" />
                     <VoidedPaymentNote sub={sub} />
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm font-medium">
@@ -537,7 +485,7 @@ export function SubscriptionsPage() {
                     {formatMemberName(sub.member)}
                   </span>
                 </div>
-                <SubscriptionStatusBadge status={sub.status} />
+                <StatusBadge status={sub.status as StatusType} size="sm" />
               </div>
               <VoidedPaymentNote sub={sub} />
               <p className="text-sm text-muted-foreground">{sub.service.name}</p>

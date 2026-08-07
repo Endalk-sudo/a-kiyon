@@ -16,6 +16,67 @@ function parseDateString(dateStr: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+export type PaymentForRecompute = {
+  createdAt?: string | null;
+  paymentDate?: string | null;
+  previousExtendedTo?: string | null;
+  extendedTo?: string | null;
+};
+
+/**
+ * Recompute a subscription's end date from its remaining non-voided payments.
+ *
+ * The first remaining payment anchors validity at its own `extendedTo` (the
+ * state it established), and every later payment re-applies the money-in math
+ * of `recordAndExtendPayment`: `end = max(end, paymentDate) + duration`. This
+ * means voiding a payment claws back its days from every later payment that
+ * extended from it — unless a later payment was recorded after the clawed-back
+ * validity had lapsed, in which case its days honestly restart from its own
+ * payment date.
+ *
+ * `fallbackAnchor` (the voided payment's `previousExtendedTo`) covers legacy
+ * rows whose first remaining payment has no rollback metadata.
+ *
+ * Used as the single rollback rule by `voidPayment` and `voidLegacyPayment`.
+ */
+export function recomputeEndDate(
+  payments: PaymentForRecompute[],
+  startDate: string | null | undefined,
+  duration: number | null | undefined,
+  fallbackAnchor?: string | null,
+): Date | null {
+  if (payments.length === 0) return null;
+  if (!startDate) return null;
+  const start = new Date(startDate);
+  if (isNaN(start.getTime()) || !Number.isFinite(duration) || (duration ?? 0) <= 0) return null;
+
+  const chronological = [...payments].sort((a, b) =>
+    (a.createdAt || '').localeCompare(b.createdAt || ''),
+  );
+
+  const first = chronological[0];
+  const anchor = first.extendedTo ? new Date(first.extendedTo) : null;
+  const fallback = fallbackAnchor ? new Date(fallbackAnchor) : null;
+  let end: Date;
+  if (anchor && !isNaN(anchor.getTime())) {
+    end = anchor;
+  } else if (fallback && !isNaN(fallback.getTime())) {
+    end = fallback;
+  } else {
+    end = new Date(start);
+  }
+  if (end.getTime() < start.getTime()) end = new Date(start);
+
+  for (const p of chronological.slice(1)) {
+    const paymentDate = p.paymentDate ? new Date(p.paymentDate) : null;
+    if (paymentDate && !isNaN(paymentDate.getTime()) && paymentDate.getTime() > end.getTime()) {
+      end.setTime(paymentDate.getTime());
+    }
+    end.setDate(end.getDate() + (duration as number));
+  }
+  return end;
+}
+
 export type RecordAndExtendResult =
   | {
       ok: true;
@@ -85,10 +146,8 @@ export async function recordAndExtendPayment(data: {
   if (!service.isActive) return { ok: false, reason: 'service_inactive' };
   if (data.amount !== undefined && data.amount !== service.price) return { ok: false, reason: 'amount_mismatch' };
 
-  const amount = data.amount ?? service.price;
   const now = new Date();
   const receiptNumber = generateReceiptNumber();
-
   // The subscription is read INSIDE the transaction so concurrent renewals
   // each extend from the latest committed end date. Without this, two
   // simultaneous payments on the same subscription would both compute the
@@ -110,6 +169,23 @@ export async function recordAndExtendPayment(data: {
       return { error: 'subscription_inactive' as const };
     }
 
+    // All validity checks are re-read INSIDE the transaction: a member
+    // soft-deleted (or service deactivated/repriced) after the fast-fail
+    // reads above must not receive a payment.
+    const memberSnap = await tx.get(db.collection('members').doc(sub.memberId));
+    if (!memberSnap.exists || memberSnap.data()?.isDeleted) {
+      return { error: 'member_not_found' as const };
+    }
+
+    const serviceSnap = await tx.get(db.collection('services').doc(sub.serviceId));
+    if (!serviceSnap.exists) return { error: 'service_not_found' as const };
+    const svc = serviceSnap.data() as { price: number; isActive: boolean };
+    if (!svc.isActive) return { error: 'service_inactive' as const };
+    if (data.amount !== undefined && data.amount !== svc.price) {
+      return { error: 'amount_mismatch' as const };
+    }
+    const amount = data.amount ?? svc.price;
+
     const currentEndDate = new Date(sub.endDate);
     const startDate = currentEndDate > now ? currentEndDate : now;
     const newEndDate = new Date(startDate);
@@ -119,6 +195,8 @@ export async function recordAndExtendPayment(data: {
     tx.update(subRef, {
       endDate: newEndDateIso,
       status: 'active',
+      hasVoidedPayment: false,
+      voidedPaymentNote: null,
       updatedAt: now.toISOString(),
     });
 
@@ -144,6 +222,7 @@ export async function recordAndExtendPayment(data: {
       paymentId: payRef.id,
       newEndDateIso,
       sub,
+      amount,
     };
   });
 
@@ -151,7 +230,7 @@ export async function recordAndExtendPayment(data: {
     return { ok: false, reason: result.error };
   }
 
-  const { paymentId, newEndDateIso, sub } = result;
+  const { paymentId, newEndDateIso, sub, amount } = result;
 
   return {
     ok: true,
@@ -244,10 +323,11 @@ export async function voidPayment(id: string, voidedBy: string) {
       : null;
     const serviceName = serviceSnap?.exists ? (serviceSnap.data() as { name: string }).name : undefined;
 
-    // Latest non-voided payment on this subscription (excluding the one being
-    // voided). Its extendedTo is the correct rollback target — never
-    // `payment.previousExtendedTo` by itself, which can point to a payment
-    // that was itself voided earlier (validity backed by refunded money).
+    // Remaining non-voided payments on this subscription (excluding the one
+    // being voided). Validity is recomputed from them — never from the voided
+    // payment's own `previousExtendedTo` by itself, which can point to a
+    // payment that was itself voided earlier (validity backed by refunded
+    // money).
     const remainingPayments = (
       await tx.get(
         db
@@ -257,7 +337,16 @@ export async function voidPayment(id: string, voidedBy: string) {
           .orderBy('createdAt', 'desc'),
       )
     ).docs
-      .map((d) => ({ id: d.id, ...d.data() }) as { id: string; extendedTo?: string | null })
+      .map(
+        (d) =>
+          ({
+            id: d.id,
+            createdAt: d.data().createdAt,
+            paymentDate: d.data().paymentDate,
+            previousExtendedTo: d.data().previousExtendedTo,
+            extendedTo: d.data().extendedTo,
+          }) as PaymentForRecompute & { id: string },
+      )
       .filter((p) => p.id !== id);
 
     const now = new Date();
@@ -267,40 +356,28 @@ export async function voidPayment(id: string, voidedBy: string) {
       isVoided: true,
       voidedAt,
       voidedBy,
+      updatedAt: voidedAt,
     });
 
     if (subscription) {
-      let rolledBackEndDate: Date | null = remainingPayments[0]?.extendedTo
-        ? new Date(remainingPayments[0].extendedTo)
-        : null;
+      let rolledBackEndDate: Date | null = null;
 
-      // The remaining payment lacks rollback metadata (legacy row) — fall back
-      // to the voided payment's own previous state.
-      if (!rolledBackEndDate && payment.previousExtendedTo) {
-        rolledBackEndDate = new Date(payment.previousExtendedTo);
-      }
-
-      // Reconstruct from the start date when no metadata exists at all
-      // (mirrors the legacy-void reconstruction).
-      if (
-        remainingPayments.length > 0 &&
-        (!rolledBackEndDate || isNaN(rolledBackEndDate.getTime()))
-      ) {
+      if (remainingPayments.length > 0) {
+        // Re-simulate the remaining payments. This is the financially correct
+        // rollback: voiding a middle payment claws back its days from every
+        // later payment that extended from it.
         if (serviceSnap?.exists && subscription.startDate) {
-          const base = new Date(subscription.startDate);
-          if (!isNaN(base.getTime())) {
-            rolledBackEndDate = new Date(base);
-            rolledBackEndDate.setDate(
-              rolledBackEndDate.getDate() +
-                (serviceSnap.data() as { duration: number }).duration * remainingPayments.length,
-            );
-          }
+          const duration = (serviceSnap.data() as { duration?: number }).duration;
+          rolledBackEndDate = recomputeEndDate(
+            remainingPayments,
+            subscription.startDate,
+            duration,
+            payment.previousExtendedTo,
+          );
         }
       }
 
-      const rolledBackValid = rolledBackEndDate !== null && !isNaN(rolledBackEndDate.getTime());
-
-      if (rolledBackValid && rolledBackEndDate) {
+      if (rolledBackEndDate && !isNaN(rolledBackEndDate.getTime())) {
         const status =
           subscription.status === 'cancelled'
             ? 'cancelled'
@@ -404,6 +481,7 @@ async function voidLegacyPayment(id: string, voidedBy: string) {
     voidedBy: string;
     notes: string | null;
     createdBy: string;
+    previousExtendedTo?: string | null;
   }>('payments', id, {
     isVoided: true,
     voidedAt: new Date().toISOString(),
@@ -430,8 +508,10 @@ async function voidLegacyPayment(id: string, voidedBy: string) {
     const now = new Date();
 
     const otherPayments = (await getDocs<{
+      createdAt?: string;
+      paymentDate?: string;
+      previousExtendedTo?: string | null;
       extendedTo?: string | null;
-      receiptNumber: string;
     }>('payments', [
       ['subscriptionId', '==', payment.subscriptionId],
       ['isVoided', '==', false],
@@ -450,20 +530,16 @@ async function voidLegacyPayment(id: string, voidedBy: string) {
         });
       }
     } else {
-      const mostRecent = otherPayments[0];
-      let rolledBackEndDate: Date | null = mostRecent.extendedTo
-        ? new Date(mostRecent.extendedTo)
-        : null;
-
-      // Reconstruct from the start date when no metadata exists at all.
-      if (!rolledBackEndDate || isNaN(rolledBackEndDate.getTime())) {
-        if (service && subscription.startDate) {
-          const base = new Date(subscription.startDate);
-          if (!isNaN(base.getTime())) {
-            rolledBackEndDate = new Date(base);
-            rolledBackEndDate.setDate(rolledBackEndDate.getDate() + service.duration * otherPayments.length);
-          }
-        }
+      // Re-simulate the remaining payments (same rule as the transactional
+      // void path — claw back the voided payment's days).
+      let rolledBackEndDate: Date | null = null;
+      if (service && subscription.startDate) {
+        rolledBackEndDate = recomputeEndDate(
+          otherPayments,
+          subscription.startDate,
+          service.duration,
+          payment.previousExtendedTo,
+        );
       }
 
       const status = rolledBackEndDate && rolledBackEndDate >= now ? 'active' : 'expired';
@@ -536,7 +612,11 @@ export async function listPayments(options: PaymentListOptions = {}) {
 
   // Search path — matches receipt number or member name; filter + paginate in
   // memory so the result is consistent across pages (client-side filtering of
-  // one page is broken once pagination kicks in).
+  // one page is broken once pagination kicks in). Firestore has no substring
+  // search, so this is bounded by a hard cap on the most recent payments:
+  // results are ordered `paymentDate desc`, so the cap only truncates
+  // ancient records (searches are overwhelmingly for recent receipts).
+  const SEARCH_FETCH_CAP = 2000;
   if (search) {
     const term = search.toLowerCase();
     const allMembers = await getDocs<{ firstName: string; lastName: string }>('members');
@@ -546,7 +626,7 @@ export async function listPayments(options: PaymentListOptions = {}) {
         .map((m) => m.id),
     );
 
-    const allPayments = await getDocs<PaymentDoc>('payments', where, ['paymentDate', 'desc']);
+    const allPayments = await getDocs<PaymentDoc>('payments', where, ['paymentDate', 'desc'], SEARCH_FETCH_CAP);
     const filtered = allPayments.filter(
       (p) =>
         p.receiptNumber.toLowerCase().includes(term) ||
