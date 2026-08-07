@@ -21,14 +21,46 @@ import {
 } from 'firebase/firestore';
 import { normalizePhone, phoneToEmail } from './phone-auth';
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'demo-api-key',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'localhost',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'demo-a-kiyon',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'demo-a-kiyon.firebasestorage.app',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_SENDER_ID || '000000000000',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:000000000000:web:0000000000000000000000',
-};
+const isEmulator = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
+
+const FIREBASE_CLIENT_VARS = [
+  'NEXT_PUBLIC_FIREBASE_API_KEY',
+  'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+  'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  'NEXT_PUBLIC_FIREBASE_SENDER_ID',
+  'NEXT_PUBLIC_FIREBASE_APP_ID',
+] as const;
+
+const missingClientVars = FIREBASE_CLIENT_VARS.filter((name) => !process.env[name]);
+
+// Fail loudly in the browser instead of silently initializing against a demo
+// project. Server-side (build/SSR) stays silent — the client config is only
+// consumed in the browser, and CI builds without NEXT_PUBLIC_* variables.
+if (!isEmulator && missingClientVars.length > 0 && typeof window !== 'undefined') {
+  throw new Error(
+    `Missing Firebase client configuration: ${missingClientVars.join(', ')}. ` +
+      'Set these NEXT_PUBLIC_FIREBASE_* variables in your deployment environment and redeploy.',
+  );
+}
+
+const firebaseConfig = isEmulator
+  ? {
+      apiKey: 'demo-api-key',
+      authDomain: 'localhost',
+      projectId: 'demo-a-kiyon',
+      storageBucket: 'demo-a-kiyon.firebasestorage.app',
+      messagingSenderId: '000000000000',
+      appId: '1:000000000000:web:0000000000000000000000',
+    }
+  : {
+      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_SENDER_ID,
+      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    };
 
 function getClientApp() {
   if (getApps().length > 0) return getApps()[0];
@@ -41,7 +73,7 @@ export const auth = getAuth(app);
 export const clientStorage = getStorage(app);
 export const clientDb = getFirestore(app);
 
-if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true') {
+if (typeof window !== 'undefined' && isEmulator) {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
   connectStorageEmulator(clientStorage, 'localhost', 9199);
   connectFirestoreEmulator(clientDb, 'localhost', 8080);

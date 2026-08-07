@@ -9,16 +9,24 @@ const firebaseAdminConfig = {
   privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
 };
 
+function missingAdminVars(): string[] {
+  return Object.entries(firebaseAdminConfig)
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+}
+
 function getAdminApp() {
   if (getApps().length > 0) return getApps()[0];
 
   const useEmulator = process.env.FIREBASE_EMULATOR === 'true';
-  const hasConfig = firebaseAdminConfig.projectId && firebaseAdminConfig.clientEmail && firebaseAdminConfig.privateKey;
+  const missing = missingAdminVars();
 
-  if (!hasConfig && !useEmulator) {
+  if (missing.length > 0 && !useEmulator) {
     throw new Error(
-      'Missing Firebase Admin credentials. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, ' +
-      'FIREBASE_PRIVATE_KEY, or set FIREBASE_EMULATOR=true for local development.'
+      `Missing Firebase Admin credentials: ${missing.join(', ')}. ` +
+      'Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in the deployment ' +
+      'environment (from the Firebase console service-account JSON), or set FIREBASE_EMULATOR=true ' +
+      'for local development.'
     );
   }
 
@@ -27,9 +35,36 @@ function getAdminApp() {
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'demo-a-kiyon.firebasestorage.app',
   };
 
-  const app = hasConfig
-    ? initializeApp({ credential: cert(firebaseAdminConfig as Record<string, string>), ...options })
-    : initializeApp(options);
+  let app;
+  if (missing.length === 0) {
+    const privateKey = firebaseAdminConfig.privateKey;
+    if (!privateKey?.includes('-----BEGIN') || !privateKey.includes('-----END')) {
+      throw new Error(
+        'FIREBASE_PRIVATE_KEY is set but does not look like a PEM key. ' +
+        'Paste the complete "-----BEGIN PRIVATE KEY-----" ... "-----END PRIVATE KEY-----" value ' +
+        'from the service-account JSON (a single line with literal \\n sequences also works).'
+      );
+    }
+    try {
+      app = initializeApp({
+        credential: cert({
+          projectId: firebaseAdminConfig.projectId,
+          clientEmail: firebaseAdminConfig.clientEmail,
+          privateKey,
+        }),
+        ...options,
+      });
+    } catch (error) {
+      console.error('[firebase-admin] Failed to initialize the Firebase Admin app:', error);
+      throw new Error(
+        'Failed to initialize Firebase Admin with the provided credentials. ' +
+        'Check FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and that FIREBASE_PRIVATE_KEY is the ' +
+        'complete, unquoted PEM key.'
+      );
+    }
+  } else {
+    app = initializeApp(options);
+  }
 
   if (useEmulator) {
     if (!process.env.FIRESTORE_EMULATOR_HOST) process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
