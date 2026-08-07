@@ -57,7 +57,10 @@
       "@parcel/watcher",
       "@swc/core",
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "jwks-rsa>jose": "4.15.9"
+    }
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
