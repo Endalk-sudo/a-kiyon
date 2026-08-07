@@ -78,7 +78,7 @@ function formatBytes(bytes: number): string {
 
 const FREE_TIERS = {
   firestore: { storage: '1 GB', reads: '50K/day', writes: '20K/day' },
-  storage: { storage: '5 GB', download: '1 GB/day' },
+  storage: { storage: '1 GB', download: '10 GB/month' },
 };
 
 function UsageBar({ used, label }: { used: number; label: string }) {

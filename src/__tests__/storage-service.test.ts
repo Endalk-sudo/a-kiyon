@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { db } from '@/lib/db';
 import { adminBucket } from '@/lib/firebase-admin';
+import { firebaseFileStore } from '@/lib/file-storage';
 import {
   findStaleMembers,
   monthsAgoIso,
@@ -88,6 +89,17 @@ describe('Storage Service (integration)', () => {
       expect(photoPathFromUrl('uploads/abc-123.webp')).toBe('uploads/abc-123.webp');
     });
 
+    it('parses Vercel Blob URLs', () => {
+      expect(
+        photoPathFromUrl('https://abcd1234.public.blob.vercel-storage.com/uploads/abc-123.webp'),
+      ).toBe('uploads/abc-123.webp');
+      expect(
+        photoPathFromUrl(
+          'https://abcd1234.public.blob.vercel-storage.com/uploads/abc-123.webp?download=1',
+        ),
+      ).toBe('uploads/abc-123.webp');
+    });
+
     it('returns null for empty or invalid input', () => {
       expect(photoPathFromUrl(null)).toBeNull();
       expect(photoPathFromUrl(undefined)).toBeNull();
@@ -173,6 +185,7 @@ describe('Storage Service (integration)', () => {
 
   describe('Purge functions (storage emulator)', () => {
     const bucket = adminBucket!;
+    const store = firebaseFileStore(bucket);
     const TEST_FILES = [
       'uploads/ref-1.webp',
       'uploads/thumbs/ref-1-thumb.webp',
@@ -219,7 +232,7 @@ describe('Storage Service (integration)', () => {
     it('purgeOrphanedFiles deletes only unreferenced uploads and thumbnails', async () => {
       await seedMember('OrphanRef', emulatorUrl('uploads/ref-1.webp'), false);
 
-      const deleted = await purgeOrphanedFiles(bucket);
+      const deleted = await purgeOrphanedFiles(store);
       expect(deleted).toBeGreaterThanOrEqual(2);
 
       const remaining = await listUploads();
@@ -232,7 +245,7 @@ describe('Storage Service (integration)', () => {
     });
 
     it('purgeDeletedMemberPhotos deletes photos of soft-deleted members only', async () => {
-      const deleted = await purgeDeletedMemberPhotos(bucket);
+      const deleted = await purgeDeletedMemberPhotos(store);
       expect(deleted).toBeGreaterThanOrEqual(2);
 
       const remaining = await listUploads();

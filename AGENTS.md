@@ -48,9 +48,9 @@ pnpm run test           # vitest (needs Firebase emulators running)
 ## Key conventions
 
 - `src/lib/api-client.ts` — typed fetch wrapper, auto-attaches Firebase token. Types from `src/lib/api-types.ts`.
-- **Photo uploads** → `POST /api/upload` with `sharp` (WebP q80 + 200×200 thumbnail). Uploads to Firebase Storage bucket.
+- **Photo uploads** → `POST /api/upload` with `sharp` (WebP q80 + 200×200 thumbnail). Production stores files in **Vercel Blob** (free tier — Firebase Storage requires the paid Blaze plan) via the `FileStore` adapter in `src/lib/file-storage.ts` (`getFileStore()` selects Blob when `BLOB_READ_WRITE_TOKEN` is set, Firebase Storage emulator otherwise). Paths stay `uploads/<uuid>.webp` + `uploads/thumbs/<uuid>-thumb.webp` (`addRandomSuffix: false`) so purge logic is provider-agnostic.
 - **Dates** are stored as ISO strings, displayed in Ethiopian Calendar via `src/lib/ethiopian-calendar.ts`.
-- **Storage monitoring** at `/api/storage` — document counts, size estimates, file breakdown, stale-member detection (`GET ?staleMonths=6` via `findStaleMembers` — non-deleted members whose latest non-voided payment predates the cutoff, or never paid), cleanup actions (`purge-orphaned-files` is **reference-based** — parses `member.photo` URLs via `photoPathFromUrl`, never filename-derived ids; `purge-deleted-member-photos`; `purge-deleted-members` deletes photos first and chunks doc deletion into 400-write batches). UI at `Storage` page (owner only) with Data Hygiene soft-delete list + summary card in Settings. Photos are never deleted automatically.
+- **Storage monitoring** at `/api/storage` — document counts, size estimates, file breakdown (via `FileStore.list()` — sizes returned directly, no metadata round-trips), stale-member detection (`GET ?staleMonths=6` via `findStaleMembers` — non-deleted members whose latest non-voided payment predates the cutoff, or never paid), cleanup actions (`purge-orphaned-files` is **reference-based** — parses `member.photo` URLs via `photoPathFromUrl`, never filename-derived ids; `purge-deleted-member-photos`; `purge-deleted-members` deletes photos first and chunks doc deletion into 400-write batches). Purge functions take a `FileStore` (see tests). UI at `Storage` page (owner only) with Data Hygiene soft-delete list + summary card in Settings. Photos are never deleted automatically. Blob free tier: 1 GB storage / 10 GB transfer per month (hard cap, never bills).
 - **Receipt printing** — generated client-side in the payments page (HTML via `window.open()`, hidden iframe fallback when popup blocked).
 - **Error boundary** — `page.tsx` wraps `<PageComponent>` in a class-based `ErrorBoundary` to catch render crashes gracefully.
 - **Mobile-responsive UI** — data tables use `hidden md:block` (desktop table) + `md:hidden` (card layout) pattern. Icon buttons minimum 36px (`h-9 w-9`) for touch targets. Form grids use responsive column counts (e.g. `grid-cols-1 sm:grid-cols-3`).
@@ -64,7 +64,8 @@ pnpm run test           # vitest (needs Firebase emulators running)
 | `pnpm run dev` | Dev server on port 3000 |
 | `pnpm run lint` | ESLint |
 | `pnpm run build` | Production build (typecheck + compile) |
-| `pnpm run seed` | Seed Firestore + Firebase Auth with demo data |
+| `pnpm run seed` | Seed Firestore + Firebase Auth with demo data (emulator only) |
+| `pnpm run create-prod-users` | Create production owner/manager/reader accounts (refuses in emulator mode; passwords from `OWNER_PASSWORD`/`MANAGER_PASSWORD`/`READER_PASSWORD`) |
 | `pnpm run cron-expire` | Manual subscription expiry batch update |
 | `pnpm run test` | Vitest (run `pnpm run firebase:emulators` first) |
 | `pnpm run firebase:emulators` | Start Firebase emulators (Firestore 8080, Auth 9099, Storage 9199, UI 4000) |
@@ -76,5 +77,5 @@ pnpm run test           # vitest (needs Firebase emulators running)
 
 - **CI**: GitHub Actions (`.github/workflows/ci.yml`) on push to `dev`/`main` + PRs — pnpm install, `tsc --noEmit`, lint, build, then `firebase emulators:exec "pnpm run test"` (fresh emulators, no secrets needed).
 - Self-hosted: Caddy reverse proxy on `:81` → `localhost:3000` (see `Caddyfile`).
-- Required env: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `NEXT_PUBLIC_FIREBASE_*` vars. Set `FIREBASE_EMULATOR=true` + `NEXT_PUBLIC_FIREBASE_EMULATOR=true` for local dev.
-- **Composite indexes**: queries in code must be covered by `firestore.indexes.json`. The emulator auto-creates indexes, so missing ones only fail in production. Deploy with `firebase deploy --only firestore:indexes` before shipping code that needs a new index (e.g. `payments(subscriptionId ASC, isVoided ASC, createdAt DESC)` added for void rollback).
+- Required env: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `NEXT_PUBLIC_FIREBASE_*` vars. Set `FIREBASE_EMULATOR=true` + `NEXT_PUBLIC_FIREBASE_EMULATOR=true` for local dev. Production photo storage needs `BLOB_READ_WRITE_TOKEN` (Vercel Blob).
+- **Composite indexes**: queries in code must be covered by `firestore.indexes.json`. The emulator auto-creates indexes, so missing ones only fail in production. Deploy with `firebase deploy --only firestore:indexes,firestore:rules` before shipping code that needs a new index (e.g. `payments(subscriptionId ASC, isVoided ASC, createdAt DESC)` added for void rollback). Storage rules are not deployed — the project intentionally has no Firebase Storage (Vercel Blob instead).

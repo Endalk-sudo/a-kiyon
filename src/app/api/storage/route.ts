@@ -3,7 +3,7 @@ import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { countDocs, getDocs } from '@/lib/db';
-import { adminBucket } from '@/lib/firebase-admin';
+import { getFileStore, type FileStore } from '@/lib/file-storage';
 import {
   DEFAULT_STALE_MONTHS,
   findStaleMembers,
@@ -24,35 +24,20 @@ async function estimateCollectionSize(name: string): Promise<{ count: number; es
   return { count, estimatedBytes: Math.round(count * avgSize) };
 }
 
-async function getStorageUsage() {
-  if (!adminBucket) return { files: 0, bytes: 0, filesByPrefix: [] as { prefix: string; count: number; bytes: number }[] };
-
-  const [files] = await adminBucket.getFiles();
+async function getStorageUsage(store: FileStore) {
+  const files = await store.list();
   const prefixMap = new Map<string, { count: number; bytes: number }>();
   let totalBytes = 0;
 
-  // Metadata calls are one HTTP round-trip per file — run them in parallel
-  // instead of serially.
-  const sizes = await Promise.all(
-    files.map(async (file) => {
-      try {
-        const [metadata] = await file.getMetadata();
-        return Number(metadata.size) || 0;
-      } catch {
-        return 0;
-      }
-    }),
-  );
-
-  files.forEach((file, i) => {
-    totalBytes += sizes[i];
-    const parts = file.name.split('/');
+  for (const file of files) {
+    totalBytes += file.size;
+    const parts = file.pathname.split('/');
     const prefix = parts.length > 1 ? parts[0] : '(root)';
     const entry = prefixMap.get(prefix) || { count: 0, bytes: 0 };
     entry.count++;
-    entry.bytes += sizes[i];
+    entry.bytes += file.size;
     prefixMap.set(prefix, entry);
-  });
+  }
 
   return {
     files: files.length,
@@ -69,7 +54,7 @@ const MB = KB * KB;
 const GB = MB * KB;
 
 const FIRESTORE_FREE_LIMIT = 1 * GB;
-const STORAGE_FREE_LIMIT = 5 * GB;
+const STORAGE_FREE_LIMIT = 1 * GB; // Vercel Blob free tier
 
 export const GET = apiHandler(async (request: NextRequest) => {
   await getSessionOrThrow(['owner'], request);
@@ -81,7 +66,10 @@ export const GET = apiHandler(async (request: NextRequest) => {
 
   const [collectionStats, storageUsage, staleMembers] = await Promise.all([
     Promise.all(COLLECTIONS.map(estimateCollectionSize)),
-    getStorageUsage(),
+    (async () => {
+      const store = getFileStore();
+      return store ? getStorageUsage(store) : { files: 0, bytes: 0, filesByPrefix: [] };
+    })(),
     findStaleMembers(staleMonths),
   ]);
   const totalDbBytes = collectionStats.reduce((s, c) => s + c.estimatedBytes, 0);
@@ -112,21 +100,21 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
   const { searchParams } = request.nextUrl;
   const action = searchParams.get('action');
 
+  const store = getFileStore();
+  if (!store) return apiError('Storage not configured', 500);
+
   if (action === 'purge-orphaned-files') {
-    if (!adminBucket) return apiError('Storage not configured', 500);
-    const deleted = await purgeOrphanedFiles(adminBucket);
+    const deleted = await purgeOrphanedFiles(store);
     return apiResponse({ message: `Deleted ${deleted} orphaned file(s)` });
   }
 
   if (action === 'purge-deleted-member-photos') {
-    if (!adminBucket) return apiError('Storage not configured', 500);
-    const deleted = await purgeDeletedMemberPhotos(adminBucket);
+    const deleted = await purgeDeletedMemberPhotos(store);
     return apiResponse({ message: `Deleted ${deleted} file(s) from soft-deleted members` });
   }
 
   if (action === 'purge-deleted-members') {
-    if (!adminBucket) return apiError('Storage not configured', 500);
-    const photosDeleted = await purgeDeletedMemberPhotos(adminBucket);
+    const photosDeleted = await purgeDeletedMemberPhotos(store);
     const { members, payments, subscriptions } = await purgeDeletedMembers();
     return apiResponse({
       message: `Permanently deleted ${members} member(s), ${subscriptions} subscription(s), ${payments} payment(s) and ${photosDeleted} photo(s)`,

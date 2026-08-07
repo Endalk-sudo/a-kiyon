@@ -1,5 +1,5 @@
 import { getDocs, batchDelete, chunk } from '@/lib/db';
-import { adminBucket } from '@/lib/firebase-admin';
+import type { FileStore } from '@/lib/file-storage';
 
 export interface StaleMember {
   id: string;
@@ -9,8 +9,6 @@ export interface StaleMember {
   photoThumb?: string | null;
   lastPaymentDate: string | null;
 }
-
-type StorageBucket = NonNullable<typeof adminBucket>;
 
 export const DEFAULT_STALE_MONTHS = 6;
 
@@ -111,8 +109,8 @@ export async function findStaleMembers(months = DEFAULT_STALE_MONTHS): Promise<S
  * Reference-based: every `uploads/` file not present in any member's photo
  * URL is an orphan. Thumbnails are never referenced and always qualify.
  */
-export async function purgeOrphanedFiles(bucket: StorageBucket): Promise<number> {
-  const [files] = await bucket.getFiles({ autoPaginate: true, prefix: 'uploads/' });
+export async function purgeOrphanedFiles(store: FileStore): Promise<number> {
+  const files = await store.list('uploads/');
 
   const members = await getDocs<{ photo?: string | null }>('members');
   const referenced = new Set<string>();
@@ -125,11 +123,11 @@ export async function purgeOrphanedFiles(bucket: StorageBucket): Promise<number>
   }
 
   let deleted = 0;
-  for (const chunkOfFiles of chunk(files.map((f) => f.name))) {
+  for (const chunkOfFiles of chunk(files.map((f) => f.pathname))) {
     const results = await Promise.allSettled(
       chunkOfFiles
         .filter((name) => !referenced.has(name))
-        .map((name) => bucket.file(name).delete()),
+        .map((name) => store.delete(name)),
     );
     deleted += results.filter((r) => r.status === 'fulfilled').length;
   }
@@ -140,7 +138,7 @@ export async function purgeOrphanedFiles(bucket: StorageBucket): Promise<number>
  * Delete photos (and thumbnails) of members that were soft-deleted.
  * Irreversible — only owner-triggered.
  */
-export async function purgeDeletedMemberPhotos(bucket: StorageBucket): Promise<number> {
+export async function purgeDeletedMemberPhotos(store: FileStore): Promise<number> {
   const deletedMembers = await getDocs<{ photo?: string | null }>('members', [['isDeleted', '==', true]]);
 
   const targets: string[] = [];
@@ -153,15 +151,9 @@ export async function purgeDeletedMemberPhotos(bucket: StorageBucket): Promise<n
   let deleted = 0;
   for (const targetChunk of chunk(targets)) {
     const results = await Promise.allSettled(
-      targetChunk.map(async (target) => {
-        const file = bucket.file(target);
-        const [exists] = await file.exists();
-        if (!exists) return false;
-        await file.delete();
-        return true;
-      }),
+      targetChunk.map((target) => store.delete(target)),
     );
-    deleted += results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
+    deleted += results.filter((r) => r.status === 'fulfilled').length;
   }
   return deleted;
 }

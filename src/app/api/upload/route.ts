@@ -4,23 +4,7 @@ import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
-import { adminBucket } from '@/lib/firebase-admin';
-
-type Bucket = NonNullable<typeof adminBucket>;
-
-async function publicUrl(bucket: Bucket, filePath: string) {
-  const file = bucket.file(filePath);
-  if (process.env.FIREBASE_EMULATOR === 'true') {
-    return `http://127.0.0.1:9199/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media`;
-  }
-  const [url] = await file.getSignedUrl({
-    action: 'read',
-    // 1 year — URLs are unauthenticated once issued, so long-lived links
-    // (previously ~25 years) were a leak risk if ever shared.
-    expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-  });
-  return url;
-}
+import { getFileStore } from '@/lib/file-storage';
 
 export const POST = apiHandler(async (request: NextRequest) => {
   await getSessionOrThrow(['owner', 'manager'], request);
@@ -56,40 +40,28 @@ export const POST = apiHandler(async (request: NextRequest) => {
     return apiError('Invalid image file', 400);
   }
 
+  const store = getFileStore();
+  if (!store) return apiError('Storage not configured', 500);
+
   const uuid = randomUUID();
-  const filename = `${uuid}.webp`;
-  const thumbFilename = `${uuid}-thumb.webp`;
+  const filePath = `uploads/${uuid}.webp`;
+  const thumbPath = `uploads/thumbs/${uuid}-thumb.webp`;
 
   image = sharp(buffer).webp({ quality: 80 });
 
   const fullBuffer = await image.clone().toBuffer();
   const thumbBuffer = await image.clone().resize(200, 200, { fit: 'cover' }).toBuffer();
 
-  const bucket = adminBucket;
-  if (!bucket) return apiError('Storage not configured', 500);
-
-  const filePath = `uploads/${filename}`;
-  const thumbPath = `uploads/thumbs/${thumbFilename}`;
-
   try {
-    await bucket.file(filePath).save(fullBuffer, {
-      contentType: 'image/webp',
-    });
+    const [photo, thumb] = await Promise.all([
+      store.save(filePath, fullBuffer, 'image/webp'),
+      store.save(thumbPath, thumbBuffer, 'image/webp'),
+    ]);
 
-    await bucket.file(thumbPath).save(thumbBuffer, {
-      contentType: 'image/webp',
-    });
-
-    const photoUrl = await publicUrl(bucket, filePath);
-    const thumbnailUrl = await publicUrl(bucket, thumbPath);
-
-    return apiResponse({ url: photoUrl, thumbnailUrl });
+    return apiResponse({ url: photo.url, thumbnailUrl: thumb.url });
   } catch (err) {
     // Don't leave orphans behind if a later step fails.
-    await Promise.allSettled([
-      bucket.file(filePath).delete(),
-      bucket.file(thumbPath).delete(),
-    ]);
+    await Promise.allSettled([store.delete(filePath), store.delete(thumbPath)]);
     throw err;
   }
 });
