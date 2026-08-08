@@ -7,6 +7,7 @@ import { initAuth, onAuthChange, decodeTokenPayload, authClient } from '@/lib/au
 import { onSessionExpired } from '@/lib/api-client';
 import { AppLayout } from '@/components/app-layout';
 import { LandingPage } from '@/components/pages/landing';
+import { LoginPage } from '@/components/pages/login-page';
 import { Loader2 } from 'lucide-react';
 
 // Pages are code-split so the initial bundle only contains the landing page,
@@ -99,6 +100,7 @@ export default function Home() {
   const session = useAppStore((s) => s.session);
   const setSession = useAppStore((s) => s.setSession);
   const currentPage = useAppStore((s) => s.currentPage);
+  const publicPage = useAppStore((s) => s.publicPage);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -150,7 +152,7 @@ export default function Home() {
   }
 
   if (!session) {
-    return <LandingPage />;
+    return publicPage === 'login' ? <LoginPage /> : <LandingPage />;
   }
 
   const PageComponent = pageComponents[currentPage] || DashboardPage;

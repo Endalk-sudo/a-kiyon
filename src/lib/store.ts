@@ -11,6 +11,9 @@ export type PageId =
   | 'settings'
   | 'storage';
 
+/** Public (not signed-in) pages — not persisted, so a fresh visit lands on the landing page. */
+export type PublicPage = 'landing' | 'login';
+
 interface Session {
   userId: string;
   email: string;
@@ -23,6 +26,9 @@ export type Theme = 'light' | 'dark';
 interface AppState {
   currentPage: PageId;
   setCurrentPage: (_page: PageId) => void;
+
+  publicPage: PublicPage;
+  setPublicPage: (_page: PublicPage) => void;
 
   session: Session | null;
   setSession: (_session: Session | null) => void;
@@ -56,6 +62,9 @@ export const useAppStore = create<AppState>()(
         currentPage: 'dashboard',
         setCurrentPage: (page) => set({ currentPage: page }),
 
+        publicPage: 'landing',
+        setPublicPage: (page) => set({ publicPage: page }),
+
         session: null,
         setSession: (session) => set({ session }),
 
@@ -76,6 +85,7 @@ export const useAppStore = create<AppState>()(
           const prevLocale = useAppStore.getState().locale;
           set({
             currentPage: 'dashboard',
+            publicPage: 'landing',
             session: null,
             locale: prevLocale,
             sidebarOpen: false,

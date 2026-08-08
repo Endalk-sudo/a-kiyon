@@ -2,184 +2,19 @@
 
 import { useState, useEffect } from 'react';import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { authClient } from '@/lib/auth-client';
-import { normalizePhone, isValidPhone } from '@/lib/phone-auth';
 import { getEthiopianYear } from '@/lib/ethiopian-calendar';
 import { useAppStore } from '@/lib/store';
-import { sanitizeError } from '@/lib/errors';
-import { t } from '@/lib/messages';
-import { toast } from 'sonner';
 import {
   Dumbbell,
   Users,
   Calendar,
   BarChart3,
   ArrowDown,
-  Eye,
-  EyeOff,
-  Loader2,
   CheckCircle,
   TrendingUp,
   CreditCard,
   Shield,
 } from 'lucide-react';
-
-function LoginDialog({ children }: { children: React.ReactNode }) {
-  const setSession = useAppStore((s) => s.setSession);
-  const locale = useAppStore((s) => s.locale);
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [phoneError, setPhoneError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-
-  const validate = (): boolean => {
-    let valid = true;
-    if (!phone.trim()) {
-      setPhoneError(t(locale, 'Phone number is required', 'ስልክ ቁጥር ያስፈልጋል'));
-      valid = false;
-    } else if (!isValidPhone(normalizePhone(phone))) {
-      setPhoneError(t(locale, 'Invalid phone number format', 'የተሳሳተ የስልክ ቁጥር ቅርጸት'));
-      valid = false;
-    } else {
-      setPhoneError('');
-    }
-    if (!password) {
-      setPasswordError(t(locale, 'Password is required', 'የይለፍ ቃል ያስፈልጋል'));
-      valid = false;
-    } else {
-      setPasswordError('');
-    }
-    return valid;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-
-    setLoading(true);
-    try {
-      const { data, error: authError } = await authClient.signIn.phone({
-        phone: normalizePhone(phone),
-        password,
-      });
-      if (authError) {
-        setPhoneError(sanitizeError({ message: authError.message } as Error, locale, 'Invalid phone number or password', 'የተሳሳተ የስልክ ቁጥር ወይም የይለፍ ቃል'));
-        return;
-      }
-      if (data?.user) {
-        const u = data.user as { id: string; email: string; name: string | null; role?: string };
-        setSession({
-          userId: u.id,
-          email: u.email,
-          name: u.name || '',
-          role: u.role || 'manager',
-        });
-        setOpen(false);
-        toast.success(t(locale, 'Welcome back!', 'እንኳን ደህና መጡ!'));
-      }
-    } catch {
-      setPhoneError(t(locale, 'Invalid phone number or password', 'የተሳሳተ የስልክ ቁጥር ወይም የይለፍ ቃል'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const clearPhoneError = () => setPhoneError('');
-  const clearPasswordError = () => setPasswordError('');
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <span className="inline-flex cursor-pointer">{children}</span>
-      </DialogTrigger>
-
-      <DialogContent className="md:max-w-md">
-        <DialogHeader className="text-left">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-              <Dumbbell className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <DialogTitle>Sign In</DialogTitle>
-              <DialogDescription>
-                Enter your phone number and password to access the system
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="login-phone">Phone Number</Label>
-            <Input
-              id="login-phone"
-              type="tel"
-              inputMode="tel"
-              value={phone}
-              onChange={(e) => { setPhone(e.target.value); clearPhoneError(); }}
-              placeholder="+251 9XX XXX XXX"
-              required
-              autoComplete="tel"
-              className={phoneError ? 'border-destructive' : ''}
-            />
-            {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="login-password">Password</Label>
-            <div className="relative">
-              <Input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); clearPasswordError(); }}
-                placeholder="Enter your password"
-                required
-                autoComplete="current-password"
-                className={passwordError ? 'border-destructive' : ''}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
-            <p className="text-right -mt-2 text-xs text-muted-foreground">
-              Forgot your password? Contact your administrator.
-            </p>
-          </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign In
-          </Button>
-          {process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true' && (
-            <div className="pt-2 border-t text-xs text-muted-foreground space-y-1">
-              <p className="font-medium">Demo credentials:</p>
-              <p>Owner: +251911000000 / owner123</p>
-              <p>Manager: +251922000000 / manager123</p>
-            </div>
-          )}
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
   return (
@@ -196,6 +31,7 @@ function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementTy
 }
 
 export function LandingPage() {
+  const setPublicPage = useAppStore((s) => s.setPublicPage);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -255,19 +91,25 @@ export function LandingPage() {
             }`}>
               Features
             </button>
-            <LoginDialog>
-              <Button size="sm" className="h-9 min-w-[100px]" variant={scrolled ? 'default' : 'secondary'}>
-                Sign In
-              </Button>
-            </LoginDialog>
+            <Button
+              size="sm"
+              className="h-9 min-w-[100px]"
+              variant={scrolled ? 'default' : 'secondary'}
+              onClick={() => setPublicPage('login')}
+            >
+              Sign In
+            </Button>
           </div>
 
           <div className="md:hidden">
-            <LoginDialog>
-              <Button size="sm" className="h-9" variant={scrolled ? 'default' : 'secondary'}>
-                Sign In
-              </Button>
-            </LoginDialog>
+            <Button
+              size="sm"
+              className="h-9"
+              variant={scrolled ? 'default' : 'secondary'}
+              onClick={() => setPublicPage('login')}
+            >
+              Sign In
+            </Button>
           </div>
         </div>
       </nav>
@@ -315,11 +157,13 @@ export function LandingPage() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4">
-            <LoginDialog>
-              <Button size="lg" className="min-w-[160px] text-base h-12">
-                Sign In
-              </Button>
-            </LoginDialog>
+            <Button
+              size="lg"
+              className="min-w-[160px] text-base h-12"
+              onClick={() => setPublicPage('login')}
+            >
+              Sign In
+            </Button>
             <Button
               size="lg"
               variant="secondary"
@@ -443,11 +287,13 @@ export function LandingPage() {
           <p className="text-lg text-muted-foreground mb-10 max-w-xl mx-auto leading-relaxed">
             Sign in to manage your members, track subscriptions, and stay on top of your fitness center&apos;s performance.
           </p>
-          <LoginDialog>
-            <Button size="lg" className="min-w-[220px] text-base h-13 px-8">
-              Sign In to Get Started
-            </Button>
-          </LoginDialog>
+          <Button
+            size="lg"
+            className="min-w-[220px] text-base h-13 px-8"
+            onClick={() => setPublicPage('login')}
+          >
+            Sign In to Get Started
+          </Button>
         </div>
       </section>
 
@@ -471,9 +317,7 @@ export function LandingPage() {
               <div className="space-y-2">
                 <button onClick={scrollToTop} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Home</button>
                 <button onClick={scrollToFeatures} className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Features</button>
-                <LoginDialog>
-                  <span className="block text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">Sign In</span>
-                </LoginDialog>
+                <button onClick={() => setPublicPage('login')} className="block text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">Sign In</button>
             </div>
           </div>
             <div>
