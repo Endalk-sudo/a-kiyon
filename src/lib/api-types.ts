@@ -14,8 +14,12 @@ export interface MemberInfo {
   id: string;
   firstName: string;
   lastName: string;
+  /** Render-ready URL (presigned when B2 is configured). */
   photo: string | null;
   photoThumb?: string | null;
+  /** Canonical stored values — safe to persist back on edit. */
+  photoPath?: string | null;
+  photoThumbPath?: string | null;
 }
 
 export interface MemberResponse extends MemberInfo {

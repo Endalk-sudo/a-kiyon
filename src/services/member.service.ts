@@ -1,6 +1,7 @@
 import { getDocById, getDocs, getDocsByIds, countDocs, createDoc, updateDoc, chunk, type Doc, type WhereClause } from '@/lib/db';
 import { computeMemberStatus, findNearestEndDate } from '@/lib/member-status';
 import { calculateNavyBodyFatPercent, type Sex } from '@/lib/body-fat';
+import { resolveMemberPhoto, type ResolvedPhotoUrls } from '@/services/storage.service';
 
 export type MemberListOptions = {
   page?: number;
@@ -58,7 +59,7 @@ export async function listMembers(options: MemberListOptions = {}) {
 
     const withSubs = await attachSubscriptionStatuses(members);
     return {
-      data: withSubs,
+      data: await withPhotoUrls(withSubs),
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -85,9 +86,17 @@ export async function listMembers(options: MemberListOptions = {}) {
   const total = filtered.length;
   const start = (page - 1) * limit;
   return {
-    data: filtered.slice(start, start + limit),
+    data: await withPhotoUrls(filtered.slice(start, start + limit)),
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
+}
+
+async function withPhotoUrls<T extends { photo?: string | null; photoThumb?: string | null }>(
+  items: T[],
+): Promise<Array<T & ResolvedPhotoUrls>> {
+  return Promise.all(
+    items.map(async (item) => ({ ...item, ...(await resolveMemberPhoto(item.photo, item.photoThumb)) })),
+  );
 }
 
 async function attachSubscriptionStatuses(members: Doc<MemberData>[]) {
@@ -155,7 +164,8 @@ export async function getMember(id: string) {
   });
 
   const status = computeMemberStatus(subs);
-  return { ...member, subscriptions: subsWithService, payments: paymentsWithService, status };
+  const photos = await resolveMemberPhoto(member.photo, member.photoThumb);
+  return { ...member, ...photos, subscriptions: subsWithService, payments: paymentsWithService, status };
 }
 
 export async function createMember(data: {

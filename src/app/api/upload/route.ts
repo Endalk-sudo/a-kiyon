@@ -56,8 +56,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
       store.save(filePath, fullBuffer, 'image/webp'),
       store.save(thumbPath, thumbBuffer, 'image/webp'),
     ]);
+    const [previewUrl, previewThumbnailUrl] = await Promise.all([
+      store.getUrl(photo.pathname),
+      store.getUrl(thumb.pathname),
+    ]);
 
-    return apiResponse({ url: photo.url, thumbnailUrl: thumb.url });
+    return apiResponse({ url: photo.url, thumbnailUrl: thumb.url, previewUrl, previewThumbnailUrl });
   } catch (err) {
     // Don't leave orphans behind if a later step fails.
     await Promise.allSettled([store.delete(filePath), store.delete(thumbPath)]);

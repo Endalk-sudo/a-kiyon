@@ -112,7 +112,12 @@ export async function apiUpload<T = unknown>(
 // Uploads
 export const uploadApi = {
   photo: (formData: FormData) =>
-    apiUpload<{ url: string; thumbnailUrl: string }>('/upload', formData),
+    apiUpload<{
+      url: string;
+      thumbnailUrl: string;
+      previewUrl: string;
+      previewThumbnailUrl: string;
+    }>('/upload', formData),
 };
 
 // Storage

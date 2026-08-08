@@ -137,6 +137,7 @@ interface MemberFormData {
   notes: string;
   photo: string | null;
   photoThumb: string | null;
+  photoPreview: string | null;
 }
 
 const emptyFormData: MemberFormData = {
@@ -155,6 +156,7 @@ const emptyFormData: MemberFormData = {
   notes: '',
   photo: null,
   photoThumb: null,
+  photoPreview: null,
 };
 
 const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -398,8 +400,9 @@ export function MembersPage() {
       hip: member.hip?.toString() || '',
       emergencyContact: member.emergencyContact || '',
       notes: member.notes || '',
-      photo: member.photo || null,
-      photoThumb: member.photoThumb || null,
+      photo: member.photoPath ?? member.photo ?? null,
+      photoThumb: member.photoThumbPath ?? member.photoThumb ?? null,
+      photoPreview: member.photo || null,
     });
     setFormErrors({});
     setNewServiceId('');
@@ -1434,6 +1437,8 @@ function MemberForm({ formData, setFormData, formErrors }: {
         value={formData.photo}
         onChange={(url) => updateField('photo', url)}
         onThumbChange={(thumbUrl) => updateField('photoThumb', thumbUrl)}
+        preview={formData.photoPreview}
+        onPreviewChange={(previewUrl) => updateField('photoPreview', previewUrl)}
         firstName={formData.firstName}
         lastName={formData.lastName}
       />

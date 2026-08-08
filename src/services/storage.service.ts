@@ -1,5 +1,6 @@
 import { getDocs, batchDelete, chunk } from '@/lib/db';
 import type { FileStore } from '@/lib/file-storage';
+import { getFileStoreSafe } from '@/lib/file-storage';
 
 export interface StaleMember {
   id: string;
@@ -46,6 +47,52 @@ export function thumbPathFromPhotoPath(photoPath: string | null): string | null 
   const match = photoPath.match(/^uploads\/(.+)\.webp$/);
   if (!match) return null;
   return `uploads/thumbs/${match[1]}-thumb.webp`;
+}
+
+export interface ResolvedPhotoUrls {
+  photo: string | null;
+  photoPath: string | null;
+  photoThumb: string | null;
+  photoThumbPath: string | null;
+}
+
+/**
+ * Map stored photo values to render-ready URLs.
+ *
+ * Stored values are canonical paths (`uploads/<uuid>.webp`). When B2 is
+ * configured these are turned into short-lived presigned URLs (nothing is
+ * publicly readable); `*Path` carries the canonical value back so clients
+ * can re-submit it on edit without ever persisting a signed URL. Legacy
+ * absolute URLs that don't contain an `uploads/` path pass through as-is.
+ */
+export async function resolveMemberPhoto(
+  photo?: string | null,
+  photoThumb?: string | null,
+): Promise<ResolvedPhotoUrls> {
+  const [resolvedPhoto, resolvedThumb] = await Promise.all([
+    resolvePhoto(photo),
+    resolvePhoto(photoThumb),
+  ]);
+  return {
+    photo: resolvedPhoto.url,
+    photoPath: resolvedPhoto.path,
+    photoThumb: resolvedThumb.url,
+    photoThumbPath: resolvedThumb.path,
+  };
+}
+
+async function resolvePhoto(value: string | null | undefined): Promise<{ url: string | null; path: string | null }> {
+  const raw = value ?? null;
+  if (!raw) return { url: null, path: null };
+  const path = photoPathFromUrl(raw);
+  if (!path) return { url: raw, path: raw };
+  const store = getFileStoreSafe();
+  if (!store) return { url: raw, path };
+  try {
+    return { url: await store.getUrl(path), path };
+  } catch {
+    return { url: raw, path };
+  }
 }
 
 /**

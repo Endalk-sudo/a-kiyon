@@ -1,6 +1,7 @@
 import { db, getDocById, getDocs, getDocsByIds, countDocs, updateDoc } from '@/lib/db';
 import type { Doc, WhereClause } from '@/lib/db';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
+import { resolveMemberPhoto } from '@/services/storage.service';
 
 export function generateReceiptNumber(): string {
   return `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
@@ -433,14 +434,23 @@ export async function voidPayment(id: string, voidedBy: string) {
       }>('subscriptions', result.subscription.id)
     : null;
 
-  const member = await getDocById<{ firstName: string; lastName: string; photo: string | null }>(
+  const member = await getDocById<{ firstName: string; lastName: string; photo: string | null; photoThumb?: string | null }>(
     'members',
     result.payment.memberId,
   );
+  const memberPhoto = await resolveMemberPhoto(member?.photo, member?.photoThumb);
 
   return {
     ...result.payment,
-    member: member || { id: result.payment.memberId, firstName: '', lastName: '', photo: null },
+    member: member
+      ? {
+          id: member.id,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          photo: memberPhoto.photo,
+          photoThumb: memberPhoto.photoThumb,
+        }
+      : { id: result.payment.memberId, firstName: '', lastName: '', photo: null },
     subscription: freshSub
       ? {
           id: freshSub.id,
@@ -491,7 +501,7 @@ async function voidLegacyPayment(id: string, voidedBy: string) {
   if (!payment) return null;
 
   const [member, subscription] = await Promise.all([
-    getDocById<{ firstName: string; lastName: string; photo: string | null }>('members', payment.memberId),
+    getDocById<{ firstName: string; lastName: string; photo: string | null; photoThumb?: string | null }>('members', payment.memberId),
     getDocById<{ startDate: string; endDate: string; priceSnapshot: number; serviceId: string; status: string }>(
       'subscriptions',
       payment.subscriptionId,
@@ -562,9 +572,19 @@ async function voidLegacyPayment(id: string, voidedBy: string) {
     }>('subscriptions', payment.subscriptionId);
   }
 
+  const memberPhotos = await resolveMemberPhoto(member?.photo, member?.photoThumb);
+
   return {
     ...payment,
-    member: member || { id: payment.memberId, firstName: '', lastName: '', photo: null },
+    member: member
+      ? {
+          id: member.id,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          photo: memberPhotos.photo,
+          photoThumb: memberPhotos.photoThumb,
+        }
+      : { id: payment.memberId, firstName: '', lastName: '', photo: null },
     subscription: updatedSubscription
       ? {
           id: updatedSubscription.id,
@@ -688,14 +708,30 @@ async function enrichPayments(payments: Doc<PaymentDoc>[]) {
   const subscriptionsMap = new Map(subscriptionDocs.map((s) => [s.id, s]));
   const servicesMap = new Map(serviceDocs.map((s) => [s.id, s]));
 
+  const photoUrls = new Map<string, Awaited<ReturnType<typeof resolveMemberPhoto>>>();
+  await Promise.all(
+    memberDocs.map(async (m) => {
+      photoUrls.set(m.id, await resolveMemberPhoto(m.photo, m.photoThumb));
+    }),
+  );
+
   return payments.map((p) => {
     const member = membersMap.get(p.memberId);
     const subscription = subscriptionsMap.get(p.subscriptionId);
     const serviceName = subscription ? servicesMap.get(subscription.serviceId)?.name : undefined;
+    const photos = member ? photoUrls.get(member.id) : undefined;
 
     return {
       ...p,
-      member: member || { id: p.memberId, firstName: '', lastName: '', photo: null },
+      member: member
+        ? {
+            id: member.id,
+            firstName: member.firstName,
+            lastName: member.lastName,
+            photo: photos?.photo ?? null,
+            photoThumb: photos?.photoThumb ?? null,
+          }
+        : { id: p.memberId, firstName: '', lastName: '', photo: null },
       subscription: subscription
         ? {
             id: subscription.id,

@@ -2,6 +2,7 @@ import {
   getDocById, getDocs, getDocsByIds, countDocs, updateDoc, batchUpdate, chunk,
 } from '@/lib/db';
 import type { WhereClause, Doc } from '@/lib/db';
+import { resolveMemberPhoto } from '@/services/storage.service';
 
 interface SubscriptionDoc {
   memberId: string;
@@ -119,10 +120,29 @@ async function enrichSubscriptions(subscriptions: Doc<SubscriptionDoc>[]) {
   const membersMap = new Map(memberDocs.map((m) => [m.id, m]));
   const servicesMap = new Map(serviceDocs.map((s) => [s.id, s]));
 
-  return subscriptions.map((sub) => ({
-    ...sub,
-    member: membersMap.get(sub.memberId) || { id: sub.memberId, firstName: '', lastName: '', photo: null },
-    service: servicesMap.get(sub.serviceId) || { id: sub.serviceId, name: '', nameAm: null, price: 0, duration: 0 },
+  const photoUrls = new Map<string, Awaited<ReturnType<typeof resolveMemberPhoto>>>();
+  await Promise.all(
+    memberDocs.map(async (m) => {
+      photoUrls.set(m.id, await resolveMemberPhoto(m.photo, m.photoThumb));
+    }),
+  );
+
+  return Promise.all(subscriptions.map(async (sub) => {
+    const member = membersMap.get(sub.memberId);
+    const photos = member ? photoUrls.get(member.id) : undefined;
+    return {
+      ...sub,
+      member: member
+        ? {
+            id: member.id,
+            firstName: member.firstName,
+            lastName: member.lastName,
+            photo: photos?.photo ?? null,
+            photoThumb: photos?.photoThumb ?? null,
+          }
+        : { id: sub.memberId, firstName: '', lastName: '', photo: null },
+      service: servicesMap.get(sub.serviceId) || { id: sub.serviceId, name: '', nameAm: null, price: 0, duration: 0 },
+    };
   }));
 }
 
@@ -162,9 +182,20 @@ export async function getSubscription(id: string) {
     ['isVoided', '==', false],
   ], ['paymentDate', 'desc']);
 
+  const memberPhotos = await resolveMemberPhoto(member?.photo, member?.photoThumb);
+
   return {
     ...sub,
-    member: member || { id: sub.memberId, firstName: '', lastName: '', photo: null, phone: null },
+    member: member
+      ? {
+          id: member.id,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          photo: memberPhotos.photo,
+          photoThumb: memberPhotos.photoThumb,
+          phone: member.phone,
+        }
+      : { id: sub.memberId, firstName: '', lastName: '', photo: null, phone: null },
     service: service || { id: sub.serviceId, name: '', nameAm: null, price: 0, duration: 0 },
     payments,
   };

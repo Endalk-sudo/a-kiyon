@@ -187,7 +187,10 @@ describe('Storage Service (integration)', () => {
     const store: FileStore = {
       async save(pathname, body) {
         files.set(pathname, body);
-        return { url: `https://b2.test/${pathname}`, pathname };
+        return { url: pathname, pathname };
+      },
+      async getUrl(pathname) {
+        return `https://b2.test/${pathname}?signed=1`;
       },
       async list(pathname) {
         return Array.from(files.entries())

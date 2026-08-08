@@ -13,11 +13,14 @@ interface PhotoCaptureProps {
   value: string | null;
   onChange: (url: string | null) => void;
   onThumbChange?: (thumbUrl: string | null) => void;
+  /** Render-ready (signed) URL shown in the preview while `value` stays canonical. */
+  preview?: string | null;
+  onPreviewChange?: (previewUrl: string | null) => void;
   firstName?: string;
   lastName?: string;
 }
 
-export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', lastName = '' }: PhotoCaptureProps) {
+export function PhotoCapture({ value, onChange, onThumbChange, preview, onPreviewChange, firstName = '', lastName = '' }: PhotoCaptureProps) {
   const locale = useAppStore((s) => s.locale);
   const [mode, setMode] = useState<'none' | 'camera' | 'upload'>('none');
   const [streaming, setStreaming] = useState(false);
@@ -88,6 +91,7 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
       const result = await uploadApi.photo(formData);
       onChange(result.url);
       onThumbChange?.(result.thumbnailUrl);
+      onPreviewChange?.(result.previewUrl);
       setMode('none');
     } catch (err) {
       toast.error(sanitizeError(err, locale, 'Failed to upload photo', 'ፎቶ መጫን አልተሳካም'));
@@ -95,7 +99,7 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
     } finally {
       setUploading(false);
     }
-  }, [onChange, onThumbChange, locale]);
+  }, [onChange, onThumbChange, onPreviewChange, locale]);
 
   // Capture photo from video
   const capturePhoto = useCallback(() => {
@@ -137,6 +141,7 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
       const result = await uploadApi.photo(formData);
       onChange(result.url);
       onThumbChange?.(result.thumbnailUrl);
+      onPreviewChange?.(result.previewUrl);
     } catch (err) {
       toast.error(sanitizeError(err, locale, 'Failed to upload photo', 'ፎቶ መጫን አልተሳካም'));
       console.error('Upload error:', err);
@@ -153,6 +158,7 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
   const removePhoto = () => {
     onChange(null);
     onThumbChange?.(null);
+    onPreviewChange?.(null);
     setMode('none');
   };
 
@@ -161,7 +167,9 @@ export function PhotoCapture({ value, onChange, onThumbChange, firstName = '', l
       {/* Photo Preview */}
       <div className="flex items-center gap-4">
         <Avatar className="h-20 w-20 border-2 border-dashed border-muted-foreground/30">
-          {value && <AvatarImage src={value} alt={`${firstName} ${lastName}`} />}
+          {(preview ?? value) && (
+            <AvatarImage src={preview ?? value!} alt={`${firstName} ${lastName}`} />
+          )}
           <AvatarFallback className="text-xl bg-primary/10 text-primary font-semibold">
             {initials}
           </AvatarFallback>
