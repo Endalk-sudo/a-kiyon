@@ -43,4 +43,4 @@ jobs:
         run: pnpm run build
 
       - name: Test (Firebase emulators)
-        run: npx firebase emulators:exec --only auth,firestore,storage "pnpm run test"
+        run: npx firebase emulators:exec --only auth,firestore "pnpm run test"

@@ -8,14 +8,6 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
-  getStorage,
-  connectStorageEmulator,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
-import {
   getFirestore,
   connectFirestoreEmulator,
 } from 'firebase/firestore';
@@ -32,7 +24,6 @@ const FIREBASE_CLIENT_VAR_NAMES: Record<string, string> = {
   apiKey: 'NEXT_PUBLIC_FIREBASE_API_KEY',
   authDomain: 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
   projectId: 'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  storageBucket: 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
   messagingSenderId: 'NEXT_PUBLIC_FIREBASE_SENDER_ID',
   appId: 'NEXT_PUBLIC_FIREBASE_APP_ID',
 };
@@ -42,7 +33,6 @@ const firebaseConfig = isEmulator
       apiKey: 'demo-api-key',
       authDomain: 'localhost',
       projectId: 'demo-a-kiyon',
-      storageBucket: 'demo-a-kiyon.firebasestorage.app',
       messagingSenderId: '000000000000',
       appId: '1:000000000000:web:0000000000000000000000',
     }
@@ -50,7 +40,6 @@ const firebaseConfig = isEmulator
       apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
       authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
       messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_SENDER_ID,
       appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
     };
@@ -80,12 +69,10 @@ function getClientApp() {
 const app = getClientApp();
 
 export const auth = getAuth(app);
-export const clientStorage = getStorage(app);
 export const clientDb = getFirestore(app);
 
 if (typeof window !== 'undefined' && isEmulator) {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-  connectStorageEmulator(clientStorage, 'localhost', 9199);
   connectFirestoreEmulator(clientDb, 'localhost', 8080);
 }
 
@@ -106,17 +93,3 @@ export async function signOut() {
 export function onAuthChange(callback: (_user: FirebaseUser | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
-
-// Storage helpers
-export async function uploadFile(path: string, buffer: Uint8Array, contentType: string) {
-  const storageRef = ref(clientStorage, path);
-  await uploadBytes(storageRef, buffer, { contentType });
-  return getDownloadURL(storageRef);
-}
-
-export async function deleteFile(path: string) {
-  const storageRef = ref(clientStorage, path);
-  await deleteObject(storageRef);
-}
-
-export { ref as storageRef, getDownloadURL, uploadBytes, deleteObject };

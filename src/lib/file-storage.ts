@@ -4,12 +4,11 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
-import { adminBucket } from '@/lib/firebase-admin';
 
 /**
- * Abstraction over member-photo storage. Production stores files in
- * Backblaze B2 (S3-compatible, ~$6/TB/mo, 10 GB free) via the AWS SDK v3;
- * local development keeps using the Firebase Storage emulator.
+ * Abstraction over member-photo storage. Backblaze B2 (S3-compatible,
+ * ~$6/TB/mo, 10 GB free) is the only storage backend — no Firebase
+ * Storage, no other providers.
  */
 
 export interface StoredFile {
@@ -21,47 +20,6 @@ export interface FileStore {
   save(pathname: string, body: Buffer, contentType: string): Promise<StoredFile>;
   list(prefix?: string): Promise<{ pathname: string; size: number }[]>;
   delete(pathname: string): Promise<void>;
-}
-
-type Bucket = NonNullable<typeof adminBucket>;
-
-export function firebaseFileStore(bucket: Bucket): FileStore {
-  return {
-    async save(pathname, body, contentType) {
-      await bucket.file(pathname).save(body, { contentType });
-      const url =
-        process.env.FIREBASE_EMULATOR === 'true'
-          ? `http://127.0.0.1:9199/v0/b/${bucket.name}/o/${encodeURIComponent(pathname)}?alt=media`
-          : (
-              await bucket.file(pathname).getSignedUrl({
-                action: 'read',
-                // 1 year — URLs are unauthenticated once issued, so
-                // long-lived links were a leak risk if ever shared.
-                expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-              })
-            )[0];
-      return { url, pathname };
-    },
-    async list(prefix) {
-      const [files] = await bucket.getFiles({ autoPaginate: true, prefix });
-      const sizes = await Promise.all(
-        files.map(async (file) => {
-          try {
-            const [metadata] = await file.getMetadata();
-            return Number(metadata.size) || 0;
-          } catch {
-            return 0;
-          }
-        }),
-      );
-      return files.map((file, i) => ({ pathname: file.name, size: sizes[i] }));
-    },
-    async delete(pathname) {
-      const file = bucket.file(pathname);
-      const [exists] = await file.exists();
-      if (exists) await file.delete();
-    },
-  };
 }
 
 export interface B2Config {
@@ -139,16 +97,16 @@ const B2_ENV_VARS = [
 ] as const;
 
 /**
- * Select the active file store. Emulator mode (and tests) always use the
- * Firebase Storage emulator; production requires B2 credentials. Returns
- * null when no backend is configured (routes surface a clean 500).
+ * Select the active file store — always Backblaze B2. Fails fast when the
+ * required B2 env vars are missing (also in local dev; emulators no longer
+ * provide a storage backend).
  */
-export function getFileStore(): FileStore | null {
-  if (process.env.FIREBASE_EMULATOR === 'true') {
-    return adminBucket ? firebaseFileStore(adminBucket) : null;
-  }
+export function getFileStore(): FileStore {
   const missing = B2_ENV_VARS.filter((name) => !process.env[name]);
-  if (missing.length > 0) return null;
+  if (missing.length > 0) {
+    console.error(`[storage] Missing B2 configuration: ${missing.join(', ')}`);
+    throw new Error('Storage not configured');
+  }
   return b2FileStore({
     bucket: process.env.B2_BUCKET!,
     region: process.env.B2_REGION!,

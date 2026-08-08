@@ -41,7 +41,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
   }
 
   const store = getFileStore();
-  if (!store) return apiError('Storage not configured', 500);
 
   const uuid = randomUUID();
   const filePath = `uploads/${uuid}.webp`;

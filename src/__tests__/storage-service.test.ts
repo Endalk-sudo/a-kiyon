@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { db } from '@/lib/db';
-import { adminBucket } from '@/lib/firebase-admin';
-import { firebaseFileStore } from '@/lib/file-storage';
+import type { FileStore } from '@/lib/file-storage';
 import {
   findStaleMembers,
   monthsAgoIso,
@@ -183,9 +182,23 @@ describe('Storage Service (integration)', () => {
     });
   });
 
-  describe('Purge functions (storage emulator)', () => {
-    const bucket = adminBucket!;
-    const store = firebaseFileStore(bucket);
+  describe('Purge functions (in-memory store)', () => {
+    const files = new Map<string, Buffer>();
+    const store: FileStore = {
+      async save(pathname, body) {
+        files.set(pathname, body);
+        return { url: `https://b2.test/${pathname}`, pathname };
+      },
+      async list(pathname) {
+        return Array.from(files.entries())
+          .filter(([p]) => !pathname || p.startsWith(pathname))
+          .map(([p, body]) => ({ pathname: p, size: body.byteLength }));
+      },
+      async delete(pathname) {
+        files.delete(pathname);
+      },
+    };
+
     const TEST_FILES = [
       'uploads/ref-1.webp',
       'uploads/thumbs/ref-1-thumb.webp',
@@ -195,13 +208,9 @@ describe('Storage Service (integration)', () => {
       'uploads/thumbs/ref-2-thumb.webp',
     ];
 
-    const emulatorUrl = (path: string) =>
-      `http://127.0.0.1:9199/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+    const b2Url = (path: string) => `https://b2.test/${path}`;
 
-    async function listUploads(): Promise<string[]> {
-      const [files] = await bucket.getFiles({ prefix: 'uploads/' });
-      return files.map((f) => f.name);
-    }
+    const listUploads = () => Array.from(files.keys());
 
     async function seedMember(name: string, photo: string | null, isDeleted: boolean) {
       await db.collection('members').add({
@@ -217,20 +226,15 @@ describe('Storage Service (integration)', () => {
 
     beforeAll(async () => {
       for (const path of TEST_FILES) {
-        await bucket.file(path).save('test-fixture');
+        await store.save(path, Buffer.from('test-fixture'), 'image/webp');
       }
       // Seed before the orphan purge so ref-2 stays referenced (a soft-deleted
       // member's photo is still referenced; only soft-delete cleanup removes it).
-      await seedMember('PurgePhoto', emulatorUrl('uploads/ref-2.webp'), true);
-    });
-
-    afterAll(async () => {
-      const [files] = await bucket.getFiles({ prefix: 'uploads/' });
-      await Promise.all(files.map((f) => f.delete().catch(() => {})));
+      await seedMember('PurgePhoto', b2Url('uploads/ref-2.webp'), true);
     });
 
     it('purgeOrphanedFiles deletes only unreferenced uploads and thumbnails', async () => {
-      await seedMember('OrphanRef', emulatorUrl('uploads/ref-1.webp'), false);
+      await seedMember('OrphanRef', b2Url('uploads/ref-1.webp'), false);
 
       const deleted = await purgeOrphanedFiles(store);
       expect(deleted).toBeGreaterThanOrEqual(2);

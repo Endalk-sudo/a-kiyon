@@ -68,7 +68,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
     Promise.all(COLLECTIONS.map(estimateCollectionSize)),
     (async () => {
       const store = getFileStore();
-      return store ? getStorageUsage(store) : { files: 0, bytes: 0, filesByPrefix: [] };
+      return getStorageUsage(store);
     })(),
     findStaleMembers(staleMonths),
   ]);
@@ -101,7 +101,6 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
   const action = searchParams.get('action');
 
   const store = getFileStore();
-  if (!store) return apiError('Storage not configured', 500);
 
   if (action === 'purge-orphaned-files') {
     const deleted = await purgeOrphanedFiles(store);
