@@ -73,6 +73,7 @@
     "eslint": "^9",
     "eslint-config-next": "^16.2.12",
     "firebase-tools": "^15.24.0",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "tsx": "^4.19.0",
     "tw-animate-css": "^1.3.5",

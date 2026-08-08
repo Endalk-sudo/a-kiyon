@@ -60,8 +60,8 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed left-1/2 top-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 pb-6 shadow-lg duration-200 max-h-[calc(100dvh-3rem)] overflow-y-auto",
-          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed left-1/2 top-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] sm:max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border p-6 pb-6 shadow-2xl ring-1 ring-black/5 dark:ring-white/10 duration-200 max-h-[calc(100dvh-3rem)] overflow-y-auto overscroll-contain",
+          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 motion-reduce:transition-none",
           "max-md:translate-x-0 max-md:translate-y-0 max-md:left-0 max-md:right-0 max-md:top-auto max-md:bottom-0 max-md:max-w-none max-md:rounded-t-2xl max-md:rounded-b-none max-md:border-b-0 max-md:max-h-[85dvh] max-md:pb-[calc(1.5rem+env(safe-area-inset-bottom))] max-md:data-[state=closed]:slide-out-to-bottom max-md:data-[state=open]:slide-in-from-bottom",
           className
         )}
@@ -86,7 +86,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      className={cn("flex flex-col gap-1.5 items-start text-left", className)}
       {...props}
     />
   )
@@ -97,7 +97,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-footer"
       className={cn(
-        "sticky bottom-0 -mx-6 flex flex-col-reverse gap-2 bg-background px-6 pb-1 pt-2 sm:flex-row sm:justify-end md:static md:mx-0 md:px-0 md:pb-0 md:pt-0",
+        "sticky bottom-0 -mx-6 flex flex-col-reverse gap-2 border-t bg-background/85 px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 backdrop-blur-sm sm:flex-row sm:justify-end",
         className
       )}
       {...props}
@@ -112,7 +112,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-snug font-semibold", className)}
+      className={cn("text-lg leading-snug font-semibold pr-8", className)}
       {...props}
     />
   )

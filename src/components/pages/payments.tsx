@@ -44,6 +44,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -634,7 +635,7 @@ export function PaymentsPage() {
             >
               {voiding ? (
                 <>
-                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Voiding...
                 </>
               ) : (

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { subscriptionsApi, membersApi, servicesApi } from '@/lib/api-client';
 import { MemberAvatar } from '@/components/member-avatar';
+import { SummaryRows } from '@/components/summary-rows';
 import { formatCurrency, formatDate, formatMemberName } from '@/lib/format';
 import { sanitizeError } from '@/lib/errors';
 import { t } from '@/lib/messages';
@@ -626,7 +627,7 @@ export function SubscriptionsPage() {
             <AlertDialogAction
               onClick={handleCancelSubscription}
               disabled={cancelling}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {cancelling ? 'Cancelling...' : 'Cancel Subscription'}
             </AlertDialogAction>
@@ -636,7 +637,7 @@ export function SubscriptionsPage() {
 
       {/* Renew Confirmation Dialog */}
       <Dialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
-        <DialogContent className="md:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-600" />
@@ -653,20 +654,13 @@ export function SubscriptionsPage() {
                   Renewing <strong>{subscriptionToRenew.service.name}</strong> for{' '}
                   <strong>{formatMemberName(subscriptionToRenew.member)}</strong>.
                 </p>
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Service:</span>
-                    <span className="font-medium">{subscriptionToRenew.service.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Price:</span>
-                    <span className="font-bold text-emerald-600">{formatCurrency(subscriptionToRenew.priceSnapshot)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration:</span>
-                    <span className="font-medium">{subscriptionToRenew.service.duration} days</span>
-                  </div>
-                </div>
+                <SummaryRows
+                  rows={[
+                    { label: 'Service:', value: subscriptionToRenew.service.name },
+                    { label: 'Price:', value: formatCurrency(subscriptionToRenew.priceSnapshot), accent: true },
+                    { label: 'Duration:', value: `${subscriptionToRenew.service.duration} days` },
+                  ]}
+                />
                 <div className="space-y-2">
                   <Label htmlFor="renew-payment-method">Payment Method</Label>
                   <Select value={renewPaymentMethod} onValueChange={setRenewPaymentMethod}>
@@ -687,11 +681,7 @@ export function SubscriptionsPage() {
             <Button variant="outline" onClick={() => setRenewDialogOpen(false)} disabled={renewing}>
               Cancel
             </Button>
-            <Button
-              onClick={handleRenewSubscription}
-              disabled={renewing}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
+            <Button variant="success" onClick={handleRenewSubscription} disabled={renewing}>
               {renewing ? 'Renewing...' : 'Confirm Renewal & Payment'}
             </Button>
           </DialogFooter>
@@ -700,7 +690,7 @@ export function SubscriptionsPage() {
 
       {/* ─── New Subscription Dialog (existing member) ─────────────────── */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="md:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-emerald-600" />
@@ -771,16 +761,12 @@ export function SubscriptionsPage() {
             {createServiceId && (() => {
               const svc = createServices.find((s) => s.id === createServiceId);
               return svc ? (
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration:</span>
-                    <span className="font-medium">{svc.duration} days</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Price:</span>
-                    <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
-                  </div>
-                </div>
+                <SummaryRows
+                  rows={[
+                    { label: 'Duration:', value: `${svc.duration} days` },
+                    { label: 'Price:', value: formatCurrency(svc.price), accent: true },
+                  ]}
+                />
               ) : null;
             })()}
             <div className="space-y-2">
@@ -812,11 +798,7 @@ export function SubscriptionsPage() {
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={creating}>
               Cancel
             </Button>
-            <Button
-              onClick={handleCreateSubscription}
-              disabled={creating}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
+            <Button variant="success" onClick={handleCreateSubscription} disabled={creating}>
               {creating ? 'Subscribing...' : 'Subscribe & Record Payment'}
             </Button>
           </DialogFooter>

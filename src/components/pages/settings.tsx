@@ -364,9 +364,12 @@ export function SettingsPage() {
                     Add User
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="md:max-w-md">
+                <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Create New User</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      <UserPlus className="h-5 w-5 text-primary" />
+                      Create New User
+                    </DialogTitle>
                     <DialogDescription>
                       Add a new user to the system. They will be able to log in immediately.
                     </DialogDescription>
@@ -621,9 +624,12 @@ export function SettingsPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="md:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-muted-foreground" />
+              Edit User
+            </DialogTitle>
             <DialogDescription>Update user information and role.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">

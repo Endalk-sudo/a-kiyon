@@ -6,6 +6,7 @@ import { StatusBadge, type StatusType } from '@/components/status-badge';
 import { MemberAvatar } from '@/components/member-avatar';
 import { PhotoLightbox } from '@/components/photo-lightbox';
 import { PhotoCapture } from '@/components/photo-capture';
+import { SummaryRows } from '@/components/summary-rows';
 import { formatCurrency, formatDate, formatMemberName, getInitials } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
 import { sanitizeError } from '@/lib/errors';
@@ -778,7 +779,7 @@ export function MembersPage() {
 
       {/* ─── Add Member Dialog ──────────────────────────────────────────── */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add New Member</DialogTitle>
             <DialogDescription>Enter member information and photo.</DialogDescription>
@@ -812,16 +813,12 @@ export function MembersPage() {
               {newServiceId && (() => {
                 const svc = availableServices.find((s) => s.id === newServiceId);
                 return svc ? (
-                  <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Duration:</span>
-                      <span className="font-medium">{svc.duration} days</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Price:</span>
-                      <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
-                    </div>
-                  </div>
+                  <SummaryRows
+                    rows={[
+                      { label: 'Duration:', value: `${svc.duration} days` },
+                      { label: 'Price:', value: formatCurrency(svc.price), accent: true },
+                    ]}
+                  />
                 ) : null;
               })()}
               <div className="space-y-2">
@@ -858,7 +855,7 @@ export function MembersPage() {
 
       {/* ─── Edit Member Dialog ──────────────────────────────────────────── */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Member</DialogTitle>
             <DialogDescription>Update member information.</DialogDescription>
@@ -881,7 +878,7 @@ export function MembersPage() {
           setViewDialogOpen(open);
         }}
       >
-        <DialogContent className="md:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Member Details</DialogTitle>
           </DialogHeader>
@@ -1063,7 +1060,7 @@ export function MembersPage() {
 
       {/* ─── Renew Subscription Confirmation Dialog ────────────────────── */}
       <Dialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
-        <DialogContent className="md:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-600" />
@@ -1080,20 +1077,20 @@ export function MembersPage() {
                   Renewing <strong>{subscriptionToRenew.service?.name ?? 'Unknown Service'}</strong> for{' '}
                   <strong>{memberDetail ? formatMemberName(memberDetail) : ''}</strong>.
                 </p>
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Service:</span>
-                    <span className="font-medium">{subscriptionToRenew.service?.name ?? 'Unknown Service'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Price:</span>
-                    <span className="font-bold text-emerald-600">{formatCurrency(subscriptionToRenew.priceSnapshot)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Current Status:</span>
-                    <Badge variant={subscriptionToRenew.status === 'expired' ? 'secondary' : 'outline'} className="text-xs">{subscriptionToRenew.status}</Badge>
-                  </div>
-                </div>
+                <SummaryRows
+                  rows={[
+                    { label: 'Service:', value: subscriptionToRenew.service?.name ?? 'Unknown Service' },
+                    { label: 'Price:', value: formatCurrency(subscriptionToRenew.priceSnapshot), accent: true },
+                    {
+                      label: 'Current Status:',
+                      value: (
+                        <Badge variant={subscriptionToRenew.status === 'expired' ? 'secondary' : 'outline'} className="text-xs">
+                          {subscriptionToRenew.status}
+                        </Badge>
+                      ),
+                    },
+                  ]}
+                />
                 <div className="space-y-2">
                   <Label htmlFor="member-renew-payment-method">Payment Method</Label>
                   <Select value={renewPaymentMethod} onValueChange={setRenewPaymentMethod}>
@@ -1114,11 +1111,7 @@ export function MembersPage() {
             <Button variant="outline" onClick={() => setRenewDialogOpen(false)} disabled={renewing}>
               Cancel
             </Button>
-            <Button
-              onClick={handleRenewSubscription}
-              disabled={renewing}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
+            <Button variant="success" onClick={handleRenewSubscription} disabled={renewing}>
               {renewing ? 'Renewing...' : 'Confirm Renewal & Payment'}
             </Button>
           </DialogFooter>
@@ -1127,7 +1120,7 @@ export function MembersPage() {
 
       {/* ─── New Subscription Dialog (existing member) ─────────────────── */}
       <Dialog open={subscribeDialogOpen} onOpenChange={setSubscribeDialogOpen}>
-        <DialogContent className="md:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-emerald-600" />
@@ -1160,16 +1153,12 @@ export function MembersPage() {
             {subscribeServiceId && (() => {
               const svc = subscribeServices.find((s) => s.id === subscribeServiceId);
               return svc ? (
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration:</span>
-                    <span className="font-medium">{svc.duration} days</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Price:</span>
-                    <span className="font-bold text-emerald-600">{formatCurrency(svc.price)}</span>
-                  </div>
-                </div>
+                <SummaryRows
+                  rows={[
+                    { label: 'Duration:', value: `${svc.duration} days` },
+                    { label: 'Price:', value: formatCurrency(svc.price), accent: true },
+                  ]}
+                />
               ) : null;
             })()}
             <div className="space-y-2">
@@ -1200,11 +1189,7 @@ export function MembersPage() {
             <Button variant="outline" onClick={() => setSubscribeDialogOpen(false)} disabled={subscribing}>
               Cancel
             </Button>
-            <Button
-              onClick={handleSubscribeMember}
-              disabled={subscribing}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
+            <Button variant="success" onClick={handleSubscribeMember} disabled={subscribing}>
               {subscribing ? 'Subscribing...' : 'Subscribe & Record Payment'}
             </Button>
           </DialogFooter>

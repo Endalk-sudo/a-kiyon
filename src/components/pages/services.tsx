@@ -634,7 +634,8 @@ export function ServicesPage() {
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-primary" />
               {locale === 'en' ? 'Add New Service' : 'አዲስ አገልግሎት ጨምር'}
             </DialogTitle>
             <DialogDescription>
@@ -664,7 +665,8 @@ export function ServicesPage() {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-primary" />
               {locale === 'en' ? 'Edit Service' : 'አገልግሎት አስተካክል'}
             </DialogTitle>
             <DialogDescription>
@@ -718,6 +720,7 @@ export function ServicesPage() {
                 setDeactivateDialogOpen(false);
                 setServiceToToggle(null);
               }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {locale === 'en' ? 'Deactivate' : 'አጥፋ'}
             </AlertDialogAction>
