@@ -778,7 +778,7 @@ export function MembersPage() {
 
       {/* ─── Add Member Dialog ──────────────────────────────────────────── */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Member</DialogTitle>
             <DialogDescription>Enter member information and photo.</DialogDescription>
@@ -858,7 +858,7 @@ export function MembersPage() {
 
       {/* ─── Edit Member Dialog ──────────────────────────────────────────── */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Member</DialogTitle>
             <DialogDescription>Update member information.</DialogDescription>
@@ -881,7 +881,7 @@ export function MembersPage() {
           setViewDialogOpen(open);
         }}
       >
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="md:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Member Details</DialogTitle>
           </DialogHeader>
@@ -1063,7 +1063,7 @@ export function MembersPage() {
 
       {/* ─── Renew Subscription Confirmation Dialog ────────────────────── */}
       <Dialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-600" />
@@ -1127,7 +1127,7 @@ export function MembersPage() {
 
       {/* ─── New Subscription Dialog (existing member) ─────────────────── */}
       <Dialog open={subscribeDialogOpen} onOpenChange={setSubscribeDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-emerald-600" />

@@ -632,7 +632,7 @@ export function ServicesPage() {
 
       {/* Add Service Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {locale === 'en' ? 'Add New Service' : 'አዲስ አገልግሎት ጨምር'}
@@ -662,7 +662,7 @@ export function ServicesPage() {
 
       {/* Edit Service Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {locale === 'en' ? 'Edit Service' : 'አገልግሎት አስተካክል'}

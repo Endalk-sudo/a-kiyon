@@ -364,7 +364,7 @@ export function SettingsPage() {
                     Add User
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="md:max-w-md">
                   <DialogHeader>
                     <DialogTitle>Create New User</DialogTitle>
                     <DialogDescription>
@@ -621,7 +621,7 @@ export function SettingsPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>Update user information and role.</DialogDescription>

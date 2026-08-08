@@ -4,6 +4,14 @@ import { useState, useEffect } from 'react';import { Button } from '@/components
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { authClient } from '@/lib/auth-client';
 import { normalizePhone, isValidPhone } from '@/lib/phone-auth';
 import { getEthiopianYear } from '@/lib/ethiopian-calendar';
@@ -24,7 +32,6 @@ import {
   TrendingUp,
   CreditCard,
   Shield,
-  X,
 } from 'lucide-react';
 
 function LoginDialog({ children }: { children: React.ReactNode }) {
@@ -37,15 +44,6 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [phoneError, setPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
 
   const validate = (): boolean => {
     let valid = true;
@@ -103,105 +101,83 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
   const clearPasswordError = () => setPasswordError('');
 
   return (
-    <>
-      <span onClick={() => setOpen(true)} className="inline-flex cursor-pointer">
-        {children}
-      </span>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <span className="inline-flex cursor-pointer">{children}</span>
+      </DialogTrigger>
 
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
-            onClick={() => setOpen(false)}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Sign In"
-              className="relative bg-background text-foreground w-full sm:max-w-md rounded-t-2xl sm:rounded-xl border p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-lg max-h-[85dvh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="absolute top-4 right-4 h-9 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center">
-                  <Dumbbell className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold">Sign In</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Enter your phone number and password to access the system
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-phone">Phone Number</Label>
-                  <Input
-                    id="login-phone"
-                    type="tel"
-                    inputMode="tel"
-                    value={phone}
-                    onChange={(e) => { setPhone(e.target.value); clearPhoneError(); }}
-                    placeholder="+251 9XX XXX XXX"
-                    required
-                    autoComplete="tel"
-                    className={phoneError ? 'border-destructive' : ''}
-                  />
-                  {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="login-password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => { setPassword(e.target.value); clearPasswordError(); }}
-                      placeholder="Enter your password"
-                      required
-                      autoComplete="current-password"
-                      className={passwordError ? 'border-destructive' : ''}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
-                  <p className="text-right -mt-2 text-xs text-muted-foreground">
-                    Forgot your password? Contact your administrator.
-                  </p>
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Sign In
-                </Button>
-                {process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true' && (
-                  <div className="pt-2 border-t text-xs text-muted-foreground space-y-1">
-                    <p className="font-medium">Demo credentials:</p>
-                    <p>Owner: +251911000000 / owner123</p>
-                    <p>Manager: +251922000000 / manager123</p>
-                  </div>
-                )}
-              </form>
+      <DialogContent className="md:max-w-md">
+        <DialogHeader className="text-left">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+              <Dumbbell className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle>Sign In</DialogTitle>
+              <DialogDescription>
+                Enter your phone number and password to access the system
+              </DialogDescription>
             </div>
           </div>
-        </>
-      )}
-    </>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="login-phone">Phone Number</Label>
+            <Input
+              id="login-phone"
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => { setPhone(e.target.value); clearPhoneError(); }}
+              placeholder="+251 9XX XXX XXX"
+              required
+              autoComplete="tel"
+              className={phoneError ? 'border-destructive' : ''}
+            />
+            {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="login-password">Password</Label>
+            <div className="relative">
+              <Input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); clearPasswordError(); }}
+                placeholder="Enter your password"
+                required
+                autoComplete="current-password"
+                className={passwordError ? 'border-destructive' : ''}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+            <p className="text-right -mt-2 text-xs text-muted-foreground">
+              Forgot your password? Contact your administrator.
+            </p>
+          </div>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Sign In
+          </Button>
+          {process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true' && (
+            <div className="pt-2 border-t text-xs text-muted-foreground space-y-1">
+              <p className="font-medium">Demo credentials:</p>
+              <p>Owner: +251911000000 / owner123</p>
+              <p>Manager: +251922000000 / manager123</p>
+            </div>
+          )}
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

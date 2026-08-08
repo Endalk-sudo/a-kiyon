@@ -60,9 +60,9 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 grid w-full max-w-none gap-4 border border-b-0 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-lg rounded-t-2xl bottom-0 inset-x-0 max-h-[85dvh] overflow-y-auto",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 grid w-full max-w-lg gap-4 border border-b-0 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-lg rounded-t-2xl bottom-0 inset-x-0 max-h-[85dvh] overflow-y-auto",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 max-md:data-[state=closed]:slide-out-to-bottom max-md:data-[state=open]:slide-in-from-bottom",
-          "md:top-[50%] md:left-[50%] md:bottom-auto md:inset-auto md:max-h-none md:overflow-visible md:rounded-lg md:border-b md:pb-6 md:max-w-lg md:translate-x-[-50%] md:translate-y-[-50%] md:duration-200 md:data-[state=closed]:zoom-out-95 md:data-[state=open]:zoom-in-95",
+          "md:top-[50%] md:left-[50%] md:bottom-auto md:inset-auto md:max-h-[calc(100dvh-3rem)] md:overflow-y-auto md:rounded-lg md:border-b md:pb-6 md:translate-x-[-50%] md:translate-y-[-50%] md:duration-200 md:data-[state=closed]:zoom-out-95 md:data-[state=open]:zoom-in-95",
           className
         )}
         {...props}
@@ -112,7 +112,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn("text-lg leading-snug font-semibold", className)}
       {...props}
     />
   )

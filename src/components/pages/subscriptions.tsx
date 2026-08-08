@@ -636,7 +636,7 @@ export function SubscriptionsPage() {
 
       {/* Renew Confirmation Dialog */}
       <Dialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-emerald-600" />
@@ -700,7 +700,7 @@ export function SubscriptionsPage() {
 
       {/* ─── New Subscription Dialog (existing member) ─────────────────── */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="md:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-emerald-600" />
