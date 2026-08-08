@@ -15,6 +15,8 @@
     "create-prod-users": "tsx src/scripts/create-prod-users.ts",
     "cron-expire": "tsx src/scripts/cron-expire.ts",
     "check-indexes": "tsx src/scripts/check-indexes.ts",
+    "verify-indexes": "tsx src/scripts/verify-indexes.ts",
+    "deploy:firestore": "firebase deploy --only firestore:indexes,firestore:rules",
     "firebase:emulators": "firebase emulators:start",
     "firebase:emulators:export": "firebase emulators:export ./firebase-data",
     "firebase:emulators:import": "firebase emulators:start --import ./firebase-data",

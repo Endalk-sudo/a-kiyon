@@ -68,6 +68,9 @@ pnpm run test           # vitest (needs Firebase emulators running)
 | `pnpm run create-prod-users` | Create production owner/manager/reader accounts (refuses in emulator mode; passwords from `OWNER_PASSWORD`/`MANAGER_PASSWORD`/`READER_PASSWORD`) |
 | `pnpm run cron-expire` | Manual subscription expiry batch update |
 | `pnpm run test` | Vitest (run `pnpm run firebase:emulators` first) |
+| `pnpm run check-indexes` | Static guard — every composite query (incl. `aggregateSum` + registered runtime shapes) must be covered by `firestore.indexes.json`; exits 1 on missing/duplicate indexes or unregistered runtime queries |
+| `pnpm run deploy:firestore` | Deploy Firestore indexes + rules (`firebase deploy --only firestore:indexes,firestore:rules`) |
+| `pnpm run verify-indexes` | Diff `firestore.indexes.json` against the live project's composite indexes (reads only; needs prod `FIREBASE_*` env, refuses emulator mode) |
 | `pnpm run firebase:emulators` | Start Firebase emulators (Firestore 8080, Auth 9099, Storage 9199, UI 4000) |
 | `pnpm run firebase:emulators:export` | Export emulator data to `./firebase-data` |
 | `pnpm run firebase:emulators:import` | Start emulators with previous data |
@@ -75,7 +78,7 @@ pnpm run test           # vitest (needs Firebase emulators running)
 
 ## Deployment
 
-- **CI**: GitHub Actions (`.github/workflows/ci.yml`) on push to `dev`/`main` + PRs — pnpm install, `tsc --noEmit`, lint, build, then `firebase emulators:exec "pnpm run test"` (fresh emulators, no secrets needed).
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) on push to `dev`/`main` + PRs — pnpm install, `tsc --noEmit`, lint, `pnpm run check-indexes`, build, then `firebase emulators:exec "pnpm run test"` (fresh emulators, no secrets needed).
 - Self-hosted: Caddy reverse proxy on `:81` → `localhost:3000` (see `Caddyfile`).
 - Required env: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `NEXT_PUBLIC_FIREBASE_*` vars. Set `FIREBASE_EMULATOR=true` + `NEXT_PUBLIC_FIREBASE_EMULATOR=true` for local dev. Production photo storage needs `BLOB_READ_WRITE_TOKEN` (Vercel Blob).
-- **Composite indexes**: queries in code must be covered by `firestore.indexes.json`. The emulator auto-creates indexes, so missing ones only fail in production. Deploy with `firebase deploy --only firestore:indexes,firestore:rules` before shipping code that needs a new index (e.g. `payments(subscriptionId ASC, isVoided ASC, createdAt DESC)` added for void rollback). Storage rules are not deployed — the project intentionally has no Firebase Storage (Vercel Blob instead).
+- **Composite indexes**: queries in code must be covered by `firestore.indexes.json`. The emulator auto-creates indexes, so missing ones only fail in production — `pnpm run check-indexes` (also in CI) is the gate; `aggregateSum` calls need the aggregated field in the index, and runtime-built `where` filters (`listPayments`, `listSubscriptions`, `listMembers`, services GET) are pinned by the `RUNTIME_QUERIES` registry inside `src/scripts/check-indexes.ts` — keep it in sync when those filters change. Deploy workflow: run `check-indexes`, then `pnpm run deploy:firestore`, then `pnpm run verify-indexes` (wait for CREATING → READY, re-run without deploying). Storage rules are not deployed — the project intentionally has no Firebase Storage (Vercel Blob instead).

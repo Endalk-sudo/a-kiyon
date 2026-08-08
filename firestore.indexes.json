@@ -39,6 +39,15 @@
       { "fieldPath": "paymentDate", "order": "ASCENDING" }
     ]},
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "amount", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "isVoided", "order": "ASCENDING" },
+      { "fieldPath": "paymentDate", "order": "ASCENDING" },
+      { "fieldPath": "amount", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "memberId", "order": "ASCENDING" },
       { "fieldPath": "paymentDate", "order": "DESCENDING" }
     ]},
