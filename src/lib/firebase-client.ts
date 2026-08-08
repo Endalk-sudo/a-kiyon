@@ -23,26 +23,19 @@ import { normalizePhone, phoneToEmail } from './phone-auth';
 
 const isEmulator = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
 
-const FIREBASE_CLIENT_VARS = [
-  'NEXT_PUBLIC_FIREBASE_API_KEY',
-  'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
-  'NEXT_PUBLIC_FIREBASE_SENDER_ID',
-  'NEXT_PUBLIC_FIREBASE_APP_ID',
-] as const;
-
-const missingClientVars = FIREBASE_CLIENT_VARS.filter((name) => !process.env[name]);
-
-// Fail loudly in the browser instead of silently initializing against a demo
-// project. Server-side (build/SSR) stays silent — the client config is only
-// consumed in the browser, and CI builds without NEXT_PUBLIC_* variables.
-if (!isEmulator && missingClientVars.length > 0 && typeof window !== 'undefined') {
-  throw new Error(
-    `Missing Firebase client configuration: ${missingClientVars.join(', ')}. ` +
-      'Set these NEXT_PUBLIC_FIREBASE_* variables in your deployment environment and redeploy.',
-  );
-}
+// Direct property access only — Turbopack inlines `process.env.NEXT_PUBLIC_*`
+// into the browser bundle per-literal, but cannot inline dynamic lookups like
+// `process.env[name]`, which compile to a client env shim that carries no
+// NEXT_PUBLIC values. A loop-based guard would therefore see every variable
+// as "missing" and crash on every page load.
+const FIREBASE_CLIENT_VAR_NAMES: Record<string, string> = {
+  apiKey: 'NEXT_PUBLIC_FIREBASE_API_KEY',
+  authDomain: 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  projectId: 'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+  storageBucket: 'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  messagingSenderId: 'NEXT_PUBLIC_FIREBASE_SENDER_ID',
+  appId: 'NEXT_PUBLIC_FIREBASE_APP_ID',
+};
 
 const firebaseConfig = isEmulator
   ? {
@@ -61,6 +54,23 @@ const firebaseConfig = isEmulator
       messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_SENDER_ID,
       appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
     };
+
+const missingClientVars =
+  isEmulator || typeof window === 'undefined'
+    ? []
+    : Object.entries(firebaseConfig)
+        .filter(([, value]) => !value)
+        .map(([key]) => FIREBASE_CLIENT_VAR_NAMES[key]);
+
+// Fail loudly in the browser instead of silently initializing against a demo
+// project. Server-side (build/SSR) stays silent — the client config is only
+// consumed in the browser, and CI builds without NEXT_PUBLIC_* variables.
+if (missingClientVars.length > 0) {
+  throw new Error(
+    `Missing Firebase client configuration: ${missingClientVars.join(', ')}. ` +
+      'Set these NEXT_PUBLIC_FIREBASE_* variables in your deployment environment and redeploy.',
+  );
+}
 
 function getClientApp() {
   if (getApps().length > 0) return getApps()[0];
