@@ -40,7 +40,7 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://firebasestorage.googleapis.com http://127.0.0.1:9199",
+              "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://*.backblazeb2.com http://127.0.0.1:9199",
               "font-src 'self' data:",
               `connect-src ${connectSrc.join(" ")}`,
               "frame-ancestors 'self'",

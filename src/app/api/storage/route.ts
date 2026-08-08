@@ -54,7 +54,7 @@ const MB = KB * KB;
 const GB = MB * KB;
 
 const FIRESTORE_FREE_LIMIT = 1 * GB;
-const STORAGE_FREE_LIMIT = 1 * GB; // Vercel Blob free tier
+const STORAGE_FREE_LIMIT = 10 * GB; // Backblaze B2 free tier
 
 export const GET = apiHandler(async (request: NextRequest) => {
   await getSessionOrThrow(['owner'], request);

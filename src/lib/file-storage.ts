@@ -1,10 +1,15 @@
-import { put, list as listBlobs, del as deleteBlob } from '@vercel/blob';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
 import { adminBucket } from '@/lib/firebase-admin';
 
 /**
- * Abstraction over member-photo storage. Production uses Vercel Blob (free
- * tier — Firebase Storage requires the paid Blaze plan); local development
- * keeps using the Firebase Storage emulator.
+ * Abstraction over member-photo storage. Production stores files in
+ * Backblaze B2 (S3-compatible, ~$6/TB/mo, 10 GB free) via the AWS SDK v3;
+ * local development keeps using the Firebase Storage emulator.
  */
 
 export interface StoredFile {
@@ -59,42 +64,97 @@ export function firebaseFileStore(bucket: Bucket): FileStore {
   };
 }
 
-export function blobFileStore(): FileStore {
+export interface B2Config {
+  bucket: string;
+  region: string;
+  applicationKeyId: string;
+  applicationKey: string;
+  s3Endpoint?: string;
+  publicUrl?: string;
+}
+
+export function b2FileStore(config: B2Config): FileStore {
+  const s3Endpoint =
+    config.s3Endpoint ?? `https://s3.${config.region}.backblazeb2.com`;
+  // Public read access works at the bucket-prefixed path on B2; override
+  // with a custom domain via publicUrl if one is added later.
+  const publicBase = config.publicUrl ?? `${s3Endpoint}/${config.bucket}`;
+  const client = new S3Client({
+    region: config.region,
+    endpoint: s3Endpoint,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: config.applicationKeyId,
+      secretAccessKey: config.applicationKey,
+    },
+  });
+
+  const photoUrl = (pathname: string) => `${publicBase}/${pathname}`;
+
   return {
     async save(pathname, body, contentType) {
-      const result = await put(pathname, body, {
-        access: 'public',
-        contentType,
-        addRandomSuffix: false,
-      });
-      return { url: result.url, pathname: result.pathname };
+      await client.send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: pathname,
+          Body: body,
+          ContentType: contentType,
+        }),
+      );
+      return { url: photoUrl(pathname), pathname };
     },
     async list(prefix) {
       const files: { pathname: string; size: number }[] = [];
-      let cursor: string | undefined;
+      let continuationToken: string | undefined;
       do {
-        const page = await listBlobs({ prefix, cursor, limit: 1000 });
-        for (const blob of page.blobs) files.push({ pathname: blob.pathname, size: blob.size });
-        cursor = page.hasMore ? page.cursor : undefined;
-      } while (cursor);
+        const page = await client.send(
+          new ListObjectsV2Command({
+            Bucket: config.bucket,
+            Prefix: prefix,
+            MaxKeys: 1000,
+            ContinuationToken: continuationToken,
+          }),
+        );
+        for (const obj of page.Contents ?? []) {
+          files.push({ pathname: obj.Key ?? '', size: obj.Size ?? 0 });
+        }
+        continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+      } while (continuationToken);
       return files;
     },
     async delete(pathname) {
-      // del() is idempotent — deleting a missing blob is a no-op.
-      await deleteBlob(pathname);
+      // S3 DeleteObject is idempotent — deleting a missing object is a no-op.
+      await client.send(
+        new DeleteObjectCommand({ Bucket: config.bucket, Key: pathname }),
+      );
     },
   };
 }
 
+const B2_ENV_VARS = [
+  'B2_BUCKET',
+  'B2_REGION',
+  'B2_APPLICATION_KEY_ID',
+  'B2_APPLICATION_KEY',
+] as const;
+
 /**
  * Select the active file store. Emulator mode (and tests) always use the
- * Firebase Storage emulator; production requires BLOB_READ_WRITE_TOKEN.
- * Returns null when no backend is configured.
+ * Firebase Storage emulator; production requires B2 credentials. Returns
+ * null when no backend is configured (routes surface a clean 500).
  */
 export function getFileStore(): FileStore | null {
   if (process.env.FIREBASE_EMULATOR === 'true') {
     return adminBucket ? firebaseFileStore(adminBucket) : null;
   }
-  if (process.env.BLOB_READ_WRITE_TOKEN) return blobFileStore();
-  return null;
+  const missing = B2_ENV_VARS.filter((name) => !process.env[name]);
+  if (missing.length > 0) return null;
+  return b2FileStore({
+    bucket: process.env.B2_BUCKET!,
+    region: process.env.B2_REGION!,
+    applicationKeyId: process.env.B2_APPLICATION_KEY_ID!,
+    applicationKey: process.env.B2_APPLICATION_KEY!,
+    s3Endpoint: process.env.B2_S3_ENDPOINT || undefined,
+    publicUrl: process.env.B2_PUBLIC_URL || undefined,
+  });
 }
