@@ -1,22 +1,34 @@
 import { NextRequest } from 'next/server';
-import { getDocs, chunk, type WhereClause } from '@/lib/db';
+import { getDocs, countDocs, chunk } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiHandler } from '@/lib/api-handler';
+import { apiError } from '@/lib/api';
 import { escapeCsv } from '@/lib/format';
+import { exportDateRangeWhere } from '@/lib/date-range';
 import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 import { computeMemberStatus } from '@/lib/member-status';
 
-// GET /api/export/members - Export members as CSV (manager + owner). Optional ?startDate=&endDate= (ISO) filter on createdAt.
+// 10k rows keeps exports snappy and bounds member PII / memory in one pull.
+const MAX_EXPORT_ROWS = 10_000;
+
+// GET /api/export/members - Export members as CSV (owner only). Optional ?startDate=&endDate= (ISO or EC) filter on createdAt.
 export const GET = apiHandler(async (request: NextRequest) => {
-  await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner'], request);
 
   const { searchParams } = request.nextUrl;
   const startDate = searchParams.get('startDate') || undefined;
   const endDate = searchParams.get('endDate') || undefined;
 
-  const where: WhereClause[] = [['isDeleted', '==', false]];
-  if (startDate) where.push(['createdAt', '>=', startDate]);
-  if (endDate) where.push(['createdAt', '<=', endDate]);
+  // Inclusive range: start of the start day → end of the end day. Malformed
+  // input returns a 400 instead of silently exporting nothing or everything.
+  const { where, error } = exportDateRangeWhere('createdAt', startDate, endDate);
+  if (error) return apiError(error, 400);
+  where.unshift(['isDeleted', '==', false]);
+
+  const total = await countDocs('members', where);
+  if (total > MAX_EXPORT_ROWS) {
+    return apiError(`Export too large — narrow the date range (max ${MAX_EXPORT_ROWS} rows)`, 400);
+  }
 
   const members = await getDocs<{
     firstName: string;

@@ -1,12 +1,13 @@
 import { formatEthiopianDate } from './ethiopian-calendar';
 
+// `amount` is Birr cents (int) — display in whole Birr.
 export function formatCurrency(amount: number): string {
   const formatted = new Intl.NumberFormat('en-ET', {
     style: 'currency',
     currency: 'ETB',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(amount / 100);
   return formatted.replace('ETB', 'ETB ');
 }
 

@@ -80,9 +80,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
-  const parsedEndDate = new Date(parsedStartDate);
-  parsedEndDate.setDate(parsedEndDate.getDate() + service.duration);
-
   const receiptNumber = generateReceiptNumber();
 
   // The duplicate-active check runs INSIDE the transaction against a
@@ -90,7 +87,24 @@ export const POST = apiHandler(async (request: NextRequest) => {
   // touched changed, so two concurrent POSTs for the same member+service
   // serialize: the loser re-checks on retry, sees the winner's active
   // subscription, and aborts with the conflict error.
-  const { subscriptionId, paymentId, existing } = await db.runTransaction(async (tx) => {
+  //
+  // Member and service validity are ALSO re-verified inside the transaction:
+  // the fast-fail reads above only exist for friendly errors — authority
+  // rests with the tx snapshot so a member soft-deleted (or service
+  // deactivated/repriced) moments before the commit can never be subscribed
+  // against. Price and duration for the charge and end date come from the
+  // in-transaction service read, never the pre-tx snapshot.
+  const result = await db.runTransaction(async (tx) => {
+    const memberSnap = await tx.get(db.collection('members').doc(data.memberId));
+    if (!memberSnap.exists || memberSnap.data()?.isDeleted) {
+      return { kind: 'member_missing' as const };
+    }
+
+    const serviceSnap = await tx.get(db.collection('services').doc(data.serviceId));
+    if (!serviceSnap.exists) return { kind: 'service_missing' as const };
+    const svcData = serviceSnap.data() as { price: number; duration: number; isActive: boolean };
+    if (!svcData.isActive) return { kind: 'service_inactive' as const };
+
     const lockRef = db.collection('subscription-locks').doc(`${data.memberId}_${data.serviceId}`);
     await tx.get(lockRef);
 
@@ -102,18 +116,22 @@ export const POST = apiHandler(async (request: NextRequest) => {
         .where('status', '==', 'active')
         .limit(1),
     );
-    if (!activeCheck.empty) return { existing: true as const };
+    if (!activeCheck.empty) return { kind: 'duplicate' as const };
 
     tx.set(lockRef, { updatedAt: new Date().toISOString() });
+
+    const txEndDate = new Date(parsedStartDate);
+    txEndDate.setDate(txEndDate.getDate() + svcData.duration);
+    const txEndDateIso = txEndDate.toISOString();
 
     const subRef = db.collection('subscriptions').doc();
     tx.set(subRef, {
       memberId: data.memberId,
       serviceId: data.serviceId,
       startDate: parsedStartDate.toISOString(),
-      endDate: parsedEndDate.toISOString(),
+      endDate: txEndDateIso,
       status: 'active',
-      priceSnapshot: service.price,
+      priceSnapshot: svcData.price,
       notes: data.notes || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -123,43 +141,56 @@ export const POST = apiHandler(async (request: NextRequest) => {
     tx.set(payRef, {
       subscriptionId: subRef.id,
       memberId: data.memberId,
-      amount: service.price,
+      amount: svcData.price,
       paymentDate: paymentDateValue.toISOString(),
       method: data.paymentMethod,
       receiptNumber,
       createdBy: session.userId,
       isVoided: false,
-      extendedTo: parsedEndDate.toISOString(),
+      extendedTo: txEndDateIso,
       previousExtendedTo: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
-    return { existing: false as const, subscriptionId: subRef.id, paymentId: payRef.id };
+    return {
+      kind: 'ok' as const,
+      subscriptionId: subRef.id,
+      paymentId: payRef.id,
+      endDate: txEndDateIso,
+      price: svcData.price,
+    };
   });
 
-  if (existing) {
-    return apiError('Member already has an active subscription for this service');
+  switch (result.kind) {
+    case 'member_missing':
+      return apiError('Member not found', 404);
+    case 'service_missing':
+      return apiError('Service not found', 404);
+    case 'service_inactive':
+      return apiError('Service is not active');
+    case 'duplicate':
+      return apiError('Member already has an active subscription for this service');
   }
 
   const subscription = {
-    id: subscriptionId,
+    id: result.subscriptionId,
     memberId: data.memberId,
     serviceId: data.serviceId,
     startDate: parsedStartDate.toISOString(),
-    endDate: parsedEndDate.toISOString(),
+    endDate: result.endDate,
     status: 'active',
-    priceSnapshot: service.price,
+    priceSnapshot: result.price,
     notes: data.notes || null,
     member: { id: member.id, firstName: member.firstName, lastName: member.lastName, photo: member.photo },
-    service: { id: service.id, name: service.name, price: service.price },
+    service: { id: service.id, name: service.name, price: result.price },
   };
 
   const payment = {
-    id: paymentId,
-    subscriptionId,
+    id: result.paymentId,
+    subscriptionId: result.subscriptionId,
     memberId: data.memberId,
-    amount: service.price,
+    amount: result.price,
     paymentDate: paymentDateValue.toISOString(),
     method: data.paymentMethod,
     receiptNumber,

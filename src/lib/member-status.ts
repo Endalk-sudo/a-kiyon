@@ -36,3 +36,16 @@ export function findNearestEndDate(subscriptions: SubscriptionInfo[]): Date | nu
 
   return active.length > 0 ? toDate(active[0].endDate) : null;
 }
+
+/**
+ * Effective display status for a subscription document: `cancelled` is the
+ * only manually-writable state, `active`/`expired` are derived from the end
+ * date. Reads must use this instead of trusting the stored `status`, because
+ * the stored field is only ever a lazily-reconciled cache (debounced
+ * auto-expire) — a stale write must never surface as a contradiction in the
+ * UI (e.g. a just-renewed subscription shown as expired).
+ */
+export function deriveSubscriptionStatus(sub: SubscriptionInfo): 'active' | 'expired' | 'cancelled' {
+  if (sub.status === 'cancelled') return 'cancelled';
+  return toDate(sub.endDate) >= new Date() ? 'active' : 'expired';
+}

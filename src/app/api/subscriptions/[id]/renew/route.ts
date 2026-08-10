@@ -23,6 +23,7 @@ export const POST = apiHandler(async (
     method: data.paymentMethod,
     createdBy: session.userId,
     allowReactivation: true,
+    idempotencyKey: data.idempotencyKey,
   });
 
   if (!result.ok) {
@@ -42,5 +43,10 @@ export const POST = apiHandler(async (
     }
   }
 
-  return apiResponse({ subscription: result.subscription, payment: result.payment }, 201);
+  // A duplicate renew (double-click / retry) resolves to the original payment
+  // and receipt instead of charging twice.
+  return apiResponse(
+    { subscription: result.subscription, payment: { ...result.payment, duplicate: result.duplicate } },
+    result.duplicate ? 200 : 201,
+  );
 });

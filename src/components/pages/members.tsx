@@ -218,6 +218,9 @@ export function MembersPage() {
   // Renew subscription (from member detail modal)
   const [renewDialogOpen, setRenewDialogOpen] = useState(false);
   const [subscriptionToRenew, setSubscriptionToRenew] = useState<MemberDetail['subscriptions'][number] | null>(null);
+  // New key per dialog open: retries within one submission carry the same key,
+  // so a double-click on Renew can never double-charge.
+  const [renewIdempotencyKey, setRenewIdempotencyKey] = useState<string>(() => crypto.randomUUID());
   const [renewPaymentMethod, setRenewPaymentMethod] = useState('cash');
   const [renewing, setRenewing] = useState(false);
 
@@ -311,13 +314,20 @@ export function MembersPage() {
     }
   };
 
+  useEffect(() => {
+    if (subscriptionToRenew) setRenewIdempotencyKey(crypto.randomUUID());
+  }, [subscriptionToRenew]);
+
   // ─── Renew Subscription ─────────────────────────────────────────────────
 
   const handleRenewSubscription = async () => {
     if (!subscriptionToRenew) return;
     setRenewing(true);
     try {
-      const result = await subscriptionsApi.renew(subscriptionToRenew.id, { paymentMethod: renewPaymentMethod });
+      const result = await subscriptionsApi.renew(subscriptionToRenew.id, {
+        paymentMethod: renewPaymentMethod,
+        idempotencyKey: renewIdempotencyKey,
+      });
       toast.success(t(
         locale,
         `Subscription renewed! Payment of ${formatCurrency(result.subscription.priceSnapshot || subscriptionToRenew.priceSnapshot)} has been recorded. Receipt: ${result.payment?.receiptNumber || ''}`,

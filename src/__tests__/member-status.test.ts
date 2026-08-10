@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeMemberStatus, findNearestEndDate } from '@/lib/member-status';
+import { computeMemberStatus, findNearestEndDate, deriveSubscriptionStatus } from '@/lib/member-status';
 
 describe('Member Status', () => {
   describe('computeMemberStatus', () => {
@@ -103,6 +103,25 @@ describe('Member Status', () => {
         { endDate: past.toISOString(), status: 'expired' },
       ];
       expect(findNearestEndDate(subs)).toBeNull();
+    });
+  });
+
+  describe('deriveSubscriptionStatus', () => {
+    const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+    const past = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+
+    it('derives active from the end date even when the stored status is stale', () => {
+      // The auto-expire reconcile race can leave a just-renewed subscription
+      // stored as "expired" — reads must still surface the truth.
+      expect(deriveSubscriptionStatus({ endDate: future, status: 'expired' })).toBe('active');
+    });
+
+    it('derives expired when the end date passed', () => {
+      expect(deriveSubscriptionStatus({ endDate: past, status: 'active' })).toBe('expired');
+    });
+
+    it('never overrides a manual cancellation', () => {
+      expect(deriveSubscriptionStatus({ endDate: future, status: 'cancelled' })).toBe('cancelled');
     });
   });
 });

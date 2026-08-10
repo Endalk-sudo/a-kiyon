@@ -36,7 +36,7 @@ async function createTestSubscription(overrides: Record<string, unknown> = {}) {
     startDate: isoFromNow(-40),
     endDate: isoFromNow(20),
     status: 'active',
-    priceSnapshot: 300,
+    priceSnapshot: 30000,
     notes: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -68,7 +68,7 @@ async function createSubscriptionWithInitialPayment(overrides: Record<string, un
     startDate: isoFromNow(-40),
     endDate,
     status: 'active',
-    priceSnapshot: 300,
+    priceSnapshot: 30000,
     notes: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -78,7 +78,7 @@ async function createSubscriptionWithInitialPayment(overrides: Record<string, un
   const payRef = await db.collection('payments').add({
     subscriptionId: subRef.id,
     memberId,
-    amount: 300,
+    amount: 30000,
     paymentDate: endDate,
     method: 'cash',
     receiptNumber: 'RCPT-INITIAL',
@@ -109,7 +109,7 @@ describe('Payment Service (integration)', () => {
 
     const sRef = await db.collection('services').add({
       name: `${PREFIX}Yoga`,
-      price: 300,
+      price: 30000,
       duration: 30,
       isActive: true,
       createdAt: new Date().toISOString(),
@@ -139,7 +139,7 @@ describe('Payment Service (integration)', () => {
       if (!result.ok) return;
       await trackPayment(result.payment.id);
 
-      expect(result.payment.amount).toBe(300);
+      expect(result.payment.amount).toBe(30000);
       expect(result.payment.receiptNumber).toMatch(/^RCPT-/);
       expect(result.payment.isVoided).toBe(false);
 
@@ -156,7 +156,7 @@ describe('Payment Service (integration)', () => {
     it('rejects an amount that does not match the current service price', async () => {
       const result = await recordAndExtendPayment({
         subscriptionId,
-        amount: 301,
+        amount: 30001,
         method: 'cash',
         createdBy: 'test-user',
       });
@@ -382,7 +382,7 @@ describe('Payment Service (integration)', () => {
       const legacyPayRef = await db.collection('payments').add({
         subscriptionId: legacyId,
         memberId,
-        amount: 300,
+        amount: 30000,
         paymentDate: isoFromNow(-60),
         method: 'cash',
         receiptNumber: 'RCPT-LEGACY',
@@ -394,11 +394,13 @@ describe('Payment Service (integration)', () => {
       await trackPayment(legacyPayRef.id);
 
       // Newer payment records its own previous state, so its rollback works
-      // even when the older payment is a legacy row.
+      // even when the older payment is a legacy row. Renewal always runs with
+      // reactivation allowed (same as the renew route).
       const newer = await recordAndExtendPayment({
         subscriptionId: legacyId,
         method: 'cash',
         createdBy: 'test-user',
+        allowReactivation: true,
       });
       expect(newer.ok).toBe(true);
       if (!newer.ok) return;
@@ -427,7 +429,7 @@ describe('Payment Service (integration)', () => {
     });
   });
 
-  describe('concurrent renewals', () => {
+describe('concurrent renewals', () => {
     it('applies parallel payments exactly once each — no lost days', async () => {
       // Subscription expiring "tomorrow" — two simultaneous renewals must
       // both add 30 days, chained off each other's committed end date.
@@ -470,6 +472,215 @@ describe('Payment Service (integration)', () => {
       ]);
       expect(p1.data()?.isVoided).toBe(false);
       expect(p2.data()?.isVoided).toBe(false);
+
+      await db.collection('subscriptions').doc(subId).delete();
+    });
+  });
+
+  describe('idempotency keys', () => {
+    it('a retried payment with the same key returns the original payment — never a double charge', async () => {
+      const subId = await createTestSubscription({ endDate: isoFromNow(5) });
+      const key = `${PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+      const first = await recordAndExtendPayment({
+        subscriptionId: subId,
+        method: 'cash',
+        createdBy: 'test-user',
+        idempotencyKey: key,
+      });
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+      await trackPayment(first.payment.id);
+
+      const before = await getSub(subId);
+      const beforeEndMs = new Date(before.endDate as string).getTime();
+
+      const second = await recordAndExtendPayment({
+        subscriptionId: subId,
+        method: 'cash',
+        createdBy: 'test-user',
+        idempotencyKey: key,
+      });
+      expect(second.ok).toBe(true);
+      if (!second.ok) return;
+
+      // Same original payment, marked as a duplicate, and the subscription
+      // was extended exactly once — the retry adds nothing.
+      expect(second.duplicate).toBe(true);
+      expect(second.payment.id).toBe(first.payment.id);
+      expect(second.payment.receiptNumber).toBe(first.payment.receiptNumber);
+
+      const after = await getSub(subId);
+      expect(new Date(after.endDate as string).getTime()).toBeCloseTo(beforeEndMs, -4);
+
+      const lock = await db.collection('payment-locks').doc(key).get();
+      expect(lock.exists).toBe(true);
+
+      await db.collection('payment-locks').doc(key).delete();
+      await db.collection('subscriptions').doc(subId).delete();
+    });
+
+    it('voiding a payment frees its idempotency key — a later retry is a fresh charge', async () => {
+      const subId = await createTestSubscription({ endDate: isoFromNow(5) });
+      const key = `${PREFIX}-void-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+      const first = await recordAndExtendPayment({
+        subscriptionId: subId,
+        method: 'cash',
+        createdBy: 'test-user',
+        idempotencyKey: key,
+      });
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+      await trackPayment(first.payment.id);
+
+      const voided = await voidPayment(first.payment.id, 'test-user');
+      expect(voided).not.toBeNull();
+
+      const lock = await db.collection('payment-locks').doc(key).get();
+      expect(lock.exists).toBe(false);
+
+      // Same key right after the void is a NEW charge. The sub was cancelled
+      // by the sole-payment void, so the retry reactivates it.
+      const retry = await recordAndExtendPayment({
+        subscriptionId: subId,
+        method: 'cash',
+        createdBy: 'test-user',
+        idempotencyKey: key,
+        allowReactivation: true,
+      });
+      expect(retry.ok).toBe(true);
+      if (!retry.ok) return;
+      expect(retry.duplicate).toBe(false);
+      await trackPayment(retry.payment.id);
+
+      await db.collection('payment-locks').doc(key).delete();
+      await db.collection('subscriptions').doc(subId).delete();
+    });
+  });
+
+  describe('derived payment gate', () => {
+    it('accepts a member whose STORED status is stale "expired" but the end date is in the future', async () => {
+      // The auto-expire reconcile race can leave a just-renewed subscription
+      // with status "expired" while its end date is still in the future. The
+      // gate is derived from the end date, so a payment must still record.
+      const subId = await createTestSubscription({
+        endDate: isoFromNow(10),
+        status: 'expired',
+      });
+
+      const result = await recordAndExtendPayment({
+        subscriptionId: subId,
+        method: 'cash',
+        createdBy: 'test-user',
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      await trackPayment(result.payment.id);
+
+      const after = await getSub(subId);
+      expect(after.status).toBe('active');
+
+      await db.collection('subscriptions').doc(subId).delete();
+    });
+
+    it('still rejects a genuinely past end date without reactivation', async () => {
+      const subId = await createTestSubscription({
+        status: 'active',
+        endDate: isoFromNow(-2),
+      });
+
+      const result = await recordAndExtendPayment({
+        subscriptionId: subId,
+        method: 'cash',
+        createdBy: 'test-user',
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe('subscription_inactive');
+
+      await db.collection('subscriptions').doc(subId).delete();
+    });
+  });
+
+  describe('auto-expire reconcile', () => {
+    it('never flips a subscription with a future end date, even when stored status is stale "active"', async () => {
+      const { autoExpireSubscriptions, resetAutoExpireDebounce } = await import('@/services/subscription.service');
+      resetAutoExpireDebounce();
+
+      const futureSubId = await createTestSubscription({ endDate: isoFromNow(10), status: 'active' });
+      const pastSubId = await createTestSubscription({ endDate: isoFromNow(-2), status: 'active' });
+
+      await autoExpireSubscriptions();
+
+      const future = await getSub(futureSubId);
+      expect(future.status).toBe('active');
+
+      const past = await getSub(pastSubId);
+      expect(past.status).toBe('expired');
+
+      await db.collection('subscriptions').doc(futureSubId).delete();
+      await db.collection('subscriptions').doc(pastSubId).delete();
+    });
+  });
+
+  describe('void rollback fallback', () => {
+    it('flags an unverifiable rollback instead of silently keeping paid-for days', async () => {
+      // Own service so the test can delete it: without a service doc the
+      // rollback cannot recompute duration and must flag + re-derive state.
+      const svcRef = await db.collection('services').add({
+        name: `${PREFIX}FlagSvc`,
+        price: 30000,
+        duration: 30,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      const ownServiceId = svcRef.id;
+
+      const subId = await createTestSubscription({ serviceId: ownServiceId, endDate: isoFromNow(20) });
+
+      // Give the subscription one existing non-voided payment so a void has
+      // remaining validity to try to roll back to.
+      const initialPayRef = await db.collection('payments').add({
+        subscriptionId: subId,
+        memberId,
+        amount: 30000,
+        paymentDate: isoFromNow(-20),
+        method: 'cash',
+        receiptNumber: 'RCPT-FLAG-INITIAL',
+        createdBy: 'test-user',
+        isVoided: false,
+        extendedTo: isoFromNow(20),
+        previousExtendedTo: null,
+        createdAt: isoFromNow(-5),
+        updatedAt: isoFromNow(-5),
+      });
+      await trackPayment(initialPayRef.id);
+
+      const latest = await recordAndExtendPayment({
+        subscriptionId: subId,
+        method: 'cash',
+        createdBy: 'test-user',
+      });
+      expect(latest.ok).toBe(true);
+      if (!latest.ok) return;
+      await trackPayment(latest.payment.id);
+
+      await db.collection('services').doc(ownServiceId).delete();
+
+      await voidPayment(latest.payment.id, 'test-user');
+      await settle(async () => {
+        const fresh = await getSub(subId);
+        return fresh.hasVoidedPayment === true;
+      });
+
+      const sub = await getSub(subId);
+      expect(sub.hasVoidedPayment).toBe(true);
+      expect(String(sub.voidedPaymentNote)).toContain('unverified');
+      // The stored status is kept coherent with the end date.
+      const derived = new Date(sub.endDate as string).getTime() >= Date.now() ? 'active' : 'expired';
+      expect(sub.status).toBe(derived);
 
       await db.collection('subscriptions').doc(subId).delete();
     });

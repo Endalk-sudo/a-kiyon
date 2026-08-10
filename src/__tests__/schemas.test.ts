@@ -91,8 +91,15 @@ describe('Schemas', () => {
       const data = { name: 'Gym', price: 500, duration: 30 };
       const result = createServiceSchema.parse(data);
       expect(result.name).toBe('Gym');
-      expect(result.price).toBe(500);
+      // Price is converted to integer Birr cents at the boundary — no floats
+      // are ever stored.
+      expect(result.price).toBe(50000);
       expect(result.duration).toBe(30);
+    });
+
+    it('rounds fractional Birr to exact cents', () => {
+      const result = createServiceSchema.parse({ name: 'Gym', price: 99.99, duration: 30 });
+      expect(result.price).toBe(9999);
     });
 
     it('accepts optional fields', () => {
@@ -122,7 +129,7 @@ describe('Schemas', () => {
   describe('updateServiceSchema', () => {
     it('accepts partial update', () => {
       const result = updateServiceSchema.parse({ price: 600 });
-      expect(result.price).toBe(600);
+      expect(result.price).toBe(60000);
     });
   });
 
@@ -206,7 +213,7 @@ describe('Schemas', () => {
         method: 'cash',
       };
       const result = createPaymentSchema.parse(data);
-      expect(result.amount).toBe(500);
+      expect(result.amount).toBe(50000);
       expect(result.method).toBe('cash');
     });
 

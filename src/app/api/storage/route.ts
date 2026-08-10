@@ -114,9 +114,9 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
 
   if (action === 'purge-deleted-members') {
     const photosDeleted = await purgeDeletedMemberPhotos(store);
-    const { members, payments, subscriptions } = await purgeDeletedMembers();
+    const { members, payments, subscriptions, locks } = await purgeDeletedMembers();
     return apiResponse({
-      message: `Permanently deleted ${members} member(s), ${subscriptions} subscription(s), ${payments} payment(s) and ${photosDeleted} photo(s)`,
+      message: `Permanently deleted ${members} member(s), ${subscriptions} subscription(s), ${payments} payment(s), ${locks} lock(s) and ${photosDeleted} photo(s)`,
     });
   }
 

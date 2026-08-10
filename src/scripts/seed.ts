@@ -110,7 +110,7 @@ async function main() {
       nameAm: 'ጂም',
       description: 'Full gym access with all equipment and facilities',
       descriptionAm: 'ሙሉ የጂም ተደራሽነት ከሁሉም መሳሪያዎች እና ተቋማት ጋር',
-      price: 1500,
+      price: 150000,
       duration: 30,
       isActive: true,
       createdAt: now,
@@ -121,7 +121,7 @@ async function main() {
       nameAm: 'ካራቴ',
       description: 'Karate training classes with professional instructors',
       descriptionAm: 'በሙያተኞች አሰልጣኞች የሚሰጥ የካራቴ ስልጠና',
-      price: 2000,
+      price: 200000,
       duration: 30,
       isActive: true,
       createdAt: now,
@@ -132,7 +132,7 @@ async function main() {
       nameAm: 'ኤሮቢክስ',
       description: 'Aerobics and fitness classes for all levels',
       descriptionAm: 'ለሁሉም ደረጃ የኤሮቢክስ እና የአካል ብቃት ክፍሎች',
-      price: 1200,
+      price: 120000,
       duration: 30,
       isActive: true,
       createdAt: now,
@@ -256,35 +256,35 @@ sex: m.sex as 'male' | 'female',
   }
 
   // Member 0: Abebe - Gym, active (paid cash)
-  await createSubWithPayment(0, gymId, 0, 1, 'active', 1500, { method: 'cash', dayOffset: 0, createdBy: ownerId });
+  await createSubWithPayment(0, gymId, 0, 1, 'active', 150000, { method: 'cash', dayOffset: 0, createdBy: ownerId });
 
   // Member 1: Tigist - Karate, active (paid bank_transfer)
-  await createSubWithPayment(1, karateId, 0, 1, 'active', 2000, { method: 'bank_transfer', dayOffset: 0, createdBy: managerId });
+  await createSubWithPayment(1, karateId, 0, 1, 'active', 200000, { method: 'bank_transfer', dayOffset: 0, createdBy: managerId });
 
   // Member 2: Dawit - Gym, active (paid cash)
-  await createSubWithPayment(2, gymId, 0, 1, 'active', 1500, { method: 'cash', dayOffset: 0, createdBy: ownerId });
+  await createSubWithPayment(2, gymId, 0, 1, 'active', 150000, { method: 'cash', dayOffset: 0, createdBy: ownerId });
 
   // Member 3: Mekdes - Aerobics, expired (was paid)
-  await createSubWithPayment(3, aerobicsId, -2, -1, 'expired', 1200, { method: 'cash', dayOffset: -2, createdBy: managerId });
+  await createSubWithPayment(3, aerobicsId, -2, -1, 'expired', 120000, { method: 'cash', dayOffset: -2, createdBy: managerId });
 
   // Member 4: Yonas - Karate, active (paid mobile_money)
-  await createSubWithPayment(4, karateId, 0, 1, 'active', 2000, { method: 'mobile_money', dayOffset: 0, createdBy: ownerId });
+  await createSubWithPayment(4, karateId, 0, 1, 'active', 200000, { method: 'mobile_money', dayOffset: 0, createdBy: ownerId });
 
   // Member 5: Hiwot - Aerobics, active (paid cash)
-  await createSubWithPayment(5, aerobicsId, 0, 1, 'active', 1200, { method: 'cash', dayOffset: 0, createdBy: ownerId });
+  await createSubWithPayment(5, aerobicsId, 0, 1, 'active', 120000, { method: 'cash', dayOffset: 0, createdBy: ownerId });
 
   // Member 6: Solomon - Gym, active (paid bank transfer)
-  await createSubWithPayment(6, gymId, -1, 1, 'active', 1500, { method: 'bank_transfer', dayOffset: -1, createdBy: managerId });
+  await createSubWithPayment(6, gymId, -1, 1, 'active', 150000, { method: 'bank_transfer', dayOffset: -1, createdBy: managerId });
 
   // Member 7: Frehiwot - Karate, active (paid mobile_money)
-  await createSubWithPayment(7, karateId, 0, 1, 'active', 2000, { method: 'mobile_money', dayOffset: 0, createdBy: ownerId });
+  await createSubWithPayment(7, karateId, 0, 1, 'active', 200000, { method: 'mobile_money', dayOffset: 0, createdBy: ownerId });
 
   // Member 8: Bereket - Gym, cancelled
-  await createSubWithPayment(8, gymId, -3, -2, 'cancelled', 1500, undefined, 'Cancelled at member request');
+  await createSubWithPayment(8, gymId, -3, -2, 'cancelled', 150000, undefined, 'Cancelled at member request');
 
   // Member 9: Selamawit - Gym + Aerobics, both active (paid cash for both)
-  await createSubWithPayment(9, gymId, 0, 1, 'active', 1500, { method: 'cash', dayOffset: 0, createdBy: ownerId });
-  await createSubWithPayment(9, aerobicsId, 0, 1, 'active', 1200, { method: 'cash', dayOffset: 0, createdBy: managerId });
+  await createSubWithPayment(9, gymId, 0, 1, 'active', 150000, { method: 'cash', dayOffset: 0, createdBy: ownerId });
+  await createSubWithPayment(9, aerobicsId, 0, 1, 'active', 120000, { method: 'cash', dayOffset: 0, createdBy: managerId });
 
   console.log('Created 11 subscriptions and 10 payments');
 

@@ -121,6 +121,9 @@ export function SubscriptionsPage() {
   const [renewDialogOpen, setRenewDialogOpen] = useState(false);
   const [subscriptionToRenew, setSubscriptionToRenew] = useState<Subscription | null>(null);
   const [renewing, setRenewing] = useState(false);
+  // New key per dialog open: retries within one submission carry the same key,
+  // so a double-click on Renew can never double-charge.
+  const [renewIdempotencyKey, setRenewIdempotencyKey] = useState<string>(() => crypto.randomUUID());
 
   // New subscription dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -172,6 +175,10 @@ export function SubscriptionsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  useEffect(() => {
+    if (subscriptionToRenew) setRenewIdempotencyKey(crypto.randomUUID());
+  }, [subscriptionToRenew]);
+
   // Handle cancel subscription
   const handleCancelSubscription = async () => {
     if (!subscriptionToCancel) return;
@@ -195,7 +202,10 @@ export function SubscriptionsPage() {
     if (!subscriptionToRenew) return;
     setRenewing(true);
     try {
-      const result = await subscriptionsApi.renew(subscriptionToRenew.id, { paymentMethod: renewPaymentMethod });
+      const result = await subscriptionsApi.renew(subscriptionToRenew.id, {
+        paymentMethod: renewPaymentMethod,
+        idempotencyKey: renewIdempotencyKey,
+      });
       toast.success(t(locale, `Subscription renewed! Payment recorded. Receipt: ${result.payment?.receiptNumber || ''}`, `ምዝገባ ታድሷል! ደረሰኝ ቁጥር: ${result.payment?.receiptNumber || ''}`));
       setRenewDialogOpen(false);
       setSubscriptionToRenew(null);

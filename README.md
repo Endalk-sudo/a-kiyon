@@ -146,6 +146,10 @@ src/
 | `pnpm run firebase:emulators:export` | Export emulator data to `./firebase-data` |
 | `pnpm run firebase:emulators:import` | Start emulators with previous data |
 
+## Data & Money
+
+- **All money is integer Birr cents** (×100) in Firestore — `createServiceSchema`/`createPaymentSchema` accept Birr and convert at the API boundary, so totals never drift and an exact match on service price is reliable. CSV exports print decimal Birr.
+
 ## Architecture Notes
 
 - **API routes** under `src/app/api/*/route.ts` are each wrapped with `apiHandler` which catches `ZodError` → 400, `"Unauthorized"` → 401, `"Forbidden"` → 403.

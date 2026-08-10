@@ -1,7 +1,8 @@
-import { db, getDocById, getDocs, getDocsByIds, countDocs, updateDoc } from '@/lib/db';
+import { db, getDocById, getDocs, getDocsByIds, countDocs } from '@/lib/db';
 import type { Doc, WhereClause } from '@/lib/db';
 import { parseEthiopianDate } from '@/lib/ethiopian-calendar';
 import { resolveMemberPhoto } from '@/services/storage.service';
+import { deriveSubscriptionStatus } from '@/lib/member-status';
 
 export function generateReceiptNumber(): string {
   return `RCPT-${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
@@ -18,6 +19,7 @@ function parseDateString(dateStr: string): Date | null {
 }
 
 export type PaymentForRecompute = {
+  id?: string;
   createdAt?: string | null;
   paymentDate?: string | null;
   previousExtendedTo?: string | null;
@@ -51,9 +53,13 @@ export function recomputeEndDate(
   const start = new Date(startDate);
   if (isNaN(start.getTime()) || !Number.isFinite(duration) || (duration ?? 0) <= 0) return null;
 
-  const chronological = [...payments].sort((a, b) =>
-    (a.createdAt || '').localeCompare(b.createdAt || ''),
-  );
+  const chronological = [...payments].sort((a, b) => {
+    const byCreated = (a.createdAt || '').localeCompare(b.createdAt || '');
+    if (byCreated !== 0) return byCreated;
+    // Same-millisecond rows (e.g. a fast renewal chain) need a stable tiebreak
+    // so the rollback anchor is deterministic.
+    return (a.id || '').localeCompare(b.id || '');
+  });
 
   const first = chronological[0];
   const anchor = first.extendedTo ? new Date(first.extendedTo) : null;
@@ -81,6 +87,8 @@ export function recomputeEndDate(
 export type RecordAndExtendResult =
   | {
       ok: true;
+      /** True when the request was a duplicate of an earlier payment (same idempotency key). */
+      duplicate: boolean;
       payment: {
         id: string;
         subscriptionId: string;
@@ -114,10 +122,18 @@ export type RecordAndExtendResult =
  * This is the single rule for "money in = days added". Used by both
  * POST /api/subscriptions/[id]/renew and POST /api/payments.
  *
+ * A client-supplied `idempotencyKey` makes the call safe to retry: the lock
+ * is created in the SAME transaction as the payment, so a double-click or a
+ * retry after a lost response returns the original payment instead of
+ * charging twice.
+ *
  * @param allowReactivation - When true, `expired` and `cancelled` subscriptions
  *   may be reactivated: the end date restarts from today (or the current end
  *   date if it is still in the future). Payments on inactive subscriptions are
- *   rejected unless this is set.
+ *   rejected unless this is set. Inactive here is derived from the end date and
+ *   the manual `cancelled` state — a stale stored `expired` (lazily reconciled
+ *   by the debounced auto-expire) that still has a future end date is treated
+ *   as active, so a just-renewed subscription can never be locked out.
  */
 export async function recordAndExtendPayment(data: {
   subscriptionId: string;
@@ -126,6 +142,7 @@ export async function recordAndExtendPayment(data: {
   notes?: string | null;
   createdBy: string;
   allowReactivation?: boolean;
+  idempotencyKey?: string;
 }): Promise<RecordAndExtendResult> {
   const existing = await getDocById<{
     memberId: string;
@@ -166,7 +183,26 @@ export async function recordAndExtendPayment(data: {
       status: string;
       priceSnapshot: number;
     };
-    if (sub.status !== 'active' && !data.allowReactivation) {
+
+    // Idempotency: the lock lives in the same transaction as the payment, so
+    // a retried request can never create a second charge.
+    if (data.idempotencyKey) {
+      const lockRef = db.collection('payment-locks').doc(data.idempotencyKey);
+      const lockSnap = await tx.get(lockRef);
+      if (lockSnap.exists) {
+        return {
+          error: null as null,
+          duplicate: true as const,
+          existingPaymentId: (lockSnap.data() as { paymentId?: string })?.paymentId ?? null,
+        };
+      }
+    }
+
+    // Validity gate is DERIVED: non-cancelled with a future end date counts as
+    // active even when the stored status is stale ("expired" written by an
+    // auto-expire batch that raced a renewal commit).
+    const derivedActive = deriveSubscriptionStatus(sub) === 'active';
+    if (!derivedActive && !data.allowReactivation) {
       return { error: 'subscription_inactive' as const };
     }
 
@@ -180,7 +216,7 @@ export async function recordAndExtendPayment(data: {
 
     const serviceSnap = await tx.get(db.collection('services').doc(sub.serviceId));
     if (!serviceSnap.exists) return { error: 'service_not_found' as const };
-    const svc = serviceSnap.data() as { price: number; isActive: boolean };
+    const svc = serviceSnap.data() as { price: number; isActive: boolean; duration: number };
     if (!svc.isActive) return { error: 'service_inactive' as const };
     if (data.amount !== undefined && data.amount !== svc.price) {
       return { error: 'amount_mismatch' as const };
@@ -190,7 +226,10 @@ export async function recordAndExtendPayment(data: {
     const currentEndDate = new Date(sub.endDate);
     const startDate = currentEndDate > now ? currentEndDate : now;
     const newEndDate = new Date(startDate);
-    newEndDate.setDate(newEndDate.getDate() + service.duration);
+    // Duration is read from the transaction snapshot too — a service edit
+    // between the fast-fail read above and this write must not apply stale
+    // day counts to a freshly-priced charge.
+    newEndDate.setDate(newEndDate.getDate() + svc.duration);
     const newEndDateIso = newEndDate.toISOString();
 
     tx.update(subRef, {
@@ -214,12 +253,22 @@ export async function recordAndExtendPayment(data: {
       isVoided: false,
       extendedTo: newEndDateIso,
       previousExtendedTo: sub.endDate,
+      idempotencyKey: data.idempotencyKey || null,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     });
 
+    if (data.idempotencyKey) {
+      tx.set(db.collection('payment-locks').doc(data.idempotencyKey), {
+        paymentId: payRef.id,
+        subscriptionId: data.subscriptionId,
+        createdAt: now.toISOString(),
+      });
+    }
+
     return {
       error: null as null,
+      duplicate: false as const,
       paymentId: payRef.id,
       newEndDateIso,
       sub,
@@ -231,10 +280,83 @@ export async function recordAndExtendPayment(data: {
     return { ok: false, reason: result.error };
   }
 
+  if (result.duplicate) {
+    // The original request succeeded but its response was lost (or a
+    // double-click). Return the ORIGINAL payment and the subscription's
+    // current state — never charge again.
+    const existingPaymentId = result.existingPaymentId;
+    const [existingPayment, sub] = await Promise.all([
+      existingPaymentId
+        ? getDocById<{
+            subscriptionId: string;
+            memberId: string;
+            amount: number;
+            paymentDate: string;
+            method: string;
+            receiptNumber: string;
+            notes: string | null;
+            createdBy: string;
+            isVoided: boolean;
+            extendedTo: string;
+            previousExtendedTo: string;
+          }>('payments', existingPaymentId)
+        : null,
+      getDocById<{
+        memberId: string;
+        serviceId: string;
+        startDate: string;
+        endDate: string;
+        status: string;
+        priceSnapshot: number;
+      }>('subscriptions', data.subscriptionId),
+    ]);
+
+    if (!existingPayment || !sub) {
+      return { ok: false, reason: 'subscription_not_found' };
+    }
+
+    const svc = await getDocById<{ name: string; price: number; duration: number }>(
+      'services',
+      sub.serviceId,
+    );
+
+    return {
+      ok: true,
+      duplicate: true,
+      payment: {
+        id: existingPayment.id,
+        subscriptionId: existingPayment.subscriptionId,
+        memberId: existingPayment.memberId,
+        amount: existingPayment.amount,
+        paymentDate: existingPayment.paymentDate,
+        method: existingPayment.method,
+        receiptNumber: existingPayment.receiptNumber,
+        notes: existingPayment.notes,
+        createdBy: existingPayment.createdBy,
+        isVoided: existingPayment.isVoided,
+        extendedTo: existingPayment.extendedTo,
+        previousExtendedTo: existingPayment.previousExtendedTo,
+      },
+      subscription: {
+        id: sub.id,
+        memberId: sub.memberId,
+        serviceId: sub.serviceId,
+        startDate: sub.startDate,
+        endDate: sub.endDate,
+        status: sub.status,
+        priceSnapshot: sub.priceSnapshot,
+        service: svc
+          ? { id: svc.id, name: svc.name, price: svc.price, duration: svc.duration }
+          : { id: sub.serviceId, name: '', price: 0, duration: 0 },
+      },
+    };
+  }
+
   const { paymentId, newEndDateIso, sub, amount } = result;
 
   return {
     ok: true,
+    duplicate: false,
     payment: {
       id: paymentId,
       subscriptionId: data.subscriptionId,
@@ -266,24 +388,14 @@ export async function recordAndExtendPayment(data: {
  * Void a payment and roll the subscription back to the previous payment's
  * `extendedTo` — atomically.
  *
- * Payments with rollback metadata go through a Firestore transaction so the
- * "marked voided" + "subscription rolled back" pair can never be half-applied,
- * and a concurrent double-void is rejected. Payments without metadata
- * (pre-migration rows) fall back to best-effort reconstruction.
+ * "Marked voided" + "subscription rolled back" happen inside ONE transaction:
+ * a crash can never leave them half-applied, and the in-transaction
+ * `isVoided` re-check rejects concurrent double-voids. Payments without
+ * rollback metadata (pre-migration rows) go through the same path — the
+ * rollback is reconstructed from the remaining non-voided payments, which is
+ * exactly what the legacy fallback did, but without the non-atomic window.
  */
 export async function voidPayment(id: string, voidedBy: string) {
-  const target = await getDocById<{
-    isVoided?: boolean;
-    extendedTo?: string | null;
-  }>('payments', id);
-
-  if (!target || target.isVoided) return null;
-
-  // Legacy payment without rollback metadata — best-effort reconstruction.
-  if (!target.extendedTo) {
-    return voidLegacyPayment(id, voidedBy);
-  }
-
   const result = await db.runTransaction(async (tx) => {
     const payRef = db.collection('payments').doc(id);
     const paySnap = await tx.get(payRef);
@@ -298,7 +410,8 @@ export async function voidPayment(id: string, voidedBy: string) {
       receiptNumber: string;
       notes: string | null;
       createdBy: string;
-      extendedTo: string;
+      idempotencyKey?: string | null;
+      extendedTo?: string | null;
       previousExtendedTo?: string | null;
     };
 
@@ -360,6 +473,12 @@ export async function voidPayment(id: string, voidedBy: string) {
       updatedAt: voidedAt,
     });
 
+    // The idempotency lock is tied to this payment — voiding "spends" it so a
+    // stale retry of the original payment request cannot replay later.
+    if (payment.idempotencyKey) {
+      tx.delete(db.collection('payment-locks').doc(payment.idempotencyKey));
+    }
+
     if (subscription) {
       let rolledBackEndDate: Date | null = null;
 
@@ -393,9 +512,21 @@ export async function voidPayment(id: string, voidedBy: string) {
           voidedPaymentNote: `End date rolled back — payment ${payment.receiptNumber} voided`,
         });
       } else if (remainingPayments.length > 0) {
-        // Payments remain but no rollback target could be derived — flag only.
+        // Payments remain but no rollback target could be derived (service or
+        // start date missing). Keep the end date but make the state coherent:
+        // status is re-derived from it and the note flags the uncertain period
+        // for review — a member must not silently keep days paid by a voided
+        // payment without any signal.
+        const derivedStatus =
+          subscription.status === 'cancelled'
+            ? 'cancelled'
+            : new Date(subscription.endDate) >= now
+              ? 'active'
+              : 'expired';
         tx.update(subRef, {
+          status: derivedStatus,
           hasVoidedPayment: true,
+          voidedPaymentNote: `Validity unverified after void — payment ${payment.receiptNumber} voided (rollback source missing)`,
         });
       } else {
         // No non-voided payments remain — no validity remains.
@@ -468,133 +599,6 @@ export async function voidPayment(id: string, voidedBy: string) {
           priceSnapshot: 0,
           service: { name: '' },
         },
-  };
-}
-
-/**
- * Legacy fallback for payments created before rollback metadata existed.
- * Reconstructs the previous validity from the remaining non-voided payments.
- * Best-effort — kept non-transactional because the reconstruction needs a
- * query, and this path predates the transactional query support in
- * `voidPayment` (which runs the same query inside the transaction).
- */
-async function voidLegacyPayment(id: string, voidedBy: string) {
-  const payment = await updateDoc<{
-    subscriptionId: string;
-    memberId: string;
-    amount: number;
-    paymentDate: string;
-    method: string;
-    receiptNumber: string;
-    isVoided: boolean;
-    voidedAt: string;
-    voidedBy: string;
-    notes: string | null;
-    createdBy: string;
-    previousExtendedTo?: string | null;
-  }>('payments', id, {
-    isVoided: true,
-    voidedAt: new Date().toISOString(),
-    voidedBy,
-  });
-
-  if (!payment) return null;
-
-  const [member, subscription] = await Promise.all([
-    getDocById<{ firstName: string; lastName: string; photo: string | null; photoThumb?: string | null }>('members', payment.memberId),
-    getDocById<{ startDate: string; endDate: string; priceSnapshot: number; serviceId: string; status: string }>(
-      'subscriptions',
-      payment.subscriptionId,
-    ),
-  ]);
-
-  let serviceName: string | undefined;
-  let updatedSubscription = subscription;
-
-  if (subscription) {
-    const service = await getDocById<{ name: string; duration: number }>('services', subscription.serviceId);
-    serviceName = service?.name;
-
-    const now = new Date();
-
-    const otherPayments = (await getDocs<{
-      createdAt?: string;
-      paymentDate?: string;
-      previousExtendedTo?: string | null;
-      extendedTo?: string | null;
-    }>('payments', [
-      ['subscriptionId', '==', payment.subscriptionId],
-      ['isVoided', '==', false],
-    ], ['createdAt', 'desc'])).filter((p) => p.id !== id);
-
-    if (otherPayments.length === 0) {
-      if (subscription.status === 'active') {
-        await updateDoc('subscriptions', payment.subscriptionId, {
-          status: 'cancelled',
-          hasVoidedPayment: true,
-          voidedPaymentNote: `Cancelled — sole payment ${payment.receiptNumber} voided`,
-        });
-      } else {
-        await updateDoc('subscriptions', payment.subscriptionId, {
-          hasVoidedPayment: true,
-        });
-      }
-    } else {
-      // Re-simulate the remaining payments (same rule as the transactional
-      // void path — claw back the voided payment's days).
-      let rolledBackEndDate: Date | null = null;
-      if (service && subscription.startDate) {
-        rolledBackEndDate = recomputeEndDate(
-          otherPayments,
-          subscription.startDate,
-          service.duration,
-          payment.previousExtendedTo,
-        );
-      }
-
-      const status = rolledBackEndDate && rolledBackEndDate >= now ? 'active' : 'expired';
-
-      await updateDoc('subscriptions', payment.subscriptionId, {
-        ...(rolledBackEndDate ? { endDate: rolledBackEndDate.toISOString() } : {}),
-        status,
-        hasVoidedPayment: true,
-        voidedPaymentNote: `End date rolled back — payment ${payment.receiptNumber} voided`,
-      });
-    }
-
-    // Re-read after the rollback so the response reflects the post-void state.
-    updatedSubscription = await getDocById<{
-      startDate: string;
-      endDate: string;
-      priceSnapshot: number;
-      serviceId: string;
-      status: string;
-    }>('subscriptions', payment.subscriptionId);
-  }
-
-  const memberPhotos = await resolveMemberPhoto(member?.photo, member?.photoThumb);
-
-  return {
-    ...payment,
-    member: member
-      ? {
-          id: member.id,
-          firstName: member.firstName,
-          lastName: member.lastName,
-          photo: memberPhotos.photo,
-          photoThumb: memberPhotos.photoThumb,
-        }
-      : { id: payment.memberId, firstName: '', lastName: '', photo: null },
-    subscription: updatedSubscription
-      ? {
-          id: updatedSubscription.id,
-          startDate: updatedSubscription.startDate,
-          endDate: updatedSubscription.endDate,
-          status: updatedSubscription.status,
-          priceSnapshot: updatedSubscription.priceSnapshot,
-          service: { name: serviceName || '' },
-        }
-      : { id: payment.subscriptionId, startDate: '', endDate: '', status: '', priceSnapshot: 0, service: { name: '' } },
   };
 }
 
@@ -737,7 +741,7 @@ async function enrichPayments(payments: Doc<PaymentDoc>[]) {
             id: subscription.id,
             startDate: subscription.startDate,
             endDate: subscription.endDate,
-            status: subscription.status,
+            status: deriveSubscriptionStatus(subscription),
             priceSnapshot: subscription.priceSnapshot,
             service: { name: serviceName || '' },
           }

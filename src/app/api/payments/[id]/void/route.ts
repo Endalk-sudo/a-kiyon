@@ -18,7 +18,14 @@ export const POST = apiHandler(async (
   if (payment.isVoided) return apiError('Payment is already voided');
 
   const updatedPayment = await voidPayment(id, session.userId);
-  if (!updatedPayment) return apiError('Payment not found', 404);
+  if (!updatedPayment) {
+    // `voidPayment` returns null for "nothing voided" — either the payment is
+    // gone or a concurrent request already voided it. Distinguish so a
+    // double-click on Void reports a conflict, not a confusing 404.
+    const fresh = await getDocById<{ isVoided: boolean }>('payments', id);
+    if (fresh?.isVoided) return apiError('Payment is already voided', 409);
+    return apiError('Payment not found', 404);
+  }
 
   return apiResponse(updatedPayment);
 });

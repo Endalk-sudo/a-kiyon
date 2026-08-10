@@ -133,27 +133,45 @@ export async function deleteDoc(collection: string, id: string): Promise<void> {
   await db.collection(collection).doc(id).delete();
 }
 
+/**
+ * Batch-update every document matching `where`. Returns the number of
+ * documents actually updated (0 when none matched).
+ *
+ * `limit` caps the snapshot so callers on read paths can never trigger
+ * unbounded scans or hundreds of batch commits. Each 400-write chunk commits
+ * independently and a failing chunk is logged and skipped — a partial update
+ * is preferable to a thrown error on a read endpoint, and callers that need
+ * atomicity must use transactions instead.
+ */
 export async function batchUpdate(
   collection: string,
   where: WhereClause[],
   data: Record<string, unknown>,
+  limit?: number,
 ): Promise<number> {
-  const docs = await getDocs<Record<string, unknown>>(collection, where);
+  const docs = await getDocs<Record<string, unknown>>(collection, where, undefined, limit);
   if (docs.length === 0) return 0;
   const now = new Date().toISOString();
   // A single Firestore batch is limited to 500 writes.
   const BATCH_LIMIT = 400;
+  let updated = 0;
   for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
     const batch = db.batch();
-    for (const doc of docs.slice(i, i + BATCH_LIMIT)) {
+    const chunkDocs = docs.slice(i, i + BATCH_LIMIT);
+    for (const doc of chunkDocs) {
       batch.update(db.collection(collection).doc(doc.id), {
         ...data,
         updatedAt: now,
       });
     }
-    await batch.commit();
+    try {
+      await batch.commit();
+      updated += chunkDocs.length;
+    } catch (err) {
+      console.error(`[db] batchUpdate chunk failed (${collection}) — ${chunkDocs.length} docs left un-updated:`, err);
+    }
   }
-  return docs.length;
+  return updated;
 }
 
 export async function batchDelete(collection: string, ids: string[]): Promise<number> {

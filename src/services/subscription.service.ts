@@ -1,8 +1,9 @@
 import {
-  getDocById, getDocs, getDocsByIds, countDocs, updateDoc, batchUpdate, chunk,
+  db, getDocById, getDocs, getDocsByIds, countDocs, updateDoc, chunk,
 } from '@/lib/db';
 import type { WhereClause, Doc } from '@/lib/db';
 import { resolveMemberPhoto } from '@/services/storage.service';
+import { deriveSubscriptionStatus } from '@/lib/member-status';
 
 interface SubscriptionDoc {
   memberId: string;
@@ -14,11 +15,16 @@ interface SubscriptionDoc {
   notes?: string | null;
 }
 
-// Expiry is normally enforced on every read (documented design). Debounce the
+// Expiry is normally reconciled on every read (documented design). Debounce the
 // actual scan+write so a page with many API calls (or many concurrent users)
 // doesn't trigger the full scan + batch update once per request — the status
 // just becomes slightly less "live" between ticks.
 const EXPIRE_DEBOUNCE_MS = 60_000;
+// Cap per tick: reads that call this (list/dashboard GETs) must never trigger
+// unbounded scans or hundreds of batch commits; the cron stays the backfill
+// for large backlogs.
+const EXPIRE_BATCH_LIMIT = 500;
+const WRITE_BATCH_LIMIT = 400;
 let lastExpireRun = 0;
 
 /** Test hook — clears the debounce window so the next call runs immediately. */
@@ -26,15 +32,61 @@ export function resetAutoExpireDebounce() {
   lastExpireRun = 0;
 }
 
+/**
+ * Reconcile stored subscription statuses with reality: any `active`
+ * subscription whose end date passed becomes `expired`.
+ *
+ * This is a cache write, NOT the source of truth — reads derive the displayed
+ * status from the end date (see `deriveSubscriptionStatus`). It is made
+ * race-free against concurrent renewals by re-verifying each document inside
+ * the scan AND immediately before writing: a subscription renewed after the
+ * scan (fresh end date, still `active`) is never flipped by a stale snapshot.
+ * Any failure is logged and swallowed — read endpoints must never 500 because
+ * of a hygiene write.
+ */
 export async function autoExpireSubscriptions() {
   const now = Date.now();
   if (now - lastExpireRun < EXPIRE_DEBOUNCE_MS) return;
   lastExpireRun = now;
 
-  await batchUpdate('subscriptions', [
-    ['status', '==', 'active'],
-    ['endDate', '<', new Date(now).toISOString()],
-  ], { status: 'expired' });
+  const cutoff = new Date(now).toISOString();
+  try {
+    const candidates = await getDocs<{ id: string; endDate: string }>(
+      'subscriptions',
+      [
+        ['status', '==', 'active'],
+        ['endDate', '<', cutoff],
+      ],
+      ['endDate', 'asc'],
+      EXPIRE_BATCH_LIMIT,
+    );
+    if (candidates.length === 0) return;
+
+    // Re-verify INSTANTLY before commit: a renewal may have committed between
+    // the scan and here. The read-then-write gap inside the deadline stays
+    // tiny, and even a miss only leaves a stale stored status — reads derive
+    // the truth.
+    const refs = candidates.map((c) => db.collection('subscriptions').doc(c.id));
+    const fresh = await db.getAll(...refs);
+    const expiredNow = fresh.filter(
+      (snap) =>
+        snap.exists &&
+        (snap.data() as { status?: string; endDate?: string }).status === 'active' &&
+        (snap.data() as { endDate?: string }).endDate! < cutoff,
+    );
+    if (expiredNow.length === 0) return;
+
+    const nowIso = new Date().toISOString();
+    for (let i = 0; i < expiredNow.length; i += WRITE_BATCH_LIMIT) {
+      const batch = db.batch();
+      for (const snap of expiredNow.slice(i, i + WRITE_BATCH_LIMIT)) {
+        batch.update(snap.ref, { status: 'expired', updatedAt: nowIso });
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    console.error('[expiry] reconcile batch failed — reads derive status anyway:', err);
+  }
 }
 
 export type SubscriptionListOptions = {
@@ -130,9 +182,10 @@ async function enrichSubscriptions(subscriptions: Doc<SubscriptionDoc>[]) {
   return Promise.all(subscriptions.map(async (sub) => {
     const member = membersMap.get(sub.memberId);
     const photos = member ? photoUrls.get(member.id) : undefined;
-    return {
-      ...sub,
-      member: member
+return {
+    ...sub,
+    status: deriveSubscriptionStatus(sub),
+    member: member
         ? {
             id: member.id,
             firstName: member.firstName,
@@ -224,6 +277,7 @@ export async function updateSubscription(id: string, data: { status?: string; no
 
   return {
     ...sub,
+    status: deriveSubscriptionStatus(sub),
     member: member || { id: sub.memberId, firstName: '', lastName: '', photo: null },
     service: service || { id: sub.serviceId, name: '', price: 0 },
   };

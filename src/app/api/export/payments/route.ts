@@ -1,21 +1,32 @@
 import { NextRequest } from 'next/server';
-import { getDocs, getDocsByIds, type WhereClause } from '@/lib/db';
+import { getDocs, getDocsByIds, countDocs } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiHandler } from '@/lib/api-handler';
+import { apiError } from '@/lib/api';
 import { escapeCsv } from '@/lib/format';
+import { exportDateRangeWhere } from '@/lib/date-range';
 import { formatEthiopianDate } from '@/lib/ethiopian-calendar';
 
-// GET /api/export/payments - Export payments as CSV (manager + owner). Optional ?startDate=&endDate= (ISO) filter on paymentDate.
+// 10k rows keeps exports snappy and bounds member PII / memory in one pull.
+const MAX_EXPORT_ROWS = 10_000;
+
+// GET /api/export/payments - Export payments as CSV (owner only). Optional ?startDate=&endDate= (ISO or EC) filter on paymentDate.
 export const GET = apiHandler(async (request: NextRequest) => {
-  await getSessionOrThrow(['owner', 'manager'], request);
+  await getSessionOrThrow(['owner'], request);
 
   const { searchParams } = request.nextUrl;
   const startDate = searchParams.get('startDate') || undefined;
   const endDate = searchParams.get('endDate') || undefined;
 
-  const where: WhereClause[] = [];
-  if (startDate) where.push(['paymentDate', '>=', startDate]);
-  if (endDate) where.push(['paymentDate', '<=', endDate]);
+  // Inclusive range: start of the start day → end of the end day. Malformed
+  // input returns a 400 instead of silently exporting nothing or everything.
+  const { where, error } = exportDateRangeWhere('paymentDate', startDate, endDate);
+  if (error) return apiError(error, 400);
+
+  const total = await countDocs('payments', where);
+  if (total > MAX_EXPORT_ROWS) {
+    return apiError(`Export too large — narrow the date range (max ${MAX_EXPORT_ROWS} rows)`, 400);
+  }
 
   const payments = await getDocs<{
     memberId: string;
@@ -34,7 +45,8 @@ export const GET = apiHandler(async (request: NextRequest) => {
     const member = membersMap.get(payment.memberId);
     const memberName = member ? `${member.firstName} ${member.lastName}` : '';
     const receiptNumber = payment.receiptNumber || '';
-    const amount = String(payment.amount);
+    // Stored as integer Birr cents — export human-readable Birr.
+    const amount = (payment.amount / 100).toFixed(2);
     const method = payment.method || '';
     const paymentDate = new Date(payment.paymentDate);
     const dateEC = Number.isNaN(paymentDate.getTime()) ? '' : formatEthiopianDate(paymentDate);

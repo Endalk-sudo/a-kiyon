@@ -33,13 +33,15 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const data = createPaymentSchema.parse(body);
 
   // Money in = days added: recording a payment extends the subscription
-  // end date by the service duration (same rule as renewing).
+  // end date by the service duration (same rule as renewing). The
+  // idempotency key makes retries safe — a double-click never double-charges.
   const result = await recordAndExtendPayment({
     subscriptionId: data.subscriptionId,
     amount: data.amount,
     method: data.method,
     notes: data.notes || null,
     createdBy: session.userId,
+    idempotencyKey: data.idempotencyKey,
   });
 
   if (!result.ok) {
@@ -59,5 +61,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
-  return apiResponse(result.payment, 201);
+  // A duplicate resolves to the original payment — same receipt, no second charge.
+  return apiResponse({ ...result.payment, duplicate: result.duplicate }, result.duplicate ? 200 : 201);
 });

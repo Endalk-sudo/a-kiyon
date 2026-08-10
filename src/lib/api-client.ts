@@ -167,14 +167,22 @@ export const subscriptionsApi = {
     apiFetch<{ subscription: SubscriptionRecord; payment: { id: string; amount: number; receiptNumber: string } }>('/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<SubscriptionRecord>) =>
     apiFetch<SubscriptionRecord>(`/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  renew: (id: string, data?: { paymentMethod: string }) =>
-    apiFetch<{ subscription: SubscriptionRecord; payment: { id: string; amount: number; receiptNumber: string } }>(`/subscriptions/${id}/renew`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  renew: (id: string, data?: { paymentMethod: string; idempotencyKey?: string }) =>
+    apiFetch<{ subscription: SubscriptionRecord; payment: { id: string; amount: number; receiptNumber: string; duplicate?: boolean } }>(`/subscriptions/${id}/renew`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
 };
 
 // Payments
 export const paymentsApi = {
   list: (params?: Record<string, string | number | boolean | undefined>) =>
     apiFetch<PaginatedResponse<PaymentRecord>>('/payments', { params }),
+  create: (data: {
+    subscriptionId: string;
+    amount: number;
+    method: string;
+    notes?: string | null;
+    idempotencyKey?: string;
+  }) =>
+    apiFetch<PaymentRecord & { duplicate?: boolean }>('/payments', { method: 'POST', body: JSON.stringify(data) }),
   void: (id: string) =>
     apiFetch<PaymentRecord>(`/payments/${id}/void`, { method: 'POST' }),
 };

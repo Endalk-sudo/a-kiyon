@@ -214,28 +214,43 @@ export async function purgeDeletedMembers(): Promise<{
   members: number;
   payments: number;
   subscriptions: number;
+  locks: number;
 }> {
   const deletedMembers = await getDocs<Record<string, unknown>>('members', [['isDeleted', '==', true]]);
-  if (deletedMembers.length === 0) return { members: 0, payments: 0, subscriptions: 0 };
+  if (deletedMembers.length === 0) return { members: 0, payments: 0, subscriptions: 0, locks: 0 };
 
   const memberIds = deletedMembers.map((m) => m.id);
 
   const paymentIds: string[] = [];
   const subscriptionIds: string[] = [];
+  const lockIds: string[] = [];
   for (const idChunk of chunk(memberIds)) {
     const [payments, subscriptions] = await Promise.all([
       getDocs<Record<string, unknown>>('payments', [['memberId', 'in', idChunk]]),
-      getDocs<Record<string, unknown>>('subscriptions', [['memberId', 'in', idChunk]]),
+      getDocs<{ serviceId?: string; memberId: string }>('subscriptions', [['memberId', 'in', idChunk]]),
     ]);
     paymentIds.push(...payments.map((p) => p.id));
     subscriptionIds.push(...subscriptions.map((s) => s.id));
+    // Each subscription creation touches a `subscription-locks/<memberId>_<serviceId>`
+    // doc that is never removed elsewhere — purge them with their member.
+    lockIds.push(
+      ...subscriptions
+        .filter((s) => s.serviceId)
+        .map((s) => `${s.memberId}_${s.serviceId}`),
+    );
   }
 
-  const [deletedPayments, deletedSubscriptions, deletedMembersCount] = await Promise.all([
+  const [deletedPayments, deletedSubscriptions, deletedMembersCount, deletedLocks] = await Promise.all([
     batchDelete('payments', paymentIds),
     batchDelete('subscriptions', subscriptionIds),
     batchDelete('members', memberIds),
+    batchDelete('subscription-locks', lockIds),
   ]);
 
-  return { members: deletedMembersCount, payments: deletedPayments, subscriptions: deletedSubscriptions };
+  return {
+    members: deletedMembersCount,
+    payments: deletedPayments,
+    subscriptions: deletedSubscriptions,
+    locks: deletedLocks,
+  };
 }

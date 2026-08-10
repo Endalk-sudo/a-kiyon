@@ -142,7 +142,7 @@ export function ServicesPage() {
       nameAm: service.nameAm || '',
       description: service.description || '',
       descriptionAm: service.descriptionAm || '',
-      price: String(service.price),
+      price: String(service.price / 100),
       duration: String(service.duration),
       isActive: service.isActive,
     });
@@ -179,7 +179,7 @@ export function ServicesPage() {
         nameAm: form.nameAm.trim() || null,
         description: form.description.trim() || null,
         descriptionAm: form.descriptionAm.trim() || null,
-        price: Number(form.price),
+        price: Math.round(Number(form.price) * 100),
         duration: Number(form.duration),
         isActive: form.isActive,
       });
@@ -226,7 +226,7 @@ export function ServicesPage() {
         nameAm: form.nameAm.trim() || null,
         description: form.description.trim() || null,
         descriptionAm: form.descriptionAm.trim() || null,
-        price: Number(form.price),
+        price: Math.round(Number(form.price) * 100),
         duration: Number(form.duration),
         isActive: form.isActive,
       });

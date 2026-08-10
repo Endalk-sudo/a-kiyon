@@ -26,8 +26,21 @@ describe('phone-auth helpers', () => {
       expect(normalizePhone('+251-911-000-000')).toBe('+251911000000');
     });
 
-    it('truncates over-long numbers', () => {
-      expect(normalizePhone('+25191100000099')).toBe('+251911000000');
+    it('rejects over-long numbers instead of truncating', () => {
+      expect(normalizePhone('+25191100000099')).toBe('');
+    });
+
+    it('rejects malformed lengths — never aliases a wrong number', () => {
+      expect(normalizePhone('0911')).toBe('');
+      expect(normalizePhone('+25191100000')).toBe('');
+      expect(normalizePhone('25191100000')).toBe('');
+      expect(normalizePhone('091100000000')).toBe('');
+      expect(normalizePhone('811000000')).toBe('');
+      expect(normalizePhone('')).toBe('');
+    });
+
+    it('accepts a bare 9-digit local number', () => {
+      expect(normalizePhone('911000000')).toBe('+251911000000');
     });
   });
 

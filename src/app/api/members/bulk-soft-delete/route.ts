@@ -21,7 +21,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const now = new Date().toISOString();
   let deleted = 0;
   for (const idChunk of chunk(ids)) {
-    deleted += await batchUpdate('members', [['__name__', 'in', idChunk]], {
+    // Only ever flag members not already soft-deleted — re-flagging resets
+    // their deletedAt and would report a "delete" that didn't happen.
+    deleted += await batchUpdate('members', [
+      ['__name__', 'in', idChunk],
+      ['isDeleted', '==', false],
+    ], {
       isDeleted: true,
       deletedAt: now,
     });

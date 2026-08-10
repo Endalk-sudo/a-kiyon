@@ -38,6 +38,12 @@ const memberPhone = () =>
 const measurement = (min: number, max: number) =>
   z.coerce.number().finite().min(min).max(max).optional().nullable();
 
+// Money is stored as INTEGER Birr cents (×100) — no float drift in totals,
+// strict equality on charges is exact. Callers send Birr; the transform
+// converts at the API boundary. `Math.round` fixes float artifacts (0.29×100).
+const birrAmount = (min: number, message?: string) =>
+  z.coerce.number().finite().min(min, message).transform((v) => Math.round(v * 100));
+
 export const createMemberSchema = z.object({
   firstName: name().min(1, 'First name is required'),
   lastName: name().min(1, 'Last name is required'),
@@ -91,7 +97,7 @@ export const createServiceSchema = z.object({
   nameAm: text().optional().nullable(),
   description: text(2000).optional().nullable(),
   descriptionAm: text(2000).optional().nullable(),
-  price: z.coerce.number().nonnegative('Price must be non-negative'),
+  price: birrAmount(0, 'Price must be non-negative'),
   duration: z.coerce.number().int().positive('Duration must be a positive integer (days)'),
   isActive: z.boolean().optional(),
 }).strict();
@@ -101,7 +107,7 @@ export const updateServiceSchema = z.object({
   nameAm: text().optional().nullable(),
   description: text(2000).optional().nullable(),
   descriptionAm: text(2000).optional().nullable(),
-  price: z.coerce.number().nonnegative().optional(),
+  price: birrAmount(0).optional(),
   duration: z.coerce.number().int().positive().optional(),
   isActive: z.boolean().optional(),
 }).strict();
@@ -117,6 +123,9 @@ export const createSubscriptionSchema = z.object({
 
 export const renewSubscriptionSchema = z.object({
   paymentMethod: z.enum(paymentMethods),
+  // Client-generated (crypto.randomUUID) — lets a double-click or a network
+  // retry resolve to the original payment instead of charging twice.
+  idempotencyKey: z.string().min(8, 'idempotencyKey is required').max(64).optional(),
 }).strict();
 
 export const updateSubscriptionSchema = z.object({
@@ -129,9 +138,10 @@ export const updateSubscriptionSchema = z.object({
 
 export const createPaymentSchema = z.object({
   subscriptionId: z.string().min(1, 'subscriptionId is required').max(100),
-  amount: z.coerce.number().positive('Amount must be greater than 0'),
+  amount: birrAmount(0).refine((v) => v > 0, 'Amount must be greater than 0'),
   method: z.enum(paymentMethods),
   notes: text().optional().nullable(),
+  idempotencyKey: z.string().min(8, 'idempotencyKey is required').max(64).optional(),
 }).strict();
 
 export const createUserSchema = z.object({

@@ -2,12 +2,19 @@ const PHONE_DOMAIN = '@a-kiyon.app';
 
 export const PHONE_REGEX = /^\+2519\d{8}$/;
 
-/** Strips everything but digits and normalizes to +251XXXXXXXXX. */
+/**
+ * Strips everything but digits and normalizes to +251XXXXXXXXX. Any input
+ * that can't be one of the three accepted forms (251XXXXXXXXX, 09XXXXXXXX, a
+ * bare 9XXXXXXXX) returns '' — a malformed number must never silently
+ * truncate into a DIFFERENT valid number (which would sign someone into
+ * someone else's account or mint a wrong synthetic email).
+ */
 export function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('251')) return `+251${digits.slice(3, 12)}`;
-  if (digits.startsWith('09')) return `+251${digits.slice(1, 10)}`;
-  return `+251${digits.slice(0, 9)}`;
+  if (digits.length === 12 && digits.startsWith('251')) return `+251${digits.slice(3)}`;
+  if (digits.length === 10 && digits.startsWith('09')) return `+251${digits.slice(1)}`;
+  if (digits.length === 9 && digits.startsWith('9')) return `+251${digits}`;
+  return '';
 }
 
 export function isValidPhone(phone: string): boolean {
