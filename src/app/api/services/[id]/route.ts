@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getDocById, updateDoc } from '@/lib/db';
+import { getDocById, updateDoc, deleteDoc } from '@/lib/db';
 import { getSessionOrThrow } from '@/lib/auth';
 import { apiResponse, apiError } from '@/lib/api';
 import { apiHandler } from '@/lib/api-handler';
@@ -48,11 +48,10 @@ export const DELETE = apiHandler(async (
 
   const { id } = await params;
 
-  const existing = await getDocById<{ isActive: boolean; name: string }>('services', id);
+  const existing = await getDocById<{ name: string }>('services', id);
   if (!existing) return apiError('Service not found', 404);
-  if (!existing.isActive) return apiError('Service is already inactive');
 
-  await updateDoc<{ name: string; isActive: boolean }>('services', id, { isActive: false });
+  await deleteDoc('services', id);
 
-  return apiResponse({ message: 'Service deactivated successfully' });
+  return apiResponse({ message: 'Service deleted successfully', id });
 });

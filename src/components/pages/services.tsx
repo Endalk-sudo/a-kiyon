@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { servicesApi } from '@/lib/api-client';
+import { servicesApi, subscriptionsApi } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/format';
 import { useAppStore } from '@/lib/store';
 import { sanitizeError } from '@/lib/errors';
@@ -42,6 +42,7 @@ import {
   Banknote,
   TriangleAlert,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ServiceRecord } from '@/lib/api-types';
@@ -87,6 +88,10 @@ export function ServicesPage() {
   const [searchDebounced, setSearchDebounced] = useState('');
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [serviceToToggle, setServiceToToggle] = useState<Service | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteUsageCount, setDeleteUsageCount] = useState(0);
 
   const fetchServices = useCallback(async () => {
     try {
@@ -282,6 +287,41 @@ export function ServicesPage() {
       toast.error(
         sanitizeError(err, locale, `Failed to ${action} service`, 'አገልግሎቱን ማሻሻል አልተሳካም')
       );
+    }
+  };
+
+  const openDeleteDialog = async (service: Service) => {
+    setServiceToDelete(service);
+    setDeleteUsageCount(0);
+    setDeleteDialogOpen(true);
+    try {
+      const res = await subscriptionsApi.list({ serviceId: service.id, limit: 1, page: 1 });
+      setDeleteUsageCount(res.pagination?.total ?? 0);
+    } catch {
+      // Usage count is informational only — keep the dialog usable
+      setDeleteUsageCount(-1);
+    }
+  };
+
+  const handleDeleteService = async () => {
+    if (!serviceToDelete) return;
+    setDeleting(true);
+    try {
+      await servicesApi.delete(serviceToDelete.id);
+      toast.success(
+        locale === 'en'
+          ? 'Service deleted successfully'
+          : 'አገልግሎቱ በተሳካ ሁኔታ ተሰርዟል'
+      );
+      setDeleteDialogOpen(false);
+      setServiceToDelete(null);
+      fetchServices();
+    } catch (err) {
+      toast.error(
+        sanitizeError(err, locale, 'Failed to delete service', 'አገልግሎቱን መሰረዝ አልተሳካም')
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -606,6 +646,15 @@ export function ServicesPage() {
                       {locale === 'en' ? 'Edit' : 'አስተካክል'}
                     </Button>
                     <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => openDeleteDialog(service)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      {locale === 'en' ? 'Delete' : 'ሰርዝ'}
+                    </Button>
+                    <Button
                       variant={service.isActive ? 'outline' : 'default'}
                       size="sm"
                       onClick={() => handleToggleActive(service)}
@@ -723,6 +772,42 @@ export function ServicesPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {locale === 'en' ? 'Deactivate' : 'አጥፋ'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Service Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {locale === 'en' ? 'Delete Service' : 'አገልግሎት ሰርዝ'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {locale === 'en'
+                ? `Are you sure you want to permanently delete "${serviceToDelete?.name}"? This cannot be undone.`
+                : `"${serviceToDelete?.name}" አገልግሎቱን በቋሚነት መሰረዝ እርግጠኛ ነዎት? ይህ እርምጃ ሊቀለበስ አይችልም.`}
+              {deleteUsageCount > 0 && (
+                <span className="mt-2 block">
+                  {locale === 'en'
+                    ? `This service is used by ${deleteUsageCount} subscription${deleteUsageCount === 1 ? '' : 's'}. Deleting it keeps payment history, but those subscriptions will show a blank service name.`
+                    : `ይህ አገልግሎት በ${deleteUsageCount} ምዝገባዎች ጥቅም ላይ ውሏል. ሲሰርዙት የክፍያ ታሪክ ይቆያል, ነገር ግን የአገልግሎት ስሙ ባዶ ሆኖ ይታያል.`}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>
+              {locale === 'en' ? 'Cancel' : 'ሰርዝ'}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteService}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {locale === 'en' ? 'Delete' : 'ሰርዝ'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

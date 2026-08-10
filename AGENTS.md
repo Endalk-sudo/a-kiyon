@@ -40,6 +40,7 @@ pnpm run test           # vitest (needs Firebase emulators running)
 
 - **Firestore** (via `firebase-admin`). 5 collections: `members`, `subscriptions`, `payments`, `services`, `users`.
 - **Soft delete** on Members via `isDeleted` boolean field.
+- **Service deletion is permanent** (owner only) — the UI warns with a live subscription-usage count before confirming; historical subscriptions/payments keep their `priceSnapshot` and reads fall back to blank service names.
 - **Subscription expiry** is batch-updated on every list/get call. Standalone cron at `src/scripts/cron-expire.ts`.
 - **Renewal model** extends `endDate` on the existing subscription doc (no new rows).
 - **Firestore helpers** in `src/lib/db.ts`: `getDocById`, `getDocs`, `countDocs`, `createDoc`, `updateDoc`, `deleteDoc`, `batchUpdate`, `batchDelete` (both chunked into 400-write batches — Firestore caps a batch at 500 writes), `aggregateSum` (uses Firestore `AggregateField.sum()`, no client-side fetch-all).
