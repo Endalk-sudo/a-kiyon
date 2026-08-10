@@ -179,7 +179,7 @@ export function ServicesPage() {
         nameAm: form.nameAm.trim() || null,
         description: form.description.trim() || null,
         descriptionAm: form.descriptionAm.trim() || null,
-        price: Math.round(Number(form.price) * 100),
+        price: Number(form.price),
         duration: Number(form.duration),
         isActive: form.isActive,
       });
@@ -226,7 +226,7 @@ export function ServicesPage() {
         nameAm: form.nameAm.trim() || null,
         description: form.description.trim() || null,
         descriptionAm: form.descriptionAm.trim() || null,
-        price: Math.round(Number(form.price) * 100),
+        price: Number(form.price),
         duration: Number(form.duration),
         isActive: form.isActive,
       });
