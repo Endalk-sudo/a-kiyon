@@ -141,14 +141,21 @@ export async function findStaleMembers(months = DEFAULT_STALE_MONTHS): Promise<S
     }
   }
 
-  return candidates.map((member) => ({
-    id: member.id,
-    firstName: member.firstName,
-    lastName: member.lastName,
-    photo: member.photo ?? null,
-    photoThumb: member.photoThumb ?? null,
-    lastPaymentDate: latestPaymentByMember.get(member.id) ?? null,
-  }));
+  // Photos are canonical paths in Firestore — sign them (like member list/get
+  // responses do) so the stale-member UI can render them directly.
+  return Promise.all(
+    candidates.map(async (member) => {
+      const photos = await resolveMemberPhoto(member.photo, member.photoThumb);
+      return {
+        id: member.id,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        photo: photos.photo,
+        photoThumb: photos.photoThumb,
+        lastPaymentDate: latestPaymentByMember.get(member.id) ?? null,
+      };
+    }),
+  );
 }
 
 /**
